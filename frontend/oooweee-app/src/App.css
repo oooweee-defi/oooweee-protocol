@@ -1,0 +1,724 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap');
+
+:root {
+  --oooweee-yellow: #FFD700;
+  --oooweee-lime: #9ACD32;
+  --oooweee-green: #00C853;
+  --oooweee-teal: #00BCD4;
+  --oooweee-blue: #2196F3;
+  --oooweee-purple: #7B68EE;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Loading Screen */
+.loading-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.loading-logo {
+  max-width: 300px;
+  margin-bottom: 2rem;
+  animation: pulse 1s infinite, float 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50% { transform: translateY(-10px) scale(1.02); }
+}
+
+.loading-bar {
+  width: 300px;
+  height: 20px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 3px solid #000;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.loading-progress {
+  height: 100%;
+  background: linear-gradient(90deg, 
+    var(--oooweee-yellow),
+    var(--oooweee-lime),
+    var(--oooweee-green),
+    var(--oooweee-teal),
+    var(--oooweee-blue),
+    var(--oooweee-purple));
+  animation: loading-fill 2s ease-out forwards;
+}
+
+@keyframes loading-fill {
+  from { width: 0%; }
+  to { width: 100%; }
+}
+
+.loading-text {
+  font-family: 'Press Start 2P', cursive;
+  color: #fff;
+  font-size: 0.8rem;
+  text-shadow: 2px 2px 0px #000;
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
+  0%, 50%, 100% { opacity: 1; }
+  25%, 75% { opacity: 0.5; }
+}
+
+.App {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  font-family: 'VT323', monospace;
+  position: relative;
+  overflow-x: hidden;
+}
+
+.App::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.03),
+      rgba(0, 0, 0, 0.03) 1px,
+      transparent 1px,
+      transparent 2px
+    );
+  pointer-events: none;
+  z-index: 1;
+}
+
+.App-header {
+  padding: 2rem;
+  position: relative;
+  z-index: 2;
+}
+
+.hero-section {
+  text-align: center;
+  margin-bottom: 3rem;
+  animation: slideDown 0.5s ease-out;
+}
+
+.main-logo {
+  max-width: 400px;
+  width: 100%;
+  height: auto;
+  margin-bottom: 1rem;
+  filter: drop-shadow(4px 4px 0px #000);
+  animation: float 3s ease-in-out infinite;
+  transition: all 0.3s;
+  cursor: pointer;
+}
+
+.main-logo:hover {
+  transform: scale(1.1) rotate(2deg);
+  filter: drop-shadow(6px 6px 0px #000) brightness(1.1);
+}
+
+.main-logo:active {
+  animation: rainbow-glow 0.5s linear infinite;
+}
+
+@keyframes rainbow-glow {
+  0% { filter: drop-shadow(0 0 20px var(--oooweee-yellow)); }
+  16% { filter: drop-shadow(0 0 20px var(--oooweee-lime)); }
+  33% { filter: drop-shadow(0 0 20px var(--oooweee-green)); }
+  50% { filter: drop-shadow(0 0 20px var(--oooweee-teal)); }
+  66% { filter: drop-shadow(0 0 20px var(--oooweee-blue)); }
+  83% { filter: drop-shadow(0 0 20px var(--oooweee-purple)); }
+  100% { filter: drop-shadow(0 0 20px var(--oooweee-yellow)); }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tagline {
+  font-size: 1.5rem;
+  color: #FFE66D;
+  text-shadow: 2px 2px 0px rgba(0,0,0,0.3);
+}
+
+/* Rainbow gradient buttons */
+.rainbow-btn {
+  background: linear-gradient(90deg, 
+    var(--oooweee-yellow), 
+    var(--oooweee-lime),
+    var(--oooweee-green),
+    var(--oooweee-teal),
+    var(--oooweee-blue),
+    var(--oooweee-purple));
+  background-size: 200% 100%;
+  animation: gradient-shift 3s ease infinite;
+}
+
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.connect-btn {
+  font-family: 'Press Start 2P', cursive;
+  color: #000;
+  border: 4px solid #000;
+  padding: 1rem 2rem;
+  font-size: 1rem;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.1s;
+  box-shadow: 4px 4px 0px #000;
+}
+
+.connect-btn:hover {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px #000;
+}
+
+.connect-btn:active {
+  transform: translate(4px, 4px);
+  box-shadow: none;
+}
+
+/* Enhanced Wallet Card */
+.wallet-card {
+  background: rgba(255, 255, 255, 0.95);
+  border: 4px solid #000;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  box-shadow: 8px 8px 0px #000;
+  position: relative;
+  overflow: hidden;
+}
+
+.wallet-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, 
+    var(--oooweee-yellow),
+    var(--oooweee-lime),
+    var(--oooweee-green),
+    var(--oooweee-teal),
+    var(--oooweee-blue),
+    var(--oooweee-purple));
+  background-size: 200% 100%;
+  animation: gradient-shift 3s ease infinite;
+}
+
+.wallet-card h3 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.8rem;
+  margin-bottom: 1rem;
+  color: #000;
+}
+
+.address {
+  font-family: 'VT323', monospace;
+  font-size: 1.2rem;
+  color: #666;
+  margin-bottom: 1rem;
+}
+
+.balance-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 1.3rem;
+  margin: 0.5rem 0;
+  padding: 0.5rem;
+  border-radius: 4px;
+  transition: all 0.3s;
+}
+
+.balance-row:hover {
+  background: rgba(0,0,0,0.05);
+  transform: translateX(5px);
+}
+
+.balance-row.highlight {
+  background: linear-gradient(90deg, 
+    var(--oooweee-yellow),
+    var(--oooweee-lime),
+    var(--oooweee-green),
+    var(--oooweee-teal),
+    var(--oooweee-blue),
+    var(--oooweee-purple));
+  background-size: 200% 100%;
+  animation: gradient-shift 3s ease infinite;
+  color: #fff;
+  text-shadow: 2px 2px 0px rgba(0,0,0,0.3);
+  padding: 0.8rem;
+  margin: 1rem -0.3rem;
+  border: 3px solid #000;
+  box-shadow: 3px 3px 0px #000;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.9rem;
+}
+
+.balance-row.highlight span:last-child {
+  font-weight: bold;
+  text-align: right;
+}
+
+/* Coin icon animation next to OOOWEEE balance */
+.balance-row.highlight .coin-icon {
+  animation: spin 2s linear infinite;
+  display: inline-block;
+  margin-left: 0.5rem;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.accounts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 2rem;
+  margin: 2rem 0;
+}
+
+.account-card {
+  background: #fff;
+  border: 4px solid #000;
+  padding: 1.5rem;
+  position: relative;
+  box-shadow: 6px 6px 0px #000;
+  transition: all 0.2s;
+}
+
+.account-card:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 8px 8px 0px #000;
+}
+
+.account-card.completed {
+  background: #e8ffe8;
+  opacity: 0.9;
+}
+
+.account-visual {
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 1rem 0;
+  position: relative;
+  background: rgba(0,0,0,0.05);
+  border: 2px solid #000;
+  overflow: hidden;
+}
+
+/* Piggy Bank for Time Account */
+.piggy-bank {
+  width: 80px;
+  height: 60px;
+  background: #FFB6C1;
+  border-radius: 40px;
+  position: relative;
+  border: 3px solid #000;
+  animation: wiggle 3s infinite;
+}
+
+.piggy-bank::before {
+  content: '🐽';
+  font-size: 30px;
+  position: absolute;
+  left: 10px;
+  top: 10px;
+}
+
+.piggy-bank .timer {
+  position: absolute;
+  top: -25px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--oooweee-yellow);
+  padding: 4px 8px;
+  border: 2px solid #000;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.6rem;
+}
+
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(3deg); }
+  75% { transform: rotate(-3deg); }
+}
+
+/* Plant for Growth Account */
+.plant-container {
+  position: relative;
+  width: 100px;
+  height: 100px;
+}
+
+.plant {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  transition: all 0.5s;
+}
+
+.plant .stem {
+  width: 4px;
+  background: var(--oooweee-green);
+  margin: 0 auto;
+  border: 1px solid #000;
+  transform-origin: bottom;
+}
+
+.plant .leaves {
+  font-size: 30px;
+  text-align: center;
+  margin-top: -10px;
+  animation: sway 3s infinite ease-in-out;
+}
+
+@keyframes sway {
+  0%, 100% { transform: rotate(-5deg); }
+  50% { transform: rotate(5deg); }
+}
+
+.water-btn {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--oooweee-teal);
+  border: 2px solid #000;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.5rem;
+}
+
+.water-drop {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  font-size: 20px;
+  animation: drop 1s ease-in;
+  pointer-events: none;
+}
+
+@keyframes drop {
+  to {
+    transform: translateY(60px);
+    opacity: 0;
+  }
+}
+
+/* Scale for Balance Account */
+.scale-container {
+  position: relative;
+  width: 100px;
+  height: 80px;
+}
+
+.scale {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.scale-base {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 4px;
+  background: #795548;
+  border: 2px solid #000;
+}
+
+.scale-pole {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 40px;
+  background: #795548;
+  border: 2px solid #000;
+}
+
+.scale-arm {
+  position: absolute;
+  bottom: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80px;
+  height: 4px;
+  background: #795548;
+  border: 2px solid #000;
+  transform-origin: center;
+  transition: transform 0.5s ease;
+}
+
+.scale-pan {
+  position: absolute;
+  width: 25px;
+  height: 20px;
+  background: var(--oooweee-yellow);
+  border: 2px solid #000;
+  bottom: -10px;
+}
+
+.scale-pan.left {
+  left: -12px;
+}
+
+.scale-pan.right {
+  right: -12px;
+}
+
+.scale-arm.balanced {
+  transform: translateX(-50%) rotate(0deg);
+}
+
+.scale-arm.tipped-left {
+  transform: translateX(-50%) rotate(-10deg);
+}
+
+.scale-arm.tipped-right {
+  transform: translateX(-50%) rotate(10deg);
+}
+
+.progress-bar {
+  height: 20px;
+  background: #E0E0E0;
+  border: 2px solid #000;
+  position: relative;
+  overflow: hidden;
+  margin: 1rem 0;
+}
+
+.rainbow-fill {
+  background: linear-gradient(90deg, 
+    var(--oooweee-yellow),
+    var(--oooweee-lime),
+    var(--oooweee-green),
+    var(--oooweee-teal),
+    var(--oooweee-blue),
+    var(--oooweee-purple));
+  background-size: 200% 100%;
+  animation: gradient-shift 3s ease infinite;
+}
+
+.progress-fill {
+  height: 100%;
+  transition: width 0.5s ease;
+  position: relative;
+}
+
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent 10px,
+    rgba(255,255,255,0.2) 10px,
+    rgba(255,255,255,0.2) 20px
+  );
+  animation: progress-stripes 1s linear infinite;
+}
+
+@keyframes progress-stripes {
+  to {
+    transform: translateX(20px);
+  }
+}
+
+.deposit-section {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 2px dashed #000;
+}
+
+.deposit-input {
+  width: 100%;
+  padding: 0.8rem;
+  border: 3px solid #000;
+  font-family: 'VT323', monospace;
+  font-size: 1.3rem;
+  margin-bottom: 0.5rem;
+}
+
+.deposit-btn {
+  width: 100%;
+  padding: 0.8rem;
+  background: var(--oooweee-green);
+  border: 3px solid #000;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.7rem;
+  cursor: pointer;
+  box-shadow: 4px 4px 0px #000;
+  transition: all 0.1s;
+  color: white;
+  text-shadow: 1px 1px 0px #000;
+}
+
+.deposit-btn:hover {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px #000;
+}
+
+.deposit-btn:active {
+  transform: translate(4px, 4px);
+  box-shadow: none;
+}
+
+.deposit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.create-section {
+  background: rgba(255, 255, 255, 0.95);
+  border: 4px solid #000;
+  padding: 2rem;
+  margin-top: 3rem;
+  box-shadow: 8px 8px 0px #000;
+}
+
+.create-section h2 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 1.2rem;
+  margin-bottom: 1.5rem;
+  color: #000;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.select-input,
+.text-input,
+.number-input,
+.date-input {
+  width: 100%;
+  padding: 0.8rem;
+  border: 3px solid #000;
+  font-family: 'VT323', monospace;
+  font-size: 1.3rem;
+  background: white;
+}
+
+.select-input {
+  cursor: pointer;
+}
+
+.create-btn {
+  width: 100%;
+  padding: 1rem;
+  border: 4px solid #000;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.8rem;
+  cursor: pointer;
+  box-shadow: 6px 6px 0px #000;
+  transition: all 0.1s;
+  color: white;
+  text-shadow: 2px 2px 0px #000;
+}
+
+.create-btn:hover {
+  transform: translate(2px, 2px);
+  box-shadow: 4px 4px 0px #000;
+}
+
+.create-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.help-text {
+  font-size: 1.1rem;
+  color: #666;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: #FFF9C4;
+  border: 2px dashed #FBC02D;
+}
+
+.pixel-art {
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+}
+
+/* Floating coins animation */
+@keyframes float-coin {
+  0%, 100% { 
+    transform: translateY(0) rotate(0deg);
+  }
+  50% { 
+    transform: translateY(-20px) rotate(180deg);
+  }
+}
+
+.floating-coins {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.coin {
+  position: absolute;
+  font-size: 30px;
+  animation: float-coin 3s infinite ease-in-out;
+  opacity: 0.1;
+}
