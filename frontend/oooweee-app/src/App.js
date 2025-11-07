@@ -5,15 +5,18 @@ import './App.css';
 import oooweeLogo from './assets/oooweee-logo.png';
 import { OOOWEEE_TOKEN_ABI, OOOWEEE_SAVINGS_ABI, CONTRACT_ADDRESSES } from './contracts/abis';
 import Web3Modal from "web3modal";
-import WalletConnectProvider from "@walletconnect/web3-provider";
+import { EthereumProvider } from '@walletconnect/ethereum-provider';
 
 // Web3Modal provider options
 const providerOptions = {
   walletconnect: {
-    package: WalletConnectProvider,
+    package: EthereumProvider,
     options: {
-      rpc: {
-        11155111: "https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161" // Free Infura endpoint
+      projectId: "2f5a2b8e3d6c4f8a9e7d6c5b4a3f2e1d", // You can use this test ID
+      chains: [11155111],
+      showQrModal: true,
+      rpcMap: {
+        11155111: "https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161"
       }
     }
   }
