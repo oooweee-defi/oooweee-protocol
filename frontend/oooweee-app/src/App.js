@@ -4,6 +4,20 @@ import toast, { Toaster } from 'react-hot-toast';
 import './App.css';
 import oooweeLogo from './assets/oooweee-logo.png';
 import { OOOWEEE_TOKEN_ABI, OOOWEEE_SAVINGS_ABI, CONTRACT_ADDRESSES } from './contracts/abis';
+import Web3Modal from "web3modal";
+import WalletConnectProvider from "@walletconnect/web3-provider";
+
+// Web3Modal provider options
+const providerOptions = {
+  walletconnect: {
+    package: WalletConnectProvider,
+    options: {
+      rpc: {
+        11155111: "https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161" // Free Infura endpoint
+      }
+    }
+  }
+};
 
 function App() {
   const [account, setAccount] = useState(null);
@@ -20,9 +34,20 @@ function App() {
   const [isAppLoading, setIsAppLoading] = useState(true);
   const [ethPrice, setEthPrice] = useState(null);
   const [displayCurrency, setDisplayCurrency] = useState('fiat'); // Default to fiat (EUR)
+  const [web3Modal, setWeb3Modal] = useState(null);
 
   // OOOWEEE to ETH conversion rate (example: 1 OOOWEEE = 0.00001 ETH)
   const OOOWEEE_TO_ETH = 0.00001;
+
+  // Initialize Web3Modal
+  useEffect(() => {
+    const modal = new Web3Modal({
+      network: "sepolia",
+      cacheProvider: true,
+      providerOptions
+    });
+    setWeb3Modal(modal);
+  }, []);
 
   // Loading screen
   useEffect(() => {
@@ -59,32 +84,29 @@ function App() {
     }).format(fiatValue);
   };
 
-  // Connect Wallet
+  // Connect Wallet with Web3Modal
   const connectWallet = async () => {
     try {
-      if (!window.ethereum) {
-        toast.error('Please install MetaMask!');
-        return;
-      }
-
-      const accounts = await window.ethereum.request({
-        method: 'eth_requestAccounts'
-      });
-
-      // Switch to Sepolia
-      try {
-        await window.ethereum.request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: '0xaa36a7' }], // Sepolia chainId
-        });
-      } catch (switchError) {
-        if (switchError.code === 4902) {
-          toast.error('Please add Sepolia network to MetaMask');
+      const instance = await web3Modal.connect();
+      const provider = new ethers.providers.Web3Provider(instance);
+      const signer = provider.getSigner();
+      const address = await signer.getAddress();
+      
+      // Check if on Sepolia
+      const network = await provider.getNetwork();
+      if (network.chainId !== 11155111) {
+        try {
+          await instance.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0xaa36a7' }], // Sepolia chainId
+          });
+        } catch (switchError) {
+          if (switchError.code === 4902) {
+            toast.error('Please add Sepolia network to your wallet');
+            return;
+          }
         }
       }
-
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      const signer = provider.getSigner();
       
       const tokenContract = new ethers.Contract(
         CONTRACT_ADDRESSES.token,
@@ -98,7 +120,7 @@ function App() {
         signer
       );
 
-      setAccount(accounts[0]);
+      setAccount(address);
       setProvider(provider);
       setTokenContract(tokenContract);
       setSavingsContract(savingsContract);
@@ -106,12 +128,41 @@ function App() {
       toast.success('Wallet connected! OOOWEEE!');
       
       // Load balances
-      loadBalances(accounts[0], provider, tokenContract);
-      loadSavingsAccounts(accounts[0], savingsContract);
+      loadBalances(address, provider, tokenContract);
+      loadSavingsAccounts(address, savingsContract);
+      
+      // Subscribe to accounts change
+      instance.on("accountsChanged", (accounts) => {
+        if (accounts.length === 0) {
+          disconnectWallet();
+        } else {
+          window.location.reload();
+        }
+      });
+
+      // Subscribe to chainId change
+      instance.on("chainChanged", () => {
+        window.location.reload();
+      });
+      
     } catch (error) {
       console.error(error);
       toast.error('Failed to connect wallet');
     }
+  };
+
+  // Disconnect wallet
+  const disconnectWallet = async () => {
+    if (web3Modal) {
+      web3Modal.clearCachedProvider();
+    }
+    setAccount(null);
+    setProvider(null);
+    setTokenContract(null);
+    setSavingsContract(null);
+    setBalance('0');
+    setEthBalance('0');
+    setAccounts([]);
   };
 
   // Load Balances
@@ -479,7 +530,7 @@ function App() {
             <button onClick={connectWallet} className="connect-btn rainbow-btn">
               <span>🔗</span> Connect Wallet
             </button>
-            <p className="info-text">Connect to Sepolia Testnet to get started</p>
+            <p className="info-text">Works with MetaMask, Trust Wallet, and more!</p>
             <p className="disclaimer">💡 Values shown in EUR are estimates based on current market rates</p>
           </div>
         ) : (
@@ -489,6 +540,9 @@ function App() {
                 <div className="wallet-header">
                   <h3>💰 Wallet Status</h3>
                   <span className="address">{account.slice(0, 6)}...{account.slice(-4)}</span>
+                  <button onClick={disconnectWallet} className="disconnect-btn">
+                    Disconnect
+                  </button>
                 </div>
                 
                 <div className="currency-toggle">
