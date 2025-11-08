@@ -38,6 +38,7 @@ function App() {
   const [ethPrice, setEthPrice] = useState(null);
   const [displayCurrency, setDisplayCurrency] = useState('fiat'); // Default to fiat (EUR)
   const [web3Modal, setWeb3Modal] = useState(null);
+  const [depositingAccount, setDepositingAccount] = useState(null);
 
   // OOOWEEE to ETH conversion rate (example: 1 OOOWEEE = 0.00001 ETH)
   const OOOWEEE_TO_ETH = 0.00001;
@@ -391,6 +392,8 @@ function App() {
   const depositToAccount = async (accountId, amount) => {
     try {
       setLoading(true);
+      setDepositingAccount(accountId); // For animation
+
       const depositAmount = ethers.utils.parseUnits(amount.toString(), 18);
       
       const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.savings, depositAmount);
@@ -417,6 +420,10 @@ function App() {
       
       await loadSavingsAccounts(account, savingsContract);
       await loadBalances(account, provider, tokenContract);
+      
+      // Animation cleanup
+      setTimeout(() => setDepositingAccount(null), 1000);
+
     } catch (error) {
       console.error(error);
       if (error.code === 'ACTION_REJECTED') {
@@ -424,6 +431,7 @@ function App() {
       } else {
         toast.error('Failed to deposit');
       }
+      setDepositingAccount(null); // Ensure cleanup on error
     } finally {
       setLoading(false);
     }
@@ -497,7 +505,7 @@ function App() {
             alt="OOOWEEE" 
             className="main-logo pixel-art"
           />
-          <p className="tagline">The DeFi savings platform that would make Rick proud!</p>
+          <p className="tagline">The DeFi hard-lock savings platform that would make Rick proud!</p>
           
           {ethPrice && (
             <div className="price-ticker">
@@ -620,7 +628,8 @@ function App() {
                         {/* Visual representation */}
                         <div className="account-visual">
                           {acc.type === 'Time' && (
-                            <div className="piggy-bank">
+                            <div className={`piggy-bank ${depositingAccount === acc.id ? 'coin-in' : ''}`}>
+                              <div className="piggy-coin"></div>
                               <div className="timer">
                                 {getDaysRemaining(acc.unlockTime)}d
                               </div>
@@ -660,7 +669,11 @@ function App() {
                                     {acc.progress < 100 ? '📦' : '✨'}
                                   </div>
                                   <div className="scale-pan right">
-                                    {acc.progress > 0 ? '🪙' : ''}
+                                    <div className={`coin-stack ${depositingAccount === acc.id ? 'coin-added' : ''}`}>
+                                      {[...Array(Math.min(5, Math.floor(acc.progress / 20)))].map((_, i) => (
+                                        <div key={i} className="coin-in-pan"></div>
+                                      ))}
+                                    </div>
                                   </div>
                                 </div>
                               </div>
