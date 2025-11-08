@@ -645,17 +645,22 @@ function App() {
                                   style={{ height: `${getPlantHeight(acc.progress)}px` }}
                                 />
                                 <div className="leaves">
-                                  {acc.progress < 30 ? '🌱' : acc.progress < 70 ? '🌿' : '🌳'}
+                                  {acc.progress < 10 ? '🏺' : acc.progress < 40 ? '🌱' : acc.progress < 80 ? '�' : '�'}
                                 </div>
                               </div>
                               <button 
                                 className="water-btn"
                                 onClick={() => waterPlant(acc.id)}
+                                disabled={loading}
                               >
                                 💧 Water
                               </button>
                               {wateringAccount === acc.id && (
-                                <div className="water-drop">💧</div>
+                                <div className="water-shower">
+                                  {[...Array(5)].map((_, i) => (
+                                    <div key={i} className="water-drop" style={{ left: `${i * 20}%`, animationDelay: `${i * 0.1}s` }}>💧</div>
+                                  ))}
+                                </div>
                               )}
                             </div>
                           )}
