@@ -449,18 +449,6 @@ function App() {
     return Math.max(0, Math.floor(remaining / 86400));
   };
 
-  // Get plant size based on progress
-  const getPlantHeight = (progress) => {
-    return Math.max(20, Math.min(80, progress * 0.8));
-  };
-
-  // Get scale balance based on progress
-  const getScaleBalance = (progress) => {
-    if (progress < 50) return 'tipped-left';
-    if (progress > 50 && progress < 100) return 'tipped-right';
-    return 'balanced';
-  };
-
   // Filter accounts
   const activeAccounts = accounts.filter(acc => acc.isActive);
   const completedAccounts = accounts.filter(acc => !acc.isActive);
