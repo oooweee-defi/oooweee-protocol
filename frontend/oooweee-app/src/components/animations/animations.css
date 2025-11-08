@@ -1,0 +1,375 @@
+/* Time Quest Animation */
+.time-quest-visual {
+  position: relative;
+  width: 150px;
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.piggy-bank-container {
+  position: relative;
+  width: 100px;
+  height: 80px;
+  animation: piggy-wobble 5s infinite ease-in-out;
+}
+
+.piggy-bank-body {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  height: 90%;
+  background: #FFC0CB;
+  border: 3px solid #000;
+  border-radius: 50% 50% 40% 40% / 60% 60% 40% 40%;
+  box-shadow: inset 5px -5px 0 rgba(0,0,0,0.1);
+}
+
+.piggy-snout {
+  position: absolute;
+  left: -15px;
+  top: 20px;
+  width: 30px;
+  height: 20px;
+  background: #FFAEC9;
+  border: 3px solid #000;
+  border-radius: 50%;
+}
+.piggy-snout::before, .piggy-snout::after {
+  content: '';
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  background: #000;
+  border-radius: 50%;
+  top: 7px;
+}
+.piggy-snout::before { left: 5px; }
+.piggy-snout::after { right: 5px; }
+
+.piggy-ear {
+  position: absolute;
+  right: 10px;
+  top: -10px;
+  width: 25px;
+  height: 30px;
+  background: #FFC0CB;
+  border: 3px solid #000;
+  border-radius: 50% 50% 0 0;
+  transform: rotate(15deg);
+}
+
+.piggy-tail {
+  position: absolute;
+  right: -15px;
+  top: 10px;
+  width: 20px;
+  height: 20px;
+  border: 3px solid #000;
+  border-radius: 50%;
+  border-left-color: transparent;
+  border-bottom-color: transparent;
+  transform: rotate(-45deg);
+}
+
+.coin-slot {
+  position: absolute;
+  top: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 4px;
+  background: #000;
+  border-radius: 2px;
+}
+
+.coin-animation {
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  background: var(--oooweee-yellow);
+  border: 2px solid #000;
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  opacity: 0;
+}
+
+.time-quest-visual.depositing .coin-animation {
+  animation: coin-enter 1s ease-out;
+}
+
+.time-quest-visual.depositing .piggy-bank-container {
+  animation: piggy-jiggle 0.5s;
+}
+
+.calendar {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 50px;
+  height: 50px;
+  background: #fff;
+  border: 3px solid #000;
+  box-shadow: 3px 3px 0 #000;
+}
+.calendar-top {
+  height: 10px;
+  background: #E57373;
+  border-bottom: 3px solid #000;
+}
+.calendar-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: calc(100% - 10px);
+}
+.days-remaining {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 1rem;
+}
+.days-label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+}
+
+@keyframes piggy-wobble {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(2deg) translateY(-3px); }
+}
+
+@keyframes piggy-jiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-5deg); }
+  75% { transform: rotate(5deg); }
+}
+
+@keyframes coin-enter {
+  0% { top: -20px; left: -20px; opacity: 1; transform: scale(1.5) rotate(0); }
+  50% { left: 20px; transform: scale(1) rotate(360deg); }
+  100% { top: 10px; left: 45px; opacity: 0; transform: scale(0.5) rotate(720deg); }
+}
+
+/* Growth Quest Animation */
+.growth-quest-visual {
+  position: relative;
+  width: 150px;
+  height: 120px;
+}
+
+.pot {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 50px;
+  background: #A1887F;
+  border: 3px solid #000;
+  border-radius: 0 0 20px 20px;
+}
+.soil {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 10px;
+  background: #5D4037;
+}
+
+.plant-growth {
+  position: absolute;
+  bottom: 45px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100px;
+  height: 75px;
+}
+
+.plant-growth svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.plant-growth path, .plant-growth circle {
+  stroke: #000;
+  stroke-width: 2;
+  fill: var(--oooweee-green);
+  transition: all 0.5s ease-in-out;
+  transform-origin: center bottom;
+}
+.plant-growth .foliage {
+  fill: var(--oooweee-lime);
+}
+
+.seed-stage, .seedling-stage, .sapling-stage, .tree-stage { display: none; }
+.plant-growth.seed .seed-stage { display: block; }
+.plant-growth.seedling .seedling-stage { display: block; }
+.plant-growth.sapling .sapling-stage { display: block; }
+.plant-growth.tree .tree-stage { display: block; }
+
+.plant-growth.seedling .stem { animation: grow-stem 1s; }
+.plant-growth.seedling .leaf-left { animation: grow-leaf 0.5s 0.5s both; }
+.plant-growth.seedling .leaf-right { animation: grow-leaf 0.5s 0.7s both; }
+
+.watering-animation {
+  position: absolute;
+  top: -10px;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.droplet {
+  position: absolute;
+  width: 4px;
+  height: 10px;
+  background: var(--oooweee-teal);
+  border-radius: 50%;
+  opacity: 0;
+}
+.growth-quest-visual.depositing .droplet {
+  animation: rain-fall 1s ease-in both;
+  animation-delay: calc(var(--i) * 0.1s);
+}
+
+@keyframes grow-stem {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+@keyframes grow-leaf {
+  from { transform: scale(0); }
+  to { transform: scale(1); }
+}
+@keyframes rain-fall {
+  0% { top: 0; left: calc(var(--i) * 20%); opacity: 1; }
+  100% { top: 100px; left: calc(var(--i) * 20% + 10px); opacity: 0; }
+}
+
+/* Balance Quest Animation */
+.balance-quest-visual {
+  position: relative;
+  width: 180px;
+  height: 120px;
+}
+
+.scale-stand {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 10px;
+  height: 80px;
+  background: #795548;
+  border: 3px solid #000;
+}
+.scale-stand::before {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: -25px;
+  width: 60px;
+  height: 10px;
+  background: #795548;
+  border: 3px solid #000;
+  border-radius: 3px;
+}
+
+.scale-beam {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform-origin: center;
+  transform: translateX(-50%);
+  width: 140px;
+  height: 8px;
+  background: #795548;
+  border: 3px solid #000;
+  border-radius: 4px;
+  transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+}
+
+.pan-container {
+  position: absolute;
+  top: 5px;
+  width: 40px;
+  height: 60px;
+}
+.pan-container.left { left: -20px; }
+.pan-container.right { right: -20px; }
+
+.pan-rope {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  height: 30px;
+  background: #000;
+}
+.pan-rope::before, .pan-rope::after {
+  content: '';
+  position: absolute;
+  top: 25px;
+  width: 20px;
+  height: 2px;
+  background: #000;
+}
+.pan-rope::before { left: -18px; transform: rotate(30deg); }
+.pan-rope::after { left: -2px; transform: rotate(-30deg); }
+
+.pan {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 15px;
+  background: #BDBDBD;
+  border: 3px solid #000;
+  border-radius: 0 0 10px 10px;
+}
+
+.package-icon {
+  font-size: 1.5rem;
+  text-align: center;
+  line-height: 1;
+}
+
+.coin-stack {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+}
+.coin-stack .coin {
+  width: 15px;
+  height: 5px;
+  background: var(--oooweee-yellow);
+  border: 2px solid #000;
+  border-radius: 50%;
+  margin-top: -3px;
+}
+
+.coin-drop-animation {
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  background: var(--oooweee-yellow);
+  border: 2px solid #000;
+  border-radius: 50%;
+  opacity: 0;
+}
+.balance-quest-visual.depositing .coin-drop-animation {
+  animation: drop-in-pan 1s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes drop-in-pan {
+  0% { top: 0; right: 0; opacity: 1; transform: scale(1.2); }
+  100% { top: 85px; right: 25px; opacity: 0; transform: scale(0.5); }
+}

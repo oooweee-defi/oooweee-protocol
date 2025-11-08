@@ -6,6 +6,10 @@ import oooweeLogo from './assets/oooweee-logo.png';
 import { OOOWEEE_TOKEN_ABI, OOOWEEE_SAVINGS_ABI, CONTRACT_ADDRESSES } from './contracts/abis';
 import Web3Modal from "web3modal";
 import { EthereumProvider } from '@walletconnect/ethereum-provider';
+import TimeQuestAnimation from './components/animations/TimeQuestAnimation';
+import GrowthQuestAnimation from './components/animations/GrowthQuestAnimation';
+import BalanceQuestAnimation from './components/animations/BalanceQuestAnimation';
+import './components/animations/animations.css';
 
 // Web3Modal provider options
 const providerOptions = {
