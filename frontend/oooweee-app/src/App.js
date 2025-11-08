@@ -215,12 +215,6 @@ function App() {
     }
   };
 
-  // Water animation for growth accounts
-  const waterPlant = (accountId) => {
-    setWateringAccount(accountId);
-    setTimeout(() => setWateringAccount(null), 1000);
-  };
-
   // Create Time Account
   const createTimeAccount = async (unlockDate, goalName) => {
     try {
@@ -394,11 +388,9 @@ function App() {
   };
 
   // Deposit to Account
-  const depositToAccount = async (accountId, amount) => {
+  const depositToAccount = async (accountId, amount, accountType) => {
     try {
       setLoading(true);
-      setDepositingAccount(accountId); // For animation
-
       const depositAmount = ethers.utils.parseUnits(amount.toString(), 18);
       
       const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.savings, depositAmount);
@@ -423,11 +415,23 @@ function App() {
         }
       );
       
+      // Reload data first to update progress bars and balances
       await loadSavingsAccounts(account, savingsContract);
       await loadBalances(account, provider, tokenContract);
       
+      // Now, trigger the animations
+      setDepositingAccount(accountId);
+      if (accountType === 'Growth') {
+        setWateringAccount(accountId);
+      }
+
       // Animation cleanup
-      setTimeout(() => setDepositingAccount(null), 1000);
+      setTimeout(() => {
+        setDepositingAccount(null);
+        if (accountType === 'Growth') {
+          setWateringAccount(null);
+        }
+      }, 2000); // Increased duration for better visibility
 
     } catch (error) {
       console.error(error);
@@ -436,7 +440,9 @@ function App() {
       } else {
         toast.error('Failed to deposit');
       }
-      setDepositingAccount(null); // Ensure cleanup on error
+      // Ensure animation states are cleared on error
+      setDepositingAccount(null);
+      setWateringAccount(null);
     } finally {
       setLoading(false);
     }
@@ -718,10 +724,7 @@ function App() {
                             onClick={() => {
                               const amount = document.getElementById(`deposit-${acc.id}`).value;
                               if (amount && amount > 0) {
-                                depositToAccount(acc.id, amount);
-                                if (acc.type === 'Growth') {
-                                  waterPlant(acc.id);
-                                }
+                                depositToAccount(acc.id, amount, acc.type);
                               } else {
                                 toast.error('Enter an amount');
                               }
