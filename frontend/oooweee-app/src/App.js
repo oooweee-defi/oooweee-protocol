@@ -633,61 +633,24 @@ function App() {
                         {/* Visual representation */}
                         <div className="account-visual">
                           {acc.type === 'Time' && (
-                            <div className={`piggy-bank ${depositingAccount === acc.id ? 'coin-in' : ''}`}>
-                              <div className="piggy-coin"></div>
-                              <div className="timer">
-                                {getDaysRemaining(acc.unlockTime)}d
-                              </div>
-                            </div>
+                            <TimeQuestAnimation 
+                              daysRemaining={getDaysRemaining(acc.unlockTime)}
+                              isDepositing={depositingAccount === acc.id}
+                            />
                           )}
                           
                           {acc.type === 'Growth' && (
-                            <div className="plant-container">
-                              <div className="plant">
-                                <div 
-                                  className="stem" 
-                                  style={{ height: `${getPlantHeight(acc.progress)}px` }}
-                                />
-                                <div className="leaves">
-                                  {acc.progress < 10 ? '🏺' : acc.progress < 40 ? '🌱' : acc.progress < 80 ? '�' : '�'}
-                                </div>
-                              </div>
-                              <button 
-                                className="water-btn"
-                                onClick={() => waterPlant(acc.id)}
-                                disabled={loading}
-                              >
-                                💧 Water
-                              </button>
-                              {wateringAccount === acc.id && (
-                                <div className="water-shower">
-                                  {[...Array(5)].map((_, i) => (
-                                    <div key={i} className="water-drop" style={{ left: `${i * 20}%`, animationDelay: `${i * 0.1}s` }}>💧</div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
+                            <GrowthQuestAnimation 
+                              progress={acc.progress}
+                              isDepositing={depositingAccount === acc.id || wateringAccount === acc.id}
+                            />
                           )}
                           
                           {acc.type === 'Balance' && (
-                            <div className="scale-container">
-                              <div className="scale">
-                                <div className="scale-base" />
-                                <div className="scale-pole" />
-                                <div className={`scale-arm ${getScaleBalance(acc.progress)}`}>
-                                  <div className="scale-pan left">
-                                    {acc.progress < 100 ? '📦' : '✨'}
-                                  </div>
-                                  <div className="scale-pan right">
-                                    <div className={`coin-stack ${depositingAccount === acc.id ? 'coin-added' : ''}`}>
-                                      {[...Array(Math.min(5, Math.floor(acc.progress / 20)))].map((_, i) => (
-                                        <div key={i} className="coin-in-pan"></div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
+                            <BalanceQuestAnimation 
+                              progress={acc.progress}
+                              isDepositing={depositingAccount === acc.id}
+                            />
                           )}
                         </div>
                         
