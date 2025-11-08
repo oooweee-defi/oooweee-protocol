@@ -504,7 +504,7 @@ function App() {
             alt="OOOWEEE" 
             className="main-logo pixel-art"
           />
-          <p className="tagline">OOOWEEE: Even a Jerry can't mess this up.</p>
+          <p className="tagline">OOOWEEE: Don't be a Jerry, secure your savings - secure your future.</p>
           
           {ethPrice && (
             <div className="price-ticker">
