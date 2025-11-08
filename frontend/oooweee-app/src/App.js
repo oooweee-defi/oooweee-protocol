@@ -39,6 +39,7 @@ function App() {
   const [displayCurrency, setDisplayCurrency] = useState('fiat'); // Default to fiat (EUR)
   const [web3Modal, setWeb3Modal] = useState(null);
   const [depositingAccount, setDepositingAccount] = useState(null);
+  const [targetAmountInput, setTargetAmountInput] = useState('');
 
   // OOOWEEE to ETH conversion rate (example: 1 OOOWEEE = 0.00001 ETH)
   const OOOWEEE_TO_ETH = 0.00001;
@@ -848,10 +849,12 @@ function App() {
                     id="targetAmount"
                     min="1"
                     className="number-input"
+                    value={targetAmountInput}
+                    onChange={(e) => setTargetAmountInput(e.target.value)}
                   />
                   {ethPrice && (
                     <p className="input-helper">
-                      ≈ {getOooweeeInFiat(document.getElementById('targetAmount')?.value || 0, 'eur')} EUR
+                      ≈ {getOooweeeInFiat(targetAmountInput || 0, 'eur')} EUR
                     </p>
                   )}
                 </div>
