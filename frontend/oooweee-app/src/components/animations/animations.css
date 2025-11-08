@@ -164,40 +164,42 @@
   }
 }
 
-/* Growth Quest Animation */
 .growth-quest-visual {
   position: relative;
   width: 150px;
   height: 120px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
 }
 
 .pot {
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 60px;
-  height: 50px;
+  position: relative;
+  width: 70px;
+  height: 60px;
   background: #A1887F;
   border: 3px solid #000;
   border-radius: 0 0 20px 20px;
+  z-index: 2;
 }
 .soil {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
-  height: 10px;
+  height: 15px;
   background: #5D4037;
+  border-top: 3px solid #000;
 }
 
 .plant-growth {
   position: absolute;
-  bottom: 45px;
+  bottom: 50px;
   left: 50%;
   transform: translateX(-50%);
   width: 100px;
   height: 75px;
+  z-index: 1;
 }
 
 .plant-growth svg {
@@ -227,25 +229,74 @@
 .plant-growth.seedling .leaf-left { animation: grow-leaf 0.5s 0.5s both; }
 .plant-growth.seedling .leaf-right { animation: grow-leaf 0.5s 0.7s both; }
 
+.watering-can {
+  position: absolute;
+  top: -20px;
+  left: -30px;
+  width: 80px;
+  height: 60px;
+  transform: rotate(-20deg);
+  opacity: 0;
+  transition: all 0.5s ease-out;
+  z-index: 10;
+}
+
+.growth-quest-visual.depositing .watering-can {
+  animation: pour-water 2s ease-in-out forwards;
+}
+
+.can-body {
+  width: 50px;
+  height: 40px;
+  background: #BDBDBD;
+  border: 3px solid #000;
+  border-radius: 5px;
+  position: absolute;
+  bottom: 0;
+  left: 15px;
+}
+.can-spout {
+  width: 40px;
+  height: 10px;
+  background: #BDBDBD;
+  border: 3px solid #000;
+  position: absolute;
+  left: -20px;
+  top: 10px;
+  transform: rotate(20deg);
+}
+.can-handle {
+  width: 20px;
+  height: 30px;
+  border: 3px solid #000;
+  border-left-color: transparent;
+  border-radius: 50%;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
 .watering-animation {
   position: absolute;
-  top: -10px;
+  top: 0;
   left: 0;
   width: 100%;
   height: 100%;
   pointer-events: none;
+  z-index: 5;
 }
 .droplet {
   position: absolute;
-  width: 4px;
-  height: 10px;
+  width: 5px;
+  height: 12px;
   background: var(--oooweee-teal);
   border-radius: 50%;
   opacity: 0;
+  transform: scale(0);
 }
 .growth-quest-visual.depositing .droplet {
-  animation: rain-fall 1s ease-in both;
-  animation-delay: calc(var(--i) * 0.1s);
+  animation: rain-fall 1s ease-in-out both;
+  animation-delay: calc(var(--i) * 0.1s + 0.5s);
 }
 
 @keyframes grow-stem {
@@ -257,8 +308,27 @@
   to { transform: scale(1); }
 }
 @keyframes rain-fall {
-  0% { top: 0; left: calc(var(--i) * 20%); opacity: 1; }
-  100% { top: 100px; left: calc(var(--i) * 20% + 10px); opacity: 0; }
+  0% {
+    transform: translateY(-20px) scale(0);
+    opacity: 1;
+    left: calc(20% + var(--i) * 8%);
+  }
+  50% {
+    transform: translateY(40px) scale(1);
+  }
+  100% {
+    transform: translateY(80px) scale(0.5);
+    opacity: 0;
+    left: calc(25% + var(--i) * 8%);
+  }
+}
+
+@keyframes pour-water {
+  0% { opacity: 0; transform: translate(0, 0) rotate(-20deg); }
+  20% { opacity: 1; transform: translate(30px, 10px) rotate(-20deg); }
+  40% { transform: translate(30px, 10px) rotate(10deg); }
+  80% { transform: translate(30px, 10px) rotate(10deg); }
+  100% { opacity: 0; transform: translate(60px, -10px) rotate(10deg); }
 }
 
 /* Balance Quest Animation */
@@ -301,8 +371,13 @@
   background: #795548;
   border: 3px solid #000;
   border-radius: 4px;
-  transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+  transition: transform 0.8s cubic-bezier(0.68, -0.6, 0.32, 1.6);
 }
+
+.balance-quest-visual.depositing .scale-beam {
+  animation: scale-bounce 1.5s cubic-bezier(0.68, -0.6, 0.32, 1.6) 0.5s;
+}
+
 
 .pan-container {
   position: absolute;
@@ -382,6 +457,26 @@
 }
 
 @keyframes drop-in-pan {
-  0% { top: 0; right: 0; opacity: 1; transform: scale(1.2); }
-  100% { top: 85px; right: 25px; opacity: 0; transform: scale(0.5); }
+  0% {
+    top: -20px;
+    right: 50%;
+    transform: translateX(50%) scale(1.5) rotate(0deg);
+    opacity: 1;
+  }
+  50% {
+    transform: translateX(50%) scale(1) rotate(360deg);
+  }
+  100% {
+    top: 85px;
+    right: 25px;
+    opacity: 0;
+    transform: translateX(0) scale(0.5) rotate(720deg);
+  }
+}
+
+@keyframes scale-bounce {
+  0%, 100% { transform: translateX(-50%) rotate(var(--final-rotation)); }
+  20% { transform: translateX(-50%) rotate(calc(var(--final-rotation) + 5deg)); }
+  50% { transform: translateX(-50%) rotate(calc(var(--final-rotation) - 5deg)); }
+  80% { transform: translateX(-50%) rotate(var(--final-rotation)); }
 }
