@@ -28,7 +28,6 @@ function App() {
   const [tokenContract, setTokenContract] = useState(null);
   const [savingsContract, setSavingsContract] = useState(null);
   const [balance, setBalance] = useState('0');
-  const [ethBalance, setEthBalance] = useState('0');
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [accountType, setAccountType] = useState('time');
@@ -172,15 +171,12 @@ function App() {
     setTokenContract(null);
     setSavingsContract(null);
     setBalance('0');
-    setEthBalance('0');
     setAccounts([]);
   };
 
   // Load Balances
   const loadBalances = async (account, provider, tokenContract) => {
     try {
-      const ethBal = await provider.getBalance(account);
-      setEthBalance(ethers.utils.formatEther(ethBal));
       
       const tokenBal = await tokenContract.balanceOf(account);
       setBalance(ethers.utils.formatUnits(tokenBal, 18));
@@ -579,7 +575,6 @@ function App() {
 
             <div className="balance-row">
               <span>ETH:</span>
-              <span>{parseFloat(ethBalance).toFixed(4)} ETH</span>
             </div>
             
             <div className="accounts-container">
