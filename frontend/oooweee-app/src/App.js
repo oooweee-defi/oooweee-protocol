@@ -488,16 +488,8 @@ function App() {
             className="main-logo pixel-art"
           />
           <p className="tagline">OOOWEEE! The Savings App for Bad Savers.. Hard Lock = Full Commitment!</p>
-          
-          {ethPrice && (
-            <div className="price-ticker">
-              <span>ETH: €{ethPrice.eur.toLocaleString()}</span>
-              <span className="separator">•</span>
-              <span>1 $OOOWEEE ≈ €{(OOOWEEE_TO_ETH * ethPrice.eur).toFixed(6)}</span>
-            </div>
-          )}
         </div>
-        
+
         {!account ? (
           <div className="connect-section">
             <div className="welcome-card">
@@ -570,11 +562,6 @@ function App() {
                   </p>
                 )}
               </div>
-            </div>
-
-
-            <div className="balance-row">
-              <span>ETH:</span>
             </div>
             
             <div className="accounts-container">
@@ -810,7 +797,7 @@ function App() {
                 disabled={loading}
                 className="create-btn rainbow-btn"
               >
-                {loading ? '⏳ Creating Quest...' : '🚀 START QUEST (100 $OOOWEEE fee)'}
+                {loading ? '⏳ Creating Quest...' : '🚀 START QUEST'}
               </button>
               
               <p className="fee-note">
