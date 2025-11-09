@@ -556,6 +556,8 @@ function App() {
                     💶 EUR
                   </button>
                 </div>
+
+                
                 
                 <div className="balance-row highlight">
                   <span>$OOOWEEE:</span>
@@ -572,6 +574,12 @@ function App() {
                   </p>
                 )}
               </div>
+            </div>
+
+
+            <div className="balance-row">
+              <span>ETH:</span>
+              <span>{parseFloat(ethBalance).toFixed(4)} ETH</span>
             </div>
             
             <div className="accounts-container">
