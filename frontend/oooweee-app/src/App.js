@@ -487,7 +487,7 @@ function App() {
             alt="OOOWEEE" 
             className="main-logo pixel-art"
           />
-          <p className="tagline">OOOWEEE! The Savings App for Bad Savers.. Hard Lock = Full Commitment!</p>
+          <p className="tagline">OOOWEEE! The DeFi Savings App that makes committing to your goals non-negotiable!</p>
         </div>
 
         {!account ? (
