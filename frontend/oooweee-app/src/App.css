@@ -401,18 +401,6 @@
   text-align: right;
 }
 
-/* Coin icon animation next to OOOWEEE balance */
-.balance-row.highlight .coin-icon {
-  animation: spin 2s linear infinite;
-  display: inline-block;
-  margin-left: 0.5rem;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
 .conversion-note {
   font-size: 1rem;
   color: #666;
@@ -535,272 +523,6 @@
 
 .account-type.balance {
   background: #2196F3;
-}
-
-.account-visual {
-  height: 120px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 1rem 0;
-  position: relative;
-  background: rgba(0,0,0,0.05);
-  border: 2px solid #000;
-  overflow: hidden;
-}
-
-/* Piggy Bank for Time Account */
-.piggy-bank {
-  width: 80px;
-  height: 60px;
-  background: #FFB6C1;
-  border-radius: 40px;
-  position: relative;
-  border: 3px solid #000;
-  animation: wiggle 3s infinite;
-  overflow: hidden; /* Hide coin when it goes in */
-}
-
-.piggy-bank::before {
-  content: '🐽';
-  font-size: 30px;
-  position: absolute;
-  left: 10px;
-  top: 10px;
-  z-index: 2;
-}
-
-.piggy-coin {
-  position: absolute;
-  width: 20px;
-  height: 20px;
-  background: var(--oooweee-yellow);
-  border-radius: 50%;
-  border: 2px solid #000;
-  top: -30px;
-  left: 50%;
-  transform: translateX(-50%);
-  opacity: 0;
-  z-index: 1;
-}
-
-.piggy-bank.coin-in .piggy-coin {
-  animation: coin-drop 1s ease-in;
-}
-
-@keyframes coin-drop {
-  0% {
-    top: -30px;
-    opacity: 1;
-    transform: translateX(-50%) rotate(0deg);
-  }
-  50% {
-    transform: translateX(-50%) rotate(360deg);
-  }
-  100% {
-    top: 20px;
-    opacity: 0;
-    transform: translateX(-50%) rotate(720deg);
-  }
-}
-
-.piggy-bank .timer {
-  position: absolute;
-  top: -25px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--oooweee-yellow);
-  padding: 4px 8px;
-  border: 2px solid #000;
-  font-family: 'Press Start 2P', cursive;
-  font-size: 0.6rem;
-  z-index: 3;
-}
-
-@keyframes wiggle {
-  0%, 100% { transform: rotate(0deg); }
-  25% { transform: rotate(3deg); }
-  75% { transform: rotate(-3deg); }
-}
-
-/* Plant for Growth Account */
-.plant-container {
-  position: relative;
-  width: 100px;
-  height: 100px;
-}
-
-.plant {
-  position: absolute;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  transition: all 0.5s;
-}
-
-.plant .stem {
-  width: 4px;
-  background: var(--oooweee-green);
-  margin: 0 auto;
-  border: 1px solid #000;
-  transform-origin: bottom;
-}
-
-.plant .leaves {
-  font-size: 30px;
-  text-align: center;
-  margin-top: -10px;
-  animation: sway 3s infinite ease-in-out;
-}
-
-@keyframes sway {
-  0%, 100% { transform: rotate(-5deg); }
-  50% { transform: rotate(5deg); }
-}
-
-.water-shower {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-.water-drop {
-  position: absolute;
-  top: -20px;
-  font-size: 20px;
-  animation: drop 1s ease-in forwards;
-}
-
-@keyframes drop {
-  from {
-    transform: translateY(0);
-    opacity: 1;
-  }
-  to {
-    transform: translateY(80px);
-    opacity: 0;
-  }
-}
-
-/* Scale for Balance Account */
-.scale-container {
-  position: relative;
-  width: 100px;
-  height: 80px;
-}
-
-.scale {
-  position: relative;
-  width: 100%;
-  height: 100%;
-}
-
-.scale-base {
-  position: absolute;
-  bottom: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 60px;
-  height: 4px;
-  background: #795548;
-  border: 2px solid #000;
-}
-
-.scale-pole {
-  position: absolute;
-  bottom: 14px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 4px;
-  height: 40px;
-  background: #795548;
-  border: 2px solid #000;
-}
-
-.scale-arm {
-  position: absolute;
-  bottom: 50px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 80px;
-  height: 4px;
-  background: #795548;
-  border: 2px solid #000;
-  transform-origin: center;
-  transition: transform 0.5s ease;
-}
-
-.scale-pan {
-  position: absolute;
-  width: 25px;
-  height: 20px;
-  background: var(--oooweee-yellow);
-  border: 2px solid #000;
-  bottom: -10px;
-}
-
-.scale-pan.left {
-  left: -12px;
-}
-
-.scale-pan.right {
-  right: -12px;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-
-.coin-stack {
-  display: flex;
-  flex-direction: column-reverse;
-  gap: 1px;
-  transition: all 0.3s;
-}
-
-.coin-in-pan {
-  width: 15px;
-  height: 4px;
-  background: var(--oooweee-yellow);
-  border: 1px solid #000;
-  border-radius: 2px;
-  opacity: 0;
-  animation: add-coin 0.5s forwards;
-}
-
-.coin-stack.coin-added .coin-in-pan:last-child {
-  animation: add-coin-highlight 1s;
-}
-
-@keyframes add-coin {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes add-coin-highlight {
-  0%, 100% { box-shadow: none; }
-  50% { box-shadow: 0 0 10px var(--oooweee-yellow); }
-}
-
-.scale-arm.balanced {
-  transform: translateX(-50%) rotate(0deg);
-}
-
-.scale-arm.tipped-left {
-  transform: translateX(-50%) rotate(-10deg);
-}
-
-.scale-arm.tipped-right {
-  transform: translateX(-50%) rotate(10deg);
 }
 
 .account-details {
@@ -1120,7 +842,6 @@
     padding: 0.3rem 0.6rem;
   }
 
-  /* Fix the OOOWEEE balance display */
   .balance-row.highlight {
     font-size: 0.7rem;
     padding: 0.6rem;
@@ -1137,7 +858,6 @@
     width: 100%;
   }
 
-  /* Fix account cards */
   .accounts-grid {
     grid-template-columns: 1fr;
     gap: 1rem;
@@ -1154,11 +874,6 @@
     font-size: 1rem;
   }
 
-  .account-visual {
-    height: 100px;
-  }
-
-  /* Fix form inputs */
   .create-section {
     margin: 1rem;
     padding: 1rem;
@@ -1179,7 +894,6 @@
     padding: 0.8rem;
   }
 
-  /* Fix deposit section */
   .deposit-input {
     font-size: 1rem;
     padding: 0.6rem;
@@ -1190,7 +904,6 @@
     padding: 0.6rem;
   }
 
-  /* Price ticker */
   .price-ticker {
     font-size: 0.7rem;
     padding: 0.5rem;
@@ -1202,7 +915,6 @@
     display: none;
   }
 
-  /* Currency toggle */
   .currency-toggle {
     display: flex;
     gap: 0.3rem;
@@ -1214,7 +926,6 @@
     padding: 0.4rem 0.8rem;
   }
 
-  /* Welcome card */
   .welcome-card {
     padding: 1rem;
     margin: 0 1rem;
@@ -1232,7 +943,6 @@
     font-size: 1.1rem;
   }
 
-  /* Buttons */
   .connect-btn {
     font-size: 0.8rem;
     padding: 0.8rem 1.5rem;
@@ -1240,13 +950,11 @@
     max-width: 300px;
   }
 
-  /* Fix conversion note */
   .conversion-note {
     font-size: 0.8rem;
     margin-top: 0.3rem;
   }
 
-  /* General text adjustments */
   .tagline {
     font-size: 1.2rem;
     padding: 0 1rem;

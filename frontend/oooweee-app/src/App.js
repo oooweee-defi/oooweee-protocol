@@ -6,10 +6,6 @@ import oooweeLogo from './assets/oooweee-logo.png';
 import { OOOWEEE_TOKEN_ABI, OOOWEEE_SAVINGS_ABI, CONTRACT_ADDRESSES } from './contracts/abis';
 import Web3Modal from "web3modal";
 import { EthereumProvider } from '@walletconnect/ethereum-provider';
-import TimeQuestAnimation from './components/animations/TimeQuestAnimation';
-import GrowthQuestAnimation from './components/animations/GrowthQuestAnimation';
-import BalanceQuestAnimation from './components/animations/BalanceQuestAnimation';
-import './components/animations/animations.css';
 
 // Web3Modal provider options
 const providerOptions = {
@@ -37,12 +33,10 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [accountType, setAccountType] = useState('time');
   const [showCompleted, setShowCompleted] = useState(false);
-  const [wateringAccount, setWateringAccount] = useState(null);
   const [isAppLoading, setIsAppLoading] = useState(true);
   const [ethPrice, setEthPrice] = useState(null);
   const [displayCurrency, setDisplayCurrency] = useState('fiat'); // Default to fiat (EUR)
   const [web3Modal, setWeb3Modal] = useState(null);
-  const [depositingAccount, setDepositingAccount] = useState(null);
   const [targetAmountInput, setTargetAmountInput] = useState('');
 
   // OOOWEEE to ETH conversion rate (example: 1 OOOWEEE = 0.00001 ETH)
@@ -91,6 +85,14 @@ function App() {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     }).format(fiatValue);
+  };
+
+  // Convert EUR to OOOWEEE amount
+  const convertEurToOooweee = (eurAmount) => {
+    if (!ethPrice || !eurAmount) return 0;
+    const ethValue = parseFloat(eurAmount) / ethPrice.eur;
+    const oooweeeAmount = ethValue / OOOWEEE_TO_ETH;
+    return Math.floor(oooweeeAmount);
   };
 
   // Connect Wallet with Web3Modal
@@ -258,11 +260,12 @@ function App() {
     }
   };
 
-  // Create Growth Account
-  const createGrowthAccount = async (targetAmount, goalName) => {
+  // Create Growth Account - Modified to accept EUR input
+  const createGrowthAccount = async (targetAmountEur, goalName) => {
     try {
       setLoading(true);
-      const target = ethers.utils.parseUnits(targetAmount.toString(), 18);
+      const targetOooweee = convertEurToOooweee(targetAmountEur);
+      const target = ethers.utils.parseUnits(targetOooweee.toString(), 18);
       
       const creationFee = await savingsContract.accountCreationFee();
       const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.savings, creationFee);
@@ -301,11 +304,12 @@ function App() {
     }
   };
 
-  // Create Balance Account
-  const createBalanceAccount = async (targetAmount, recipientAddress, goalName) => {
+  // Create Balance Account - Modified to accept EUR input
+  const createBalanceAccount = async (targetAmountEur, recipientAddress, goalName) => {
     try {
       setLoading(true);
-      const target = ethers.utils.parseUnits(targetAmount.toString(), 18);
+      const targetOooweee = convertEurToOooweee(targetAmountEur);
+      const target = ethers.utils.parseUnits(targetOooweee.toString(), 18);
       
       if (!ethers.utils.isAddress(recipientAddress)) {
         toast.error('Invalid recipient address');
@@ -387,8 +391,8 @@ function App() {
     }
   };
 
-  // Deposit to Account
-  const depositToAccount = async (accountId, amount, accountType) => {
+  // Simplified Deposit to Account
+  const depositToAccount = async (accountId, amount) => {
     try {
       setLoading(true);
       const depositAmount = ethers.utils.parseUnits(amount.toString(), 18);
@@ -410,28 +414,14 @@ function App() {
         depositTx.wait(),
         {
           loading: '💰 Depositing...',
-          success: `🎉 Deposited ${amount} OOOWEEE!`,
+          success: `🎉 Deposited ${amount} $OOOWEEE!`,
           error: '❌ Failed to deposit'
         }
       );
       
-      // Reload data first to update progress bars and balances
+      // Reload data
       await loadSavingsAccounts(account, savingsContract);
       await loadBalances(account, provider, tokenContract);
-      
-      // Now, trigger the animations
-      setDepositingAccount(accountId);
-      if (accountType === 'Growth') {
-        setWateringAccount(accountId);
-      }
-
-      // Animation cleanup
-      setTimeout(() => {
-        setDepositingAccount(null);
-        if (accountType === 'Growth') {
-          setWateringAccount(null);
-        }
-      }, 2000); // Increased duration for better visibility
 
     } catch (error) {
       console.error(error);
@@ -440,9 +430,6 @@ function App() {
       } else {
         toast.error('Failed to deposit');
       }
-      // Ensure animation states are cleared on error
-      setDepositingAccount(null);
-      setWateringAccount(null);
     } finally {
       setLoading(false);
     }
@@ -504,13 +491,13 @@ function App() {
             alt="OOOWEEE" 
             className="main-logo pixel-art"
           />
-          <p className="tagline">OOOWEEE: Don't be a Jerry, secure your savings - secure your future.</p>
+          <p className="tagline">OOOWEEE! The Savings App for Bad Savers.. Hard Lock = Full Commitment!</p>
           
           {ethPrice && (
             <div className="price-ticker">
               <span>ETH: €{ethPrice.eur.toLocaleString()}</span>
               <span className="separator">•</span>
-              <span>1 OOOWEEE ≈ €{(OOOWEEE_TO_ETH * ethPrice.eur).toFixed(6)}</span>
+              <span>1 $OOOWEEE ≈ €{(OOOWEEE_TO_ETH * ethPrice.eur).toFixed(6)}</span>
             </div>
           )}
         </div>
@@ -570,22 +557,18 @@ function App() {
                   </button>
                 </div>
                 
-                <div className="balance-row">
-                  <span>ETH:</span>
-                  <span>{parseFloat(ethBalance).toFixed(4)} ETH</span>
-                </div>
                 <div className="balance-row highlight">
-                  <span>OOOWEEE:</span>
+                  <span>$OOOWEEE:</span>
                   <span>
                     {displayCurrency === 'crypto' 
-                      ? `${parseFloat(balance).toLocaleString()} 🪙`
+                      ? `${parseFloat(balance).toLocaleString()} $OOOWEEE`
                       : getOooweeeInFiat(balance, 'eur')
                     }
                   </span>
                 </div>
                 {displayCurrency === 'fiat' && (
                   <p className="conversion-note">
-                    ≈ {parseFloat(balance).toLocaleString()} OOOWEEE
+                    ≈ {parseFloat(balance).toLocaleString()} $OOOWEEE
                   </p>
                 )}
               </div>
@@ -624,60 +607,41 @@ function App() {
                           </span>
                         </div>
                         
-                        {/* Visual representation */}
-                        <div className="account-visual">
-                          {acc.type === 'Time' && (
-                            <TimeQuestAnimation 
-                              daysRemaining={getDaysRemaining(acc.unlockTime)}
-                              isDepositing={depositingAccount === acc.id}
-                            />
-                          )}
-                          
-                          {acc.type === 'Growth' && (
-                            <GrowthQuestAnimation 
-                              progress={acc.progress}
-                              isDepositing={depositingAccount === acc.id || wateringAccount === acc.id}
-                            />
-                          )}
-                          
-                          {acc.type === 'Balance' && (
-                            <BalanceQuestAnimation 
-                              progress={acc.progress}
-                              isDepositing={depositingAccount === acc.id}
-                            />
-                          )}
-                        </div>
-                        
                         <div className="account-details">
                           <div className="balance-display">
                             <div className="detail-row">
                               <span>Balance:</span>
                               <span className="primary-amount">
                                 {displayCurrency === 'crypto'
-                                  ? `${parseFloat(acc.balance).toLocaleString()} 🪙`
+                                  ? `${parseFloat(acc.balance).toLocaleString()} $OOOWEEE`
                                   : getOooweeeInFiat(acc.balance, 'eur')
                                 }
                               </span>
                             </div>
                             {displayCurrency === 'fiat' && (
                               <span className="secondary-amount">
-                                ≈ {parseFloat(acc.balance).toLocaleString()} OOOWEEE
+                                ≈ {parseFloat(acc.balance).toLocaleString()} $OOOWEEE
                               </span>
                             )}
                           </div>
                           
+                          {acc.type === 'Time' && (
+                            <div className="detail-row">
+                              <span>Days Remaining:</span>
+                              <span className="value">{getDaysRemaining(acc.unlockTime)}</span>
+                            </div>
+                          )}
+                          
                           {acc.type === 'Growth' && (
-                            <>
-                              <div className="detail-row">
-                                <span>Target:</span>
-                                <span className="value">
-                                  {displayCurrency === 'crypto'
-                                    ? `${parseFloat(acc.target).toLocaleString()} 🪙`
-                                    : getOooweeeInFiat(acc.target, 'eur')
-                                  }
-                                </span>
-                              </div>
-                            </>
+                            <div className="detail-row">
+                              <span>Target:</span>
+                              <span className="value">
+                                {displayCurrency === 'crypto'
+                                  ? `${parseFloat(acc.target).toLocaleString()} $OOOWEEE`
+                                  : getOooweeeInFiat(acc.target, 'eur')
+                                }
+                              </span>
+                            </div>
                           )}
                           
                           {acc.type === 'Balance' && (
@@ -686,7 +650,7 @@ function App() {
                                 <span>Target:</span>
                                 <span className="value">
                                   {displayCurrency === 'crypto'
-                                    ? `${parseFloat(acc.target).toLocaleString()} 🪙`
+                                    ? `${parseFloat(acc.target).toLocaleString()} $OOOWEEE`
                                     : getOooweeeInFiat(acc.target, 'eur')
                                   }
                                 </span>
@@ -724,7 +688,7 @@ function App() {
                             onClick={() => {
                               const amount = document.getElementById(`deposit-${acc.id}`).value;
                               if (amount && amount > 0) {
-                                depositToAccount(acc.id, amount, acc.type);
+                                depositToAccount(acc.id, amount);
                               } else {
                                 toast.error('Enter an amount');
                               }
@@ -754,7 +718,7 @@ function App() {
                             <div className="account-details">
                               <p className="completed-text">🏆 Quest Complete!</p>
                               <p>Final: {displayCurrency === 'crypto'
-                                ? `${parseFloat(acc.target || acc.balance).toLocaleString()} 🪙`
+                                ? `${parseFloat(acc.target || acc.balance).toLocaleString()} $OOOWEEE`
                                 : getOooweeeInFiat(acc.target || acc.balance, 'eur')
                               }</p>
                             </div>
@@ -808,16 +772,17 @@ function App() {
                 <div className="form-group">
                   <input 
                     type="number" 
-                    placeholder="Target amount in OOOWEEE"
+                    placeholder="Target amount in EUR (€)"
                     id="targetAmount"
                     min="1"
+                    step="0.01"
                     className="number-input"
                     value={targetAmountInput}
                     onChange={(e) => setTargetAmountInput(e.target.value)}
                   />
-                  {ethPrice && (
+                  {ethPrice && targetAmountInput && (
                     <p className="input-helper">
-                      ≈ {getOooweeeInFiat(targetAmountInput || 0, 'eur')} EUR
+                      ≈ {convertEurToOooweee(targetAmountInput).toLocaleString()} $OOOWEEE
                     </p>
                   )}
                 </div>
@@ -842,11 +807,11 @@ function App() {
                 disabled={loading}
                 className="create-btn rainbow-btn"
               >
-                {loading ? '⏳ Creating Quest...' : '🚀 START QUEST (100 🪙 fee)'}
+                {loading ? '⏳ Creating Quest...' : '🚀 START QUEST (100 $OOOWEEE fee)'}
               </button>
               
               <p className="fee-note">
-                Creation fee: 100 OOOWEEE {ethPrice && `(≈ ${getOooweeeInFiat(100, 'eur')})`}
+                Creation fee: 100 $OOOWEEE {ethPrice && `(≈ ${getOooweeeInFiat(100, 'eur')})`}
               </p>
             </div>
           </div>
