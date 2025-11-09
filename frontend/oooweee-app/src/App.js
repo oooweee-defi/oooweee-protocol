@@ -487,7 +487,7 @@ function App() {
             alt="OOOWEEE" 
             className="main-logo pixel-art"
           />
-          <p className="tagline">OOOWEEE! The DeFi Savings App that makes achieving your goals non-negotiable!</p>
+          <p className="tagline">OOOWEEE! Make your savings goals non-negotiable!</p>
         </div>
 
         {!account ? (
