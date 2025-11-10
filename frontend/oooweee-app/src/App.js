@@ -963,9 +963,7 @@ function App() {
                     id="recipientAddress"
                     className="text-input"
                   />
-                  <p className="help-text">
-                    ⚠️ Save 101% to cover the 1% transfer fee!
-                  </p>
+
                 </div>
               )}
               
