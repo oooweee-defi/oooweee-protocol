@@ -13,8 +13,8 @@ const providerOptions = {
     package: WalletConnectProvider,
     options: {
       // IMPORTANT: Get a real project ID from https://cloud.walletconnect.com
-      projectId: "YOUR_REAL_PROJECT_ID_HERE", // Replace with your real WalletConnect project ID
-      infuraId: "084d65a488f56065ea7a901e023a8b3e",
+      projectId: "084d65a488f56065ea7a901e023a8b3e", // Replace with your real WalletConnect project ID
+      infuraId: "9aa3d95b3bc440fa88ea12eaa4456161",
       rpc: {
         11155111: "https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161"
       },
@@ -133,15 +133,18 @@ function App() {
     return Math.floor(oooweeeAmount);
   };
 
-  // Enhanced Connect Wallet with Deep Linking for Mobile
+  // Enhanced Connect Wallet with better mobile support
   const connectWallet = async () => {
     try {
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
       const isAndroid = /Android/i.test(navigator.userAgent);
       
-      // MOBILE: Check if we're already in a wallet browser
-      if (isMobile && typeof window.ethereum !== 'undefined') {
+      // Check if we're in a wallet browser (MetaMask, Trust Wallet, etc.)
+      const isWalletBrowser = typeof window.ethereum !== 'undefined';
+      
+      // MOBILE: If in wallet browser, connect directly
+      if (isMobile && isWalletBrowser) {
         console.log('Mobile wallet browser detected - connecting directly');
         
         try {
@@ -226,46 +229,60 @@ function App() {
         }
       }
       
-      // MOBILE: Not in wallet browser - show deep link options
-      if (isMobile && typeof window.ethereum === 'undefined') {
+      // MOBILE: Not in wallet browser - offer to open in wallet app
+      if (isMobile && !isWalletBrowser) {
         const currentUrl = window.location.href;
         
-        // Show wallet selection modal
-        const walletChoice = window.confirm(
-          'Choose how to connect:\n\n' +
-          'OK = Open in MetaMask\n' +
-          'Cancel = See other options'
-        );
+        // Create a more user-friendly modal
+        const modalDiv = document.createElement('div');
+        modalDiv.className = 'mobile-wallet-modal';
+        modalDiv.innerHTML = `
+          <div class="modal-backdrop"></div>
+          <div class="modal-content">
+            <h3>Connect Wallet</h3>
+            <p>Choose how to connect:</p>
+            <button class="wallet-option-btn metamask-btn" onclick="window.openMetaMask()">
+              🦊 Open in MetaMask
+            </button>
+            <button class="wallet-option-btn trust-btn" onclick="window.openTrustWallet()">
+              💠 Open in Trust Wallet
+            </button>
+            <button class="wallet-option-btn instructions-btn" onclick="window.showInstructions()">
+              📖 Show Instructions
+            </button>
+            <button class="wallet-option-btn cancel-btn" onclick="window.closeModal()">
+              Cancel
+            </button>
+          </div>
+        `;
         
-        if (walletChoice) {
-          // MetaMask deep link
+        // Define global functions for button clicks
+        window.openMetaMask = () => {
           const deepLink = `https://metamask.app.link/dapp/${currentUrl.replace('https://', '')}`;
           window.location.href = deepLink;
-          
-          // Show instructions after a delay
-          setTimeout(() => {
-            toast('Opening MetaMask... If it doesn\'t work, please install MetaMask first.', {
-              duration: 5000,
-              icon: '📱'
-            });
-          }, 1000);
-        } else {
-          // Show other wallet options
+          document.body.removeChild(modalDiv);
+        };
+        
+        window.openTrustWallet = () => {
+          const deepLink = `https://link.trustwallet.com/open_url?url=${encodeURIComponent(currentUrl)}`;
+          window.location.href = deepLink;
+          document.body.removeChild(modalDiv);
+        };
+        
+        window.showInstructions = () => {
           const message = `
-To connect on mobile:
+To connect your wallet:
 
-1. METAMASK:
-${isIOS ? 'Download from App Store' : 'Download from Play Store'}
-Open MetaMask → Browser → Enter: ${currentUrl}
+1. Download MetaMask or Trust Wallet
+2. Open the app's browser
+3. Navigate to: ${currentUrl}
+4. Click Connect Wallet again
 
-2. TRUST WALLET:
-Open Trust Wallet → Browser → Enter: ${currentUrl}
-
-3. Or scan QR code from desktop with your wallet app
+Or scan the QR code from desktop!
           `;
-          alert(message);
+          window.alert(message);
           
-          // Optionally open app store
+          // Offer to download
           if (window.confirm('Download MetaMask now?')) {
             if (isIOS) {
               window.open('https://apps.apple.com/app/metamask/id1438144202', '_blank');
@@ -273,7 +290,14 @@ Open Trust Wallet → Browser → Enter: ${currentUrl}
               window.open('https://play.google.com/store/apps/details?id=io.metamask', '_blank');
             }
           }
-        }
+          document.body.removeChild(modalDiv);
+        };
+        
+        window.closeModal = () => {
+          document.body.removeChild(modalDiv);
+        };
+        
+        document.body.appendChild(modalDiv);
         return;
       }
       
@@ -998,6 +1022,9 @@ Open Trust Wallet → Browser → Enter: ${currentUrl}
                     id="recipientAddress"
                     className="text-input"
                   />
+                  <p className="help-text">
+                    ⚠️ Save 101% to cover the 1% transfer fee!
+                  </p>
                 </div>
               )}
               
