@@ -209,6 +209,9 @@
   position: relative;
   transition: all 0.1s;
   box-shadow: 4px 4px 0px #000;
+  touch-action: manipulation; /* Improves touch responsiveness on mobile */
+  -webkit-tap-highlight-color: transparent; /* Remove tap highlight on iOS */
+  min-height: 48px; /* Better touch target for mobile */
 }
 
 .connect-btn:hover {
@@ -646,6 +649,8 @@
   font-family: 'VT323', monospace;
   font-size: 1.3rem;
   margin-bottom: 0.5rem;
+  -webkit-appearance: none; /* Fix iOS input styling */
+  border-radius: 0; /* Remove iOS default border radius */
 }
 
 .deposit-btn {
@@ -733,6 +738,13 @@
   font-family: 'VT323', monospace;
   font-size: 1.3rem;
   background: white;
+  -webkit-appearance: none; /* Fix iOS input styling */
+  border-radius: 0; /* Remove iOS default border radius */
+}
+
+/* Prevent zoom on iOS when focusing inputs */
+input, select, textarea {
+  font-size: 16px !important;
 }
 
 .select-input {
@@ -806,8 +818,73 @@
   opacity: 0.1;
 }
 
+/* Web3Modal and WalletConnect Mobile Fixes */
+.web3modal-modal-card {
+  max-height: 90vh !important;
+  overflow-y: auto !important;
+}
+
+.web3modal-modal-lightbox {
+  z-index: 9999 !important;
+}
+
+.web3modal-provider-container {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.web3modal-provider-container:active {
+  transform: scale(0.98);
+}
+
+.walletconnect-modal__base {
+  z-index: 10000 !important;
+}
+
+/* iOS Safari specific fixes */
+@supports (-webkit-touch-callout: none) {
+  .connect-btn {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  
+  /* Fix for iOS modal positioning */
+  .web3modal-modal-card {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    -webkit-transform: translate(-50%, -50%) !important;
+  }
+}
+
 /* Mobile Responsive Fixes */
 @media (max-width: 768px) {
+  /* Web3Modal mobile optimizations */
+  .walletconnect-modal__base {
+    padding: 20px !important;
+  }
+  
+  .walletconnect-qrcode__image {
+    width: 100% !important;
+    max-width: 250px !important;
+    margin: 0 auto !important;
+  }
+  
+  .walletconnect-modal__mobile__toggle {
+    margin: 20px auto !important;
+  }
+  
+  /* Ensure proper viewport handling */
+  body {
+    overflow-x: hidden;
+  }
+  
+  .App {
+    overflow-x: hidden;
+    position: relative;
+  }
+
   .App-header {
     padding: 1rem;
   }
@@ -885,23 +962,26 @@
 
   .form-group input,
   .form-group select {
-    font-size: 1rem;
+    font-size: 16px !important; /* Prevents zoom on iOS */
     padding: 0.6rem;
+    touch-action: manipulation; /* Improves touch responsiveness */
   }
 
   .create-btn {
     font-size: 0.6rem;
     padding: 0.8rem;
+    min-height: 48px; /* Better touch target */
   }
 
   .deposit-input {
-    font-size: 1rem;
+    font-size: 16px !important; /* Prevents zoom on iOS */
     padding: 0.6rem;
   }
 
   .deposit-btn {
     font-size: 0.6rem;
     padding: 0.6rem;
+    min-height: 44px; /* Better touch target */
   }
 
   .price-ticker {
@@ -944,10 +1024,12 @@
   }
 
   .connect-btn {
-    font-size: 0.8rem;
+    font-size: 16px !important; /* Prevents zoom on iOS */
     padding: 0.8rem 1.5rem;
     width: 90%;
     max-width: 300px;
+    min-height: 48px; /* Better touch target */
+    -webkit-tap-highlight-color: transparent;
   }
 
   .conversion-note {

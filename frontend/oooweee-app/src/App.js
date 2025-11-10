@@ -5,20 +5,43 @@ import './App.css';
 import oooweeLogo from './assets/oooweee-logo.png';
 import { OOOWEEE_TOKEN_ABI, OOOWEEE_SAVINGS_ABI, CONTRACT_ADDRESSES } from './contracts/abis';
 import Web3Modal from "web3modal";
-import { EthereumProvider } from '@walletconnect/ethereum-provider';
+import WalletConnectProvider from "@walletconnect/web3-provider";
 
-// Web3Modal provider options
+// Web3Modal provider options - Fixed for mobile compatibility
 const providerOptions = {
   walletconnect: {
-    package: EthereumProvider,
+    package: WalletConnectProvider,
     options: {
-      projectId: "2f5a2b8e3d6c4f8a9e7d6c5b4a3f2e1d", // You can use this test ID
-      chains: [11155111],
-      showQrModal: true,
-      rpcMap: {
+      // IMPORTANT: Get a real project ID from https://cloud.walletconnect.com
+      // The test ID might not work properly on production/mobile
+      projectId: "084d65a488f56065ea7a901e023a8b3e", // Replace with your real WalletConnect project ID
+      infuraId: "9aa3d95b3bc440fa88ea12eaa4456161",
+      rpc: {
         11155111: "https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161"
+      },
+      chainId: 11155111,
+      bridge: "https://bridge.walletconnect.org",
+      qrcode: true,
+      qrcodeModalOptions: {
+        mobileLinks: [
+          "metamask",
+          "trust",
+          "rainbow",
+          "argent",
+          "imtoken",
+          "pillar",
+          "coinbase"
+        ]
       }
     }
+  },
+  // Add injected provider option for mobile browsers with built-in wallets
+  injected: {
+    display: {
+      name: "Injected",
+      description: "Connect with the provider in your browser"
+    },
+    package: null
   }
 };
 
@@ -41,13 +64,30 @@ function App() {
   // OOOWEEE to ETH conversion rate (example: 1 OOOWEEE = 0.00001 ETH)
   const OOOWEEE_TO_ETH = 0.00001;
 
-  // Initialize Web3Modal
+  // Initialize Web3Modal with better mobile support
   useEffect(() => {
+    // Check if we're on mobile
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
     const modal = new Web3Modal({
       network: "sepolia",
-      cacheProvider: true,
-      providerOptions
+      cacheProvider: false, // Changed to false for mobile to avoid cache issues
+      providerOptions,
+      disableInjectedProvider: false, // Allow injected providers on mobile
+      theme: {
+        background: "rgb(39, 49, 56)",
+        main: "rgb(199, 199, 199)",
+        secondary: "rgb(136, 136, 136)",
+        border: "rgba(195, 195, 195, 0.14)",
+        hover: "rgb(16, 26, 32)"
+      }
     });
+    
+    // Clear cached provider on mobile to avoid issues
+    if (isMobile && modal.cachedProvider) {
+      modal.clearCachedProvider();
+    }
+    
     setWeb3Modal(modal);
   }, []);
 
@@ -94,9 +134,113 @@ function App() {
     return Math.floor(oooweeeAmount);
   };
 
-  // Connect Wallet with Web3Modal
+  // Enhanced Connect Wallet with better mobile support
   const connectWallet = async () => {
     try {
+      // Clear any existing cached provider to avoid conflicts
+      if (web3Modal && web3Modal.cachedProvider) {
+        web3Modal.clearCachedProvider();
+      }
+      
+      // Check for mobile browser with injected wallet
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      
+      // Special handling for mobile MetaMask and Trust Wallet
+      if (isMobile) {
+        // Check if MetaMask or Trust Wallet is available
+        if (window.ethereum) {
+          console.log('Mobile wallet detected');
+          // Use injected provider directly on mobile
+          const provider = new ethers.providers.Web3Provider(window.ethereum);
+          
+          try {
+            // Request account access
+            await window.ethereum.request({ method: 'eth_requestAccounts' });
+            
+            const signer = provider.getSigner();
+            const address = await signer.getAddress();
+            
+            // Check network
+            const network = await provider.getNetwork();
+            if (network.chainId !== 11155111) {
+              try {
+                await window.ethereum.request({
+                  method: 'wallet_switchEthereumChain',
+                  params: [{ chainId: '0xaa36a7' }], // Sepolia chainId in hex
+                });
+              } catch (switchError) {
+                if (switchError.code === 4902) {
+                  // Add the network
+                  try {
+                    await window.ethereum.request({
+                      method: 'wallet_addEthereumChain',
+                      params: [{
+                        chainId: '0xaa36a7',
+                        chainName: 'Sepolia',
+                        nativeCurrency: {
+                          name: 'Sepolia ETH',
+                          symbol: 'SEP',
+                          decimals: 18
+                        },
+                        rpcUrls: ['https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161'],
+                        blockExplorerUrls: ['https://sepolia.etherscan.io']
+                      }]
+                    });
+                  } catch (addError) {
+                    toast.error('Failed to add Sepolia network');
+                    return;
+                  }
+                }
+              }
+            }
+            
+            // Setup contracts
+            const tokenContract = new ethers.Contract(
+              CONTRACT_ADDRESSES.token,
+              OOOWEEE_TOKEN_ABI,
+              signer
+            );
+            
+            const savingsContract = new ethers.Contract(
+              CONTRACT_ADDRESSES.savings,
+              OOOWEEE_SAVINGS_ABI,
+              signer
+            );
+            
+            setAccount(address);
+            setProvider(provider);
+            setTokenContract(tokenContract);
+            setSavingsContract(savingsContract);
+            
+            toast.success('Wallet connected! OOOWEEE!');
+            
+            // Load data
+            loadBalances(address, provider, tokenContract);
+            loadSavingsAccounts(address, savingsContract);
+            
+            // Subscribe to accounts change
+            window.ethereum.on("accountsChanged", (accounts) => {
+              if (accounts.length === 0) {
+                disconnectWallet();
+              } else {
+                window.location.reload();
+              }
+            });
+            
+            // Subscribe to chainId change
+            window.ethereum.on("chainChanged", () => {
+              window.location.reload();
+            });
+            
+            return; // Exit early on successful mobile connection
+          } catch (error) {
+            console.error('Mobile wallet connection failed:', error);
+            // Fall through to Web3Modal if direct connection fails
+          }
+        }
+      }
+      
+      // Use Web3Modal for desktop or if mobile direct connection failed
       const instance = await web3Modal.connect();
       const provider = new ethers.providers.Web3Provider(instance);
       const signer = provider.getSigner();
@@ -112,8 +256,26 @@ function App() {
           });
         } catch (switchError) {
           if (switchError.code === 4902) {
-            toast.error('Please add Sepolia network to your wallet');
-            return;
+            // Try to add the network
+            try {
+              await instance.request({
+                method: 'wallet_addEthereumChain',
+                params: [{
+                  chainId: '0xaa36a7',
+                  chainName: 'Sepolia',
+                  nativeCurrency: {
+                    name: 'Sepolia ETH',
+                    symbol: 'SEP',
+                    decimals: 18
+                  },
+                  rpcUrls: ['https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161'],
+                  blockExplorerUrls: ['https://sepolia.etherscan.io']
+                }]
+              });
+            } catch (addError) {
+              toast.error('Please add Sepolia network to your wallet');
+              return;
+            }
           }
         }
       }
@@ -156,8 +318,16 @@ function App() {
       });
       
     } catch (error) {
-      console.error(error);
-      toast.error('Failed to connect wallet');
+      console.error('Wallet connection error:', error);
+      
+      // Provide specific error messages
+      if (error.message?.includes('User rejected')) {
+        toast.error('Connection cancelled by user');
+      } else if (error.message?.includes('No Provider')) {
+        toast.error('No wallet found. Please install MetaMask or Trust Wallet');
+      } else {
+        toast.error('Failed to connect wallet. Please try again.');
+      }
     }
   };
 
@@ -166,6 +336,13 @@ function App() {
     if (web3Modal) {
       web3Modal.clearCachedProvider();
     }
+    
+    // Remove event listeners if they exist
+    if (window.ethereum) {
+      window.ethereum.removeAllListeners('accountsChanged');
+      window.ethereum.removeAllListeners('chainChanged');
+    }
+    
     setAccount(null);
     setProvider(null);
     setTokenContract(null);
