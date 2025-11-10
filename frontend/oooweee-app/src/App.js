@@ -231,7 +231,7 @@ function App() {
         const currentUrl = window.location.href;
         
         // Show wallet selection modal
-        const walletChoice = confirm(
+        const walletChoice = window.confirm(
           'Choose how to connect:\n\n' +
           'OK = Open in MetaMask\n' +
           'Cancel = See other options'
@@ -266,7 +266,7 @@ Open Trust Wallet → Browser → Enter: ${currentUrl}
           alert(message);
           
           // Optionally open app store
-          if (confirm('Download MetaMask now?')) {
+          if (window.confirm('Download MetaMask now?')) {
             if (isIOS) {
               window.open('https://apps.apple.com/app/metamask/id1438144202', '_blank');
             } else if (isAndroid) {

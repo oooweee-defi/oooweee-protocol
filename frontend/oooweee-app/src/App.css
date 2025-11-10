@@ -180,6 +180,15 @@
   text-shadow: 1px 1px 0px rgba(0,0,0,0.3);
 }
 
+/* Connect Section - Fixed for proper button centering */
+.connect-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  padding: 1rem;
+}
+
 /* Rainbow gradient buttons */
 .rainbow-btn {
   background: linear-gradient(90deg, 
@@ -199,6 +208,7 @@
   100% { background-position: 0% 50%; }
 }
 
+/* Connect Button - Fixed centering and mobile touch */
 .connect-btn {
   font-family: 'Press Start 2P', cursive;
   color: #000;
@@ -212,6 +222,13 @@
   touch-action: manipulation; /* Improves touch responsiveness on mobile */
   -webkit-tap-highlight-color: transparent; /* Remove tap highlight on iOS */
   min-height: 48px; /* Better touch target for mobile */
+  /* Center the button properly */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 0 auto;
+  text-align: center;
 }
 
 .connect-btn:hover {
@@ -896,6 +913,41 @@ input, select, textarea {
   .main-logo {
     max-width: 300px;
   }
+  
+  /* Connect Section mobile fixes */
+  .connect-section {
+    padding: 1rem;
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  /* Fix Connect Button centering on mobile */
+  .connect-btn {
+    font-size: 16px !important; /* Prevents zoom on iOS */
+    padding: 1rem 2rem;
+    width: 90%;
+    max-width: 300px;
+    min-height: 56px; /* Bigger touch target for mobile */
+    margin: 1rem auto !important; /* Center with margin auto */
+    display: flex !important; /* Force flex for better centering */
+    align-items: center;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Make sure the button text doesn't wrap */
+  .connect-btn span {
+    white-space: nowrap;
+  }
+  
+  /* Fix the welcome card alignment */
+  .welcome-card {
+    padding: 1.5rem;
+    margin: 0 auto 2rem auto;
+    width: 90%;
+    max-width: 400px;
+    box-sizing: border-box;
+  }
 
   .wallet-card {
     margin: 1rem;
@@ -1006,13 +1058,9 @@ input, select, textarea {
     padding: 0.4rem 0.8rem;
   }
 
-  .welcome-card {
-    padding: 1rem;
-    margin: 0 1rem;
-  }
-
   .feature-grid {
     gap: 1rem;
+    grid-template-columns: 1fr;
   }
 
   .feature h4 {
@@ -1021,15 +1069,6 @@ input, select, textarea {
 
   .feature p {
     font-size: 1.1rem;
-  }
-
-  .connect-btn {
-    font-size: 16px !important; /* Prevents zoom on iOS */
-    padding: 0.8rem 1.5rem;
-    width: 90%;
-    max-width: 300px;
-    min-height: 48px; /* Better touch target */
-    -webkit-tap-highlight-color: transparent;
   }
 
   .conversion-note {
@@ -1046,6 +1085,9 @@ input, select, textarea {
   .disclaimer {
     font-size: 0.9rem;
     padding: 0 1rem;
+    width: 100%;
+    text-align: center;
+    margin: 0.5rem 0;
   }
 
   .fee-note,
@@ -1055,10 +1097,21 @@ input, select, textarea {
   }
 }
 
-/* Extra small devices */
+/* Extra small devices - even better centering */
 @media (max-width: 480px) {
   .main-logo {
     max-width: 250px;
+  }
+  
+  .connect-btn {
+    width: 85%;
+    font-size: 14px !important;
+    padding: 0.8rem 1.5rem;
+  }
+  
+  .welcome-card {
+    width: 95%;
+    padding: 1rem;
   }
 
   .balance-row.highlight {
