@@ -13,7 +13,7 @@ const providerOptions = {
     package: WalletConnectProvider,
     options: {
       // IMPORTANT: Get a real project ID from https://cloud.walletconnect.com
-      projectId: "084d65a488f56065ea7a901e023a8b3e", // Replace with your real WalletConnect project ID
+      projectId: "YOUR_REAL_PROJECT_ID_HERE", // Replace with your real WalletConnect project ID
       infuraId: "9aa3d95b3bc440fa88ea12eaa4456161",
       rpc: {
         11155111: "https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161"
@@ -135,142 +135,147 @@ function App() {
 
   // Enhanced Connect Wallet with better mobile support
   const connectWallet = async () => {
-    try {
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-      const isAndroid = /Android/i.test(navigator.userAgent);
+  try {
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    
+    // Check if we're in a wallet browser (MetaMask, Trust Wallet, etc.)
+    const isWalletBrowser = typeof window.ethereum !== 'undefined';
+    
+    // MOBILE: If in wallet browser, connect directly
+    if (isMobile && isWalletBrowser) {
+      console.log('Mobile wallet browser detected - connecting directly');
       
-      // Check if we're in a wallet browser (MetaMask, Trust Wallet, etc.)
-      const isWalletBrowser = typeof window.ethereum !== 'undefined';
-      
-      // MOBILE: If in wallet browser, connect directly
-      if (isMobile && isWalletBrowser) {
-        console.log('Mobile wallet browser detected - connecting directly');
+      try {
+        const accounts = await window.ethereum.request({
+          method: 'eth_requestAccounts'
+        });
         
-        try {
-          const accounts = await window.ethereum.request({
-            method: 'eth_requestAccounts'
-          });
+        if (accounts.length > 0) {
+          const provider = new ethers.providers.Web3Provider(window.ethereum);
+          const signer = provider.getSigner();
+          const address = await signer.getAddress();
           
-          if (accounts.length > 0) {
-            const provider = new ethers.providers.Web3Provider(window.ethereum);
-            const signer = provider.getSigner();
-            const address = await signer.getAddress();
-            
-            // Check and switch to Sepolia if needed
-            const network = await provider.getNetwork();
-            if (network.chainId !== 11155111) {
-              try {
+          // Check and switch to Sepolia if needed
+          const network = await provider.getNetwork();
+          if (network.chainId !== 11155111) {
+            try {
+              await window.ethereum.request({
+                method: 'wallet_switchEthereumChain',
+                params: [{ chainId: '0xaa36a7' }],
+              });
+            } catch (switchError) {
+              if (switchError.code === 4902) {
                 await window.ethereum.request({
-                  method: 'wallet_switchEthereumChain',
-                  params: [{ chainId: '0xaa36a7' }],
+                  method: 'wallet_addEthereumChain',
+                  params: [{
+                    chainId: '0xaa36a7',
+                    chainName: 'Sepolia',
+                    nativeCurrency: {
+                      name: 'Sepolia ETH',
+                      symbol: 'SEP',
+                      decimals: 18
+                    },
+                    rpcUrls: ['https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161'],
+                    blockExplorerUrls: ['https://sepolia.etherscan.io']
+                  }]
                 });
-              } catch (switchError) {
-                if (switchError.code === 4902) {
-                  await window.ethereum.request({
-                    method: 'wallet_addEthereumChain',
-                    params: [{
-                      chainId: '0xaa36a7',
-                      chainName: 'Sepolia',
-                      nativeCurrency: {
-                        name: 'Sepolia ETH',
-                        symbol: 'SEP',
-                        decimals: 18
-                      },
-                      rpcUrls: ['https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161'],
-                      blockExplorerUrls: ['https://sepolia.etherscan.io']
-                    }]
-                  });
-                }
               }
             }
-            
-            // Setup contracts
-            const tokenContract = new ethers.Contract(
-              CONTRACT_ADDRESSES.token,
-              OOOWEEE_TOKEN_ABI,
-              signer
-            );
-            
-            const savingsContract = new ethers.Contract(
-              CONTRACT_ADDRESSES.savings,
-              OOOWEEE_SAVINGS_ABI,
-              signer
-            );
-            
-            setAccount(address);
-            setProvider(provider);
-            setTokenContract(tokenContract);
-            setSavingsContract(savingsContract);
-            
-            toast.success('Wallet connected! OOOWEEE!');
-            
-            // Load data
-            loadBalances(address, provider, tokenContract);
-            loadSavingsAccounts(address, savingsContract);
-            
-            // Event listeners
-            window.ethereum.on("accountsChanged", (accounts) => {
-              if (accounts.length === 0) {
-                disconnectWallet();
-              } else {
-                window.location.reload();
-              }
-            });
-            
-            window.ethereum.on("chainChanged", () => {
-              window.location.reload();
-            });
-            
-            return; // Exit after successful mobile connection
           }
-        } catch (error) {
-          console.error('Direct mobile connection failed:', error);
+          
+          // Setup contracts
+          const tokenContract = new ethers.Contract(
+            CONTRACT_ADDRESSES.token,
+            OOOWEEE_TOKEN_ABI,
+            signer
+          );
+          
+          const savingsContract = new ethers.Contract(
+            CONTRACT_ADDRESSES.savings,
+            OOOWEEE_SAVINGS_ABI,
+            signer
+          );
+          
+          setAccount(address);
+          setProvider(provider);
+          setTokenContract(tokenContract);
+          setSavingsContract(savingsContract);
+          
+          toast.success('Wallet connected! OOOWEEE!');
+          
+          // Load data
+          loadBalances(address, provider, tokenContract);
+          loadSavingsAccounts(address, savingsContract);
+          
+          // Event listeners
+          window.ethereum.on("accountsChanged", (accounts) => {
+            if (accounts.length === 0) {
+              disconnectWallet();
+            } else {
+              window.location.reload();
+            }
+          });
+          
+          window.ethereum.on("chainChanged", () => {
+            window.location.reload();
+          });
+          
+          return; // Exit after successful mobile connection
         }
+      } catch (error) {
+        console.error('Direct mobile connection failed:', error);
       }
+    }
+    
+    // MOBILE: Not in wallet browser - show wallet selection modal with smooth animation
+    if (isMobile && !isWalletBrowser) {
+      const currentUrl = window.location.href;
       
-      // MOBILE: Not in wallet browser - offer to open in wallet app
-      if (isMobile && !isWalletBrowser) {
-        const currentUrl = window.location.href;
-        
-        // Create a more user-friendly modal
-        const modalDiv = document.createElement('div');
-        modalDiv.className = 'mobile-wallet-modal';
-        modalDiv.innerHTML = `
-          <div class="modal-backdrop"></div>
-          <div class="modal-content">
-            <h3>Connect Wallet</h3>
-            <p>Choose how to connect:</p>
-            <button class="wallet-option-btn metamask-btn" onclick="window.openMetaMask()">
-              🦊 Open in MetaMask
-            </button>
-            <button class="wallet-option-btn trust-btn" onclick="window.openTrustWallet()">
-              💠 Open in Trust Wallet
-            </button>
-            <button class="wallet-option-btn instructions-btn" onclick="window.showInstructions()">
-              📖 Show Instructions
-            </button>
-            <button class="wallet-option-btn cancel-btn" onclick="window.closeModal()">
-              Cancel
-            </button>
-          </div>
-        `;
-        
-        // Define global functions for button clicks
-        window.openMetaMask = () => {
-          const deepLink = `https://metamask.app.link/dapp/${currentUrl.replace('https://', '')}`;
-          window.location.href = deepLink;
-          document.body.removeChild(modalDiv);
-        };
-        
-        window.openTrustWallet = () => {
-          const deepLink = `https://link.trustwallet.com/open_url?url=${encodeURIComponent(currentUrl)}`;
-          window.location.href = deepLink;
-          document.body.removeChild(modalDiv);
-        };
-        
-        window.showInstructions = () => {
-          const message = `
+      // Create modal with initial hidden state
+      const modalDiv = document.createElement('div');
+      modalDiv.className = 'mobile-wallet-modal';
+      
+      // Set initial styles to prevent jump
+      modalDiv.style.opacity = '0';
+      modalDiv.style.transition = 'opacity 0.3s ease-in-out';
+      
+      modalDiv.innerHTML = `
+        <div class="modal-backdrop" style="opacity: 0; transition: opacity 0.3s ease-in-out;"></div>
+        <div class="modal-content" style="opacity: 0; transform: translate(-50%, -50%) scale(0.9); transition: all 0.3s ease-in-out;">
+          <h3>Connect Wallet</h3>
+          <p>Choose how to connect:</p>
+          <button class="wallet-option-btn metamask-btn" onclick="window.openMetaMask()">
+            🦊 Open in MetaMask
+          </button>
+          <button class="wallet-option-btn trust-btn" onclick="window.openTrustWallet()">
+            💠 Open in Trust Wallet
+          </button>
+          <button class="wallet-option-btn instructions-btn" onclick="window.showInstructions()">
+            📖 Show Instructions
+          </button>
+          <button class="wallet-option-btn cancel-btn" onclick="window.closeModal()">
+            Cancel
+          </button>
+        </div>
+      `;
+      
+      // Define global functions for button clicks
+      window.openMetaMask = () => {
+        const deepLink = `https://metamask.app.link/dapp/${currentUrl.replace('https://', '')}`;
+        window.location.href = deepLink;
+        closeModalSmooth();
+      };
+      
+      window.openTrustWallet = () => {
+        const deepLink = `https://link.trustwallet.com/open_url?url=${encodeURIComponent(currentUrl)}`;
+        window.location.href = deepLink;
+        closeModalSmooth();
+      };
+      
+      window.showInstructions = () => {
+        const message = `
 To connect your wallet:
 
 1. Download MetaMask or Trust Wallet
@@ -279,116 +284,144 @@ To connect your wallet:
 4. Click Connect Wallet again
 
 Or scan the QR code from desktop!
-          `;
-          window.alert(message);
-          
-          // Offer to download
-          if (window.confirm('Download MetaMask now?')) {
-            if (isIOS) {
-              window.open('https://apps.apple.com/app/metamask/id1438144202', '_blank');
-            } else if (isAndroid) {
-              window.open('https://play.google.com/store/apps/details?id=io.metamask', '_blank');
-            }
-          }
-          document.body.removeChild(modalDiv);
-        };
+        `;
+        window.alert(message);
         
-        window.closeModal = () => {
-          document.body.removeChild(modalDiv);
-        };
-        
-        document.body.appendChild(modalDiv);
-        return;
-      }
-      
-      // DESKTOP: Use Web3Modal as normal
-      if (!isMobile) {
-        console.log('Desktop device - using Web3Modal');
-        
-        if (web3Modal && web3Modal.cachedProvider) {
-          web3Modal.clearCachedProvider();
-        }
-        
-        const instance = await web3Modal.connect();
-        const provider = new ethers.providers.Web3Provider(instance);
-        const signer = provider.getSigner();
-        const address = await signer.getAddress();
-        
-        // Check network
-        const network = await provider.getNetwork();
-        if (network.chainId !== 11155111) {
-          try {
-            await instance.request({
-              method: 'wallet_switchEthereumChain',
-              params: [{ chainId: '0xaa36a7' }],
-            });
-          } catch (switchError) {
-            if (switchError.code === 4902) {
-              await instance.request({
-                method: 'wallet_addEthereumChain',
-                params: [{
-                  chainId: '0xaa36a7',
-                  chainName: 'Sepolia',
-                  nativeCurrency: {
-                    name: 'Sepolia ETH',
-                    symbol: 'SEP',
-                    decimals: 18
-                  },
-                  rpcUrls: ['https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161'],
-                  blockExplorerUrls: ['https://sepolia.etherscan.io']
-                }]
-              });
-            }
+        // Offer to download
+        if (window.confirm('Download MetaMask now?')) {
+          if (isIOS) {
+            window.open('https://apps.apple.com/app/metamask/id1438144202', '_blank');
+          } else if (isAndroid) {
+            window.open('https://play.google.com/store/apps/details?id=io.metamask', '_blank');
           }
         }
+        closeModalSmooth();
+      };
+      
+      const closeModalSmooth = () => {
+        const backdrop = modalDiv.querySelector('.modal-backdrop');
+        const content = modalDiv.querySelector('.modal-content');
         
-        const tokenContract = new ethers.Contract(
-          CONTRACT_ADDRESSES.token,
-          OOOWEEE_TOKEN_ABI,
-          signer
-        );
+        // Fade out
+        modalDiv.style.opacity = '0';
+        backdrop.style.opacity = '0';
+        content.style.opacity = '0';
+        content.style.transform = 'translate(-50%, -50%) scale(0.9)';
         
-        const savingsContract = new ethers.Contract(
-          CONTRACT_ADDRESSES.savings,
-          OOOWEEE_SAVINGS_ABI,
-          signer
-        );
-
-        setAccount(address);
-        setProvider(provider);
-        setTokenContract(tokenContract);
-        setSavingsContract(savingsContract);
-        
-        toast.success('Wallet connected! OOOWEEE!');
-        
-        loadBalances(address, provider, tokenContract);
-        loadSavingsAccounts(address, savingsContract);
-        
-        instance.on("accountsChanged", (accounts) => {
-          if (accounts.length === 0) {
-            disconnectWallet();
-          } else {
-            window.location.reload();
+        // Remove after animation
+        setTimeout(() => {
+          if (document.body.contains(modalDiv)) {
+            document.body.removeChild(modalDiv);
           }
-        });
-
-        instance.on("chainChanged", () => {
-          window.location.reload();
-        });
-      }
+        }, 300);
+      };
       
-    } catch (error) {
-      console.error('Wallet connection error:', error);
+      window.closeModal = closeModalSmooth;
       
-      if (error.message?.includes('User rejected')) {
-        toast.error('Connection cancelled by user');
-      } else if (error.message?.includes('No Provider')) {
-        toast.error('No wallet found. Please install MetaMask or use wallet browser');
-      } else {
-        toast.error('Failed to connect. Try using your wallet\'s browser.');
-      }
+      // Add to DOM
+      document.body.appendChild(modalDiv);
+      
+      // Trigger animation after a tiny delay to ensure DOM rendering
+      requestAnimationFrame(() => {
+        modalDiv.style.opacity = '1';
+        const backdrop = modalDiv.querySelector('.modal-backdrop');
+        const content = modalDiv.querySelector('.modal-content');
+        backdrop.style.opacity = '1';
+        content.style.opacity = '1';
+        content.style.transform = 'translate(-50%, -50%) scale(1)';
+      });
+      
+      return;
     }
-  };
+    
+    // DESKTOP: Use Web3Modal as normal
+    if (!isMobile) {
+      console.log('Desktop device - using Web3Modal');
+      
+      if (web3Modal && web3Modal.cachedProvider) {
+        web3Modal.clearCachedProvider();
+      }
+      
+      const instance = await web3Modal.connect();
+      const provider = new ethers.providers.Web3Provider(instance);
+      const signer = provider.getSigner();
+      const address = await signer.getAddress();
+      
+      // Check network
+      const network = await provider.getNetwork();
+      if (network.chainId !== 11155111) {
+        try {
+          await instance.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0xaa36a7' }],
+          });
+        } catch (switchError) {
+          if (switchError.code === 4902) {
+            await instance.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: '0xaa36a7',
+                chainName: 'Sepolia',
+                nativeCurrency: {
+                  name: 'Sepolia ETH',
+                  symbol: 'SEP',
+                  decimals: 18
+                },
+                rpcUrls: ['https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161'],
+                blockExplorerUrls: ['https://sepolia.etherscan.io']
+              }]
+            });
+          }
+        }
+      }
+      
+      const tokenContract = new ethers.Contract(
+        CONTRACT_ADDRESSES.token,
+        OOOWEEE_TOKEN_ABI,
+        signer
+      );
+      
+      const savingsContract = new ethers.Contract(
+        CONTRACT_ADDRESSES.savings,
+        OOOWEEE_SAVINGS_ABI,
+        signer
+      );
+
+      setAccount(address);
+      setProvider(provider);
+      setTokenContract(tokenContract);
+      setSavingsContract(savingsContract);
+      
+      toast.success('Wallet connected! OOOWEEE!');
+      
+      loadBalances(address, provider, tokenContract);
+      loadSavingsAccounts(address, savingsContract);
+      
+      instance.on("accountsChanged", (accounts) => {
+        if (accounts.length === 0) {
+          disconnectWallet();
+        } else {
+          window.location.reload();
+        }
+      });
+
+      instance.on("chainChanged", () => {
+        window.location.reload();
+      });
+    }
+    
+  } catch (error) {
+    console.error('Wallet connection error:', error);
+    
+    if (error.message?.includes('User rejected')) {
+      toast.error('Connection cancelled by user');
+    } else if (error.message?.includes('No Provider')) {
+      toast.error('No wallet found. Please install MetaMask or use wallet browser');
+    } else {
+      toast.error('Failed to connect. Try using your wallet\'s browser.');
+    }
+  }
+};
 
   // Disconnect wallet
   const disconnectWallet = async () => {

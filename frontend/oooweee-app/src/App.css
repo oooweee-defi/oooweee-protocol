@@ -295,7 +295,7 @@
   line-height: 1.3;
 }
 
-/* Mobile Wallet Modal Styles */
+/* Mobile Wallet Modal Styles - Fixed with smooth animation */
 .mobile-wallet-modal {
   position: fixed;
   top: 0;
@@ -303,6 +303,9 @@
   right: 0;
   bottom: 0;
   z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .modal-backdrop {
@@ -312,6 +315,7 @@
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.7);
+  animation: fadeIn 0.3s ease-in-out;
 }
 
 .modal-content {
@@ -326,7 +330,27 @@
   box-shadow: 10px 10px 0px #000;
   width: 90%;
   max-width: 400px;
-  animation: slideDown 0.3s ease-out;
+  animation: slideUpFadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUpFadeIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -45%) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
 }
 
 .modal-content h3 {
