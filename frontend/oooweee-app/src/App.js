@@ -13,7 +13,7 @@ const providerOptions = {
     package: WalletConnectProvider,
     options: {
       // IMPORTANT: Get a real project ID from https://cloud.walletconnect.com
-      projectId: "YOUR_REAL_PROJECT_ID_HERE", // Replace with your real WalletConnect project ID
+      projectId: "084d65a488f56065ea7a901e023a8b3e", // Replace with your real WalletConnect project ID
       infuraId: "9aa3d95b3bc440fa88ea12eaa4456161",
       rpc: {
         11155111: "https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161"
