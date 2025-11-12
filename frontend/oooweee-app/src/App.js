@@ -754,86 +754,99 @@ function App() {
     }
   };
 
-  const depositToAccount = async (accountId, amount) => {
-    try {
-      setLoading(true);
+ const depositToAccount = async (accountId, amount) => {
+  try {
+    setLoading(true);
+    
+    const depositAmountNumber = parseFloat(amount);
+    const currentBalance = parseFloat(balance);
+    
+    // Check if user has enough OOOWEEE
+    if (currentBalance < depositAmountNumber) {
+      const needed = depositAmountNumber - currentBalance;
       
-      // Check if user has enough OOOWEEE
-      if (parseFloat(balance) < parseFloat(amount)) {
-        const needed = parseFloat(amount) - parseFloat(balance);
+      if (window.confirm(`You need ${needed.toFixed(2)} more OOOWEEE. Buy with ETH now?`)) {
+        const requiredEth = needed * oooweeePrice * 1.05; // 5% buffer for slippage
         
-        if (window.confirm(`You need ${needed.toFixed(2)} more OOOWEEE. Buy with ETH now?`)) {
-          const requiredEth = needed * oooweeePrice * 1.05;
-          
-          const ethAmount = ethers.utils.parseEther(requiredEth.toFixed(6));
-          const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.token];
-          const deadline = Math.floor(Date.now() / 1000) + 3600;
-          
-          const amounts = await routerContract.getAmountsOut(ethAmount, path);
-          const minOutput = amounts[1].mul(98).div(100);
-          
-          const buyTx = await routerContract.swapExactETHForTokens(
-            minOutput,
-            path,
-            account,
-            deadline,
-            { value: ethAmount }
-          );
-          
-          await toast.promise(
-            buyTx.wait(),
-            {
-              loading: '🔄 Buying OOOWEEE first...',
-              success: '✅ OOOWEEE purchased!',
-              error: '❌ Failed to buy OOOWEEE'
-            }
-          );
-          
-          await loadBalances(account, provider, tokenContract);
-        } else {
+        // Check ETH balance
+        if (parseFloat(ethBalance) < requiredEth) {
+          toast.error(`Insufficient ETH. Need ${requiredEth.toFixed(4)} ETH`);
           setLoading(false);
           return;
         }
-      }
-      
-      const depositAmount = ethers.utils.parseUnits(amount.toString(), 18);
-      
-      const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.savings, depositAmount);
-      
-      await toast.promise(
-        approveTx.wait(),
-        {
-          loading: '🔓 Approving tokens...',
-          success: '✅ Tokens approved!',
-          error: '❌ Failed to approve'
-        }
-      );
-      
-      const depositTx = await savingsContract.deposit(accountId, depositAmount);
-      
-      await toast.promise(
-        depositTx.wait(),
-        {
-          loading: '💰 Depositing...',
-          success: `🎉 Deposited ${amount} $OOOWEEE!`,
-          error: '❌ Failed to deposit'
-        }
-      );
-      
-      await loadSavingsAccounts(account, savingsContract);
-      await loadBalances(account, provider, tokenContract);
-
-    } catch (error) {
-      console.error(error);
-      if (error.code === 'ACTION_REJECTED') {
-        toast.error('Transaction cancelled');
+        
+        const ethAmount = ethers.utils.parseEther(requiredEth.toFixed(6));
+        const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.token];
+        const deadline = Math.floor(Date.now() / 1000) + 3600;
+        
+        // Get expected output with slippage
+        const amounts = await routerContract.getAmountsOut(ethAmount, path);
+        const minOutput = ethers.utils.parseUnits(needed.toFixed(0), 18).mul(98).div(100);
+        
+        const buyTx = await routerContract.swapExactETHForTokens(
+          minOutput,
+          path,
+          account,
+          deadline,
+          { value: ethAmount }
+        );
+        
+        await toast.promise(
+          buyTx.wait(),
+          {
+            loading: `🔄 Buying ${needed.toFixed(0)} OOOWEEE...`,
+            success: '✅ OOOWEEE purchased!',
+            error: '❌ Failed to buy OOOWEEE'
+          }
+        );
+        
+        // Reload balance after purchase
+        await loadBalances(account, provider, tokenContract);
       } else {
-        toast.error('Failed to deposit');
+        setLoading(false);
+        return;
       }
-    } finally {
-      setLoading(false);
     }
-  };
+    
+    // Now deposit the originally requested amount
+    const depositAmount = ethers.utils.parseUnits(depositAmountNumber.toString(), 18);
+    
+    const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.savings, depositAmount);
+    
+    await toast.promise(
+      approveTx.wait(),
+      {
+        loading: '🔓 Approving tokens...',
+        success: '✅ Tokens approved!',
+        error: '❌ Failed to approve'
+      }
+    );
+    
+    const depositTx = await savingsContract.deposit(accountId, depositAmount);
+    
+    await toast.promise(
+      depositTx.wait(),
+      {
+        loading: `💰 Depositing ${depositAmountNumber} OOOWEEE...`,
+        success: `🎉 Deposited ${depositAmountNumber} $OOOWEEE!`,
+        error: '❌ Failed to deposit'
+      }
+    );
+    
+    await loadSavingsAccounts(account, savingsContract);
+    await loadBalances(account, provider, tokenContract);
+
+  } catch (error) {
+    console.error(error);
+    if (error.code === 'ACTION_REJECTED') {
+      toast.error('Transaction cancelled');
+    } else {
+      toast.error('Failed to deposit: ' + error.message);
+    }
+  } finally {
+    setLoading(false);
+  }
+};
 
   const getDaysRemaining = (unlockTime) => {
     const now = Math.floor(Date.now() / 1000);
