@@ -3,14 +3,15 @@
   "chainId": 11155111,
   "deployer": "0x335bB9E071F10a414308170045A5Bc614BcC97B6",
   "operationsWallet": "0x335bB9E071F10a414308170045A5Bc614BcC97B6",
-  "timestamp": "2025-11-11T22:12:37.152Z",
+  "timestamp": "2025-11-12T15:45:00.000Z",
   "contracts": {
-    "token": "0x42fc7b7175b5B9116c38bbBd5b88C1c968Dd7b77",
-    "savings": "0xBFB865389A907d35B540080d299ad70697dBdFF5",
-    "validators": "0x4106F3f19f288C4455e7998C661Ec558dB4D0cc3",
-    "stability": "0xa4001E0E85502F0a3D7e6AE03e639B4d625a9C9c",
-    "rewardsReceiver": "0xdF12e7A67Cee3E25b03E67e0a0157c52CB4486FF"
+    "token": "0xD4eEa41F12FBb3e2030B17FDeaaF8b38c471B32a",
+    "savings": "0x08292751eDBedF6e4A09eD1d133FA6b28af49Fc8",
+    "validators": "0xC0E5434c7086b4A5cb1Ff86Ba9372a171CA178Ae",
+    "stability": "0xBf12716D81F55A9105Fef47816D67Fa84bCd6373",
+    "rewardsReceiver": "0x609413Ac27E1c55474d2D8A5721F887d4c8bEdED"
   },
   "ticker": "OOOWEEE",
-  "uniswapRouter": "0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008"
+  "uniswapRouter": "0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008",
+  "notes": "Fresh deployment with safe swap approvals"
 }

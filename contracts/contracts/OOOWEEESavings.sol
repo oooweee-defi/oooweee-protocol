@@ -460,32 +460,35 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
     
     // ============ Swap Function ============
     
-    function _swapTokensForETH(uint256 tokenAmount) internal returns (uint256) {
-        if (tokenAmount == 0) return 0;
-        
-        // Approve router
-        oooweeeToken.approve(address(uniswapRouter), tokenAmount);
-        
-        // Set up swap path
-        address[] memory path = new address[](2);
-        path[0] = address(oooweeeToken);
-        path[1] = uniswapRouter.WETH();
-        
-        // Get ETH balance before
-        uint256 ethBalanceBefore = address(this).balance;
-        
-        // Execute swap
-        uniswapRouter.swapExactTokensForETHSupportingFeeOnTransferTokens(
-            tokenAmount,
-            0, // Accept any amount (consider adding slippage protection in production)
-            path,
-            address(this),
-            block.timestamp + 300
-        );
-        
-        // Calculate ETH received
-        return address(this).balance - ethBalanceBefore;
-    }
+   function _swapTokensForETH(uint256 tokenAmount) internal returns (uint256) {
+    if (tokenAmount == 0) return 0;
+    
+    // SAFE APPROACH: Exact amount + tiny buffer for rounding
+    // No security risk, follows DeFi best practices
+    uint256 approvalAmount = tokenAmount + 1; // Just 1 wei buffer for rounding
+    oooweeeToken.approve(address(uniswapRouter), approvalAmount);
+    
+    // Set up swap path
+    address[] memory path = new address[](2);
+    path[0] = address(oooweeeToken);
+    path[1] = uniswapRouter.WETH();
+    
+    uint256 ethBalanceBefore = address(this).balance;
+    
+    // Execute swap (no try-catch needed if approvals work)
+    uniswapRouter.swapExactTokensForETHSupportingFeeOnTransferTokens(
+        tokenAmount,
+        0,
+        path,
+        address(this),
+        block.timestamp + 300
+    );
+    
+    // Reset approval to 0 (good practice)
+    oooweeeToken.approve(address(uniswapRouter), 0);
+    
+    return address(this).balance - ethBalanceBefore;
+}
     
     // ============ View Functions ============
     

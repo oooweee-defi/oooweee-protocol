@@ -121,6 +121,7 @@ contract OOOWEEERewardsReceiver is Ownable {
         
         emit TokensBoughtForUsers(ethAmount, tokensBought);
         
+        // Approve exact amount for security
         oooweeeToken.approve(savingsContract, tokensBought);
         IOOOWEEESavings(savingsContract).receiveRewards(tokensBought);
     }

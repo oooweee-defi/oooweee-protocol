@@ -1,5 +1,5 @@
 require("@nomiclabs/hardhat-waffle");
-require("@nomiclabs/hardhat-etherscan");
+require("@nomicfoundation/hardhat-verify");
 require("dotenv").config();
 
 // Ensure we have required environment variables
@@ -10,6 +10,13 @@ if (!process.env.PRIVATE_KEY) {
 
 // Default to public RPC if not specified
 const SEPOLIA_RPC_URL = process.env.SEPOLIA_RPC_URL || "https://rpc.sepolia.org";
+const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || "";
+
+// Show warning if no Etherscan key
+if (!ETHERSCAN_API_KEY) {
+  console.warn("⚠️  No ETHERSCAN_API_KEY set - verification will not work");
+  console.warn("   Get a free key at https://etherscan.io/apis");
+}
 
 module.exports = {
   solidity: {
@@ -27,17 +34,14 @@ module.exports = {
       accounts: [process.env.PRIVATE_KEY],
       chainId: 11155111,
       gasPrice: "auto",
-      timeout: 60000 // 60 seconds timeout for public RPC
+      timeout: 60000
     },
-    // Localhost for testing
     hardhat: {
       chainId: 31337
     }
   },
   etherscan: {
-    // Optional: Add your Etherscan API key for contract verification
-    // Get one free at https://etherscan.io/apis
-    apiKey: process.env.ETHERSCAN_API_KEY || "YOUR_ETHERSCAN_API_KEY"
+    apiKey: ETHERSCAN_API_KEY
   },
   paths: {
     sources: "./contracts",
