@@ -7,7 +7,18 @@ import { OOOWEEE_TOKEN_ABI, OOOWEEE_SAVINGS_ABI, OOOWEEE_VALIDATORS_ABI, CONTRAC
 import Web3Modal from "web3modal";
 import WalletConnectProvider from "@walletconnect/web3-provider";
 
-// Web3Modal provider options - Fixed for mobile compatibility
+// Uniswap Router ABI (minimal)
+const UNISWAP_ROUTER_ABI = [
+  "function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)",
+  "function getAmountsOut(uint amountIn, address[] calldata path) public view returns (uint[] memory amounts)",
+  "function WETH() external pure returns (address)"
+];
+
+// Contract addresses
+const UNISWAP_ROUTER = "0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008";
+const WETH_ADDRESS = "0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9";
+
+// Web3Modal provider options
 const providerOptions = {
   walletconnect: {
     package: WalletConnectProvider,
@@ -48,7 +59,9 @@ function App() {
   const [tokenContract, setTokenContract] = useState(null);
   const [savingsContract, setSavingsContract] = useState(null);
   const [validatorsContract, setValidatorsContract] = useState(null);
+  const [routerContract, setRouterContract] = useState(null);
   const [balance, setBalance] = useState('0');
+  const [ethBalance, setEthBalance] = useState('0');
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [accountType, setAccountType] = useState('time');
@@ -60,6 +73,9 @@ function App() {
   const [targetAmountInput, setTargetAmountInput] = useState('');
   const [initialDepositInput, setInitialDepositInput] = useState('');
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [showBuyModal, setShowBuyModal] = useState(false);
+  const [ethToBuy, setEthToBuy] = useState('0.01');
+  const [estimatedOooweee, setEstimatedOooweee] = useState('0');
   
   // Validator stats
   const [validatorStats, setValidatorStats] = useState({
@@ -71,8 +87,8 @@ function App() {
     totalDonations: '0'
   });
 
-  // OOOWEEE to ETH conversion rate (example: 1 OOOWEEE = 0.00001 ETH)
-  const OOOWEEE_TO_ETH = 0.00001;
+  // OOOWEEE to ETH conversion rate (will be updated from pool)
+  const [oooweeePrice, setOooweeePrice] = useState(0.00001);
 
   // Initialize Web3Modal
   useEffect(() => {
@@ -121,6 +137,51 @@ function App() {
     }
   };
 
+  // Get OOOWEEE price from router
+  const updateOooweeePrice = useCallback(async () => {
+    if (!routerContract) return;
+    
+    try {
+      const ethAmount = ethers.utils.parseEther("1");
+      const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.token];
+      const amounts = await routerContract.getAmountsOut(ethAmount, path);
+      const oooweeePerEth = parseFloat(ethers.utils.formatUnits(amounts[1], 18));
+      setOooweeePrice(1 / oooweeePerEth);
+    } catch (error) {
+      console.error('Error fetching OOOWEEE price:', error);
+    }
+  }, [routerContract]);
+
+  // Update OOOWEEE price when router is available
+  useEffect(() => {
+    if (routerContract) {
+      updateOooweeePrice();
+      const interval = setInterval(updateOooweeePrice, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [routerContract, updateOooweeePrice]);
+
+  // Estimate OOOWEEE output
+  useEffect(() => {
+    const estimateOooweee = async () => {
+      if (!routerContract || !ethToBuy || parseFloat(ethToBuy) <= 0) {
+        setEstimatedOooweee('0');
+        return;
+      }
+      
+      try {
+        const ethAmount = ethers.utils.parseEther(ethToBuy);
+        const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.token];
+        const amounts = await routerContract.getAmountsOut(ethAmount, path);
+        setEstimatedOooweee(ethers.utils.formatUnits(amounts[1], 18));
+      } catch (error) {
+        setEstimatedOooweee('0');
+      }
+    };
+    
+    estimateOooweee();
+  }, [ethToBuy, routerContract]);
+
   const loadValidatorStats = useCallback(async () => {
     try {
       const stats = await validatorsContract.getStats();
@@ -152,7 +213,7 @@ function App() {
   // Calculate fiat value
   const getOooweeeInFiat = (oooweeeAmount, currency = 'eur') => {
     if (!ethPrice) return '...';
-    const ethValue = parseFloat(oooweeeAmount) * OOOWEEE_TO_ETH;
+    const ethValue = parseFloat(oooweeeAmount) * oooweeePrice;
     const fiatValue = ethValue * ethPrice[currency];
     return new Intl.NumberFormat('en-IE', {
       style: 'currency',
@@ -166,15 +227,112 @@ function App() {
   const convertEurToOooweee = (eurAmount) => {
     if (!ethPrice || !eurAmount) return 0;
     const ethValue = parseFloat(eurAmount) / ethPrice.eur;
-    const oooweeeAmount = ethValue / OOOWEEE_TO_ETH;
+    const oooweeeAmount = ethValue / oooweeePrice;
     return Math.floor(oooweeeAmount);
   };
 
-  // Connect Wallet (keeping your existing implementation)
+  // Buy OOOWEEE with ETH
+  const buyOooweee = async () => {
+    if (!ethToBuy || parseFloat(ethToBuy) <= 0) {
+      toast.error('Enter a valid ETH amount');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      const ethAmount = ethers.utils.parseEther(ethToBuy);
+      const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.token];
+      const deadline = Math.floor(Date.now() / 1000) + 3600;
+      
+      // Get minimum output (with 2% slippage)
+      const amounts = await routerContract.getAmountsOut(ethAmount, path);
+      const minOutput = amounts[1].mul(98).div(100);
+      
+      const tx = await routerContract.swapExactETHForTokens(
+        minOutput,
+        path,
+        account,
+        deadline,
+        { value: ethAmount }
+      );
+      
+      await toast.promise(
+        tx.wait(),
+        {
+          loading: '🔄 Swapping ETH for OOOWEEE...',
+          success: `🎉 Bought ${parseFloat(estimatedOooweee).toFixed(2)} OOOWEEE!`,
+          error: '❌ Swap failed'
+        }
+      );
+      
+      setShowBuyModal(false);
+      await loadBalances(account, provider, tokenContract);
+      
+    } catch (error) {
+      console.error(error);
+      if (error.code === 'ACTION_REJECTED') {
+        toast.error('Transaction cancelled');
+      } else if (error.message.includes('insufficient')) {
+        toast.error('Insufficient ETH balance');
+      } else {
+        toast.error('Swap failed');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Buy and create account
+  const buyAndCreateAccount = async (requiredOooweee) => {
+    const requiredEth = requiredOooweee * oooweeePrice * 1.05; // Add 5% buffer
+    
+    const result = await toast.promise(
+      new Promise(async (resolve, reject) => {
+        try {
+          setLoading(true);
+          
+          const ethAmount = ethers.utils.parseEther(requiredEth.toFixed(6));
+          const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.token];
+          const deadline = Math.floor(Date.now() / 1000) + 3600;
+          
+          const amounts = await routerContract.getAmountsOut(ethAmount, path);
+          const minOutput = amounts[1].mul(98).div(100);
+          
+          const tx = await routerContract.swapExactETHForTokens(
+            minOutput,
+            path,
+            account,
+            deadline,
+            { value: ethAmount }
+          );
+          
+          await tx.wait();
+          await loadBalances(account, provider, tokenContract);
+          resolve(true);
+        } catch (error) {
+          reject(error);
+        } finally {
+          setLoading(false);
+        }
+      }),
+      {
+        loading: '🔄 Buying OOOWEEE first...',
+        success: '✅ OOOWEEE purchased! Now creating account...',
+        error: '❌ Failed to buy OOOWEEE'
+      }
+    );
+    
+    return result;
+  };
+
+  // Connect Wallet
   const connectWallet = async () => {
     try {
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       const isWalletBrowser = typeof window.ethereum !== 'undefined';
+      
+      let instance, provider, signer, address;
       
       // Mobile wallet browser - connect directly
       if (isMobile && isWalletBrowser) {
@@ -183,162 +341,100 @@ function App() {
         });
         
         if (accounts.length > 0) {
-          const provider = new ethers.providers.Web3Provider(window.ethereum);
-          const signer = provider.getSigner();
-          const address = await signer.getAddress();
-          
-          // Check network
-          const network = await provider.getNetwork();
-          if (network.chainId !== 11155111) {
-            try {
-              await window.ethereum.request({
-                method: 'wallet_switchEthereumChain',
-                params: [{ chainId: '0xaa36a7' }],
-              });
-            } catch (switchError) {
-              if (switchError.code === 4902) {
-                await window.ethereum.request({
-                  method: 'wallet_addEthereumChain',
-                  params: [{
-                    chainId: '0xaa36a7',
-                    chainName: 'Sepolia',
-                    nativeCurrency: {
-                      name: 'Sepolia ETH',
-                      symbol: 'SEP',
-                      decimals: 18
-                    },
-                    rpcUrls: ['https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161'],
-                    blockExplorerUrls: ['https://sepolia.etherscan.io']
-                  }]
-                });
-              }
-            }
-          }
-          
-          const tokenContract = new ethers.Contract(
-            CONTRACT_ADDRESSES.token,
-            OOOWEEE_TOKEN_ABI,
-            signer
-          );
-          
-          const savingsContract = new ethers.Contract(
-            CONTRACT_ADDRESSES.savings,
-            OOOWEEE_SAVINGS_ABI,
-            signer
-          );
-
-          const validatorsContract = new ethers.Contract(
-            CONTRACT_ADDRESSES.validators,
-            OOOWEEE_VALIDATORS_ABI,
-            signer
-          );
-          
-          setAccount(address);
-          setProvider(provider);
-          setTokenContract(tokenContract);
-          setSavingsContract(savingsContract);
-          setValidatorsContract(validatorsContract);
-          
-          toast.success('Wallet connected! OOOWEEE!');
-          
-          loadBalances(address, provider, tokenContract);
-          loadSavingsAccounts(address, savingsContract);
-          
-          window.ethereum.on("accountsChanged", (accounts) => {
-            if (accounts.length === 0) {
-              disconnectWallet();
-            } else {
-              window.location.reload();
-            }
-          });
-          
-          window.ethereum.on("chainChanged", () => {
-            window.location.reload();
-          });
-          
-          return;
+          provider = new ethers.providers.Web3Provider(window.ethereum);
+          signer = provider.getSigner();
+          address = await signer.getAddress();
+          instance = window.ethereum;
         }
-      }
-      
-      // Desktop - use Web3Modal (your existing code)
-      if (!isMobile) {
+      } else if (!isMobile) {
+        // Desktop - use Web3Modal
         if (web3Modal && web3Modal.cachedProvider) {
           web3Modal.clearCachedProvider();
         }
         
-        const instance = await web3Modal.connect();
-        const provider = new ethers.providers.Web3Provider(instance);
-        const signer = provider.getSigner();
-        const address = await signer.getAddress();
-        
-        const network = await provider.getNetwork();
-        if (network.chainId !== 11155111) {
-          try {
+        instance = await web3Modal.connect();
+        provider = new ethers.providers.Web3Provider(instance);
+        signer = provider.getSigner();
+        address = await signer.getAddress();
+      }
+      
+      // Check network
+      const network = await provider.getNetwork();
+      if (network.chainId !== 11155111) {
+        try {
+          await instance.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0xaa36a7' }],
+          });
+        } catch (switchError) {
+          if (switchError.code === 4902) {
             await instance.request({
-              method: 'wallet_switchEthereumChain',
-              params: [{ chainId: '0xaa36a7' }],
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: '0xaa36a7',
+                chainName: 'Sepolia',
+                nativeCurrency: {
+                  name: 'Sepolia ETH',
+                  symbol: 'SEP',
+                  decimals: 18
+                },
+                rpcUrls: ['https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161'],
+                blockExplorerUrls: ['https://sepolia.etherscan.io']
+              }]
             });
-          } catch (switchError) {
-            if (switchError.code === 4902) {
-              await instance.request({
-                method: 'wallet_addEthereumChain',
-                params: [{
-                  chainId: '0xaa36a7',
-                  chainName: 'Sepolia',
-                  nativeCurrency: {
-                    name: 'Sepolia ETH',
-                    symbol: 'SEP',
-                    decimals: 18
-                  },
-                  rpcUrls: ['https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161'],
-                  blockExplorerUrls: ['https://sepolia.etherscan.io']
-                }]
-              });
-            }
           }
         }
-        
-        const tokenContract = new ethers.Contract(
-          CONTRACT_ADDRESSES.token,
-          OOOWEEE_TOKEN_ABI,
-          signer
-        );
-        
-        const savingsContract = new ethers.Contract(
-          CONTRACT_ADDRESSES.savings,
-          OOOWEEE_SAVINGS_ABI,
-          signer
-        );
-
-        const validatorsContract = new ethers.Contract(
-          CONTRACT_ADDRESSES.validators,
-          OOOWEEE_VALIDATORS_ABI,
-          signer
-        );
-
-        setAccount(address);
-        setProvider(provider);
-        setTokenContract(tokenContract);
-        setSavingsContract(savingsContract);
-        setValidatorsContract(validatorsContract);
-        
-        toast.success('Wallet connected! OOOWEEE!');
-        
-        loadBalances(address, provider, tokenContract);
-        loadSavingsAccounts(address, savingsContract);
-        
-        instance.on("accountsChanged", (accounts) => {
-          if (accounts.length === 0) {
-            disconnectWallet();
-          } else {
-            window.location.reload();
-          }
-        });
-
-        instance.on("chainChanged", () => {
-          window.location.reload();
-        });
       }
+      
+      // Initialize contracts
+      const tokenContract = new ethers.Contract(
+        CONTRACT_ADDRESSES.token,
+        OOOWEEE_TOKEN_ABI,
+        signer
+      );
+      
+      const savingsContract = new ethers.Contract(
+        CONTRACT_ADDRESSES.savings,
+        OOOWEEE_SAVINGS_ABI,
+        signer
+      );
+
+      const validatorsContract = new ethers.Contract(
+        CONTRACT_ADDRESSES.validators,
+        OOOWEEE_VALIDATORS_ABI,
+        signer
+      );
+      
+      const routerContract = new ethers.Contract(
+        UNISWAP_ROUTER,
+        UNISWAP_ROUTER_ABI,
+        signer
+      );
+      
+      setAccount(address);
+      setProvider(provider);
+      setTokenContract(tokenContract);
+      setSavingsContract(savingsContract);
+      setValidatorsContract(validatorsContract);
+      setRouterContract(routerContract);
+      
+      toast.success('Wallet connected! OOOWEEE!');
+      
+      loadBalances(address, provider, tokenContract);
+      loadSavingsAccounts(address, savingsContract);
+      
+      // Event listeners
+      instance.on("accountsChanged", (accounts) => {
+        if (accounts.length === 0) {
+          disconnectWallet();
+        } else {
+          window.location.reload();
+        }
+      });
+
+      instance.on("chainChanged", () => {
+        window.location.reload();
+      });
       
     } catch (error) {
       console.error('Wallet connection error:', error);
@@ -398,17 +494,19 @@ function App() {
     setTokenContract(null);
     setSavingsContract(null);
     setValidatorsContract(null);
+    setRouterContract(null);
     setBalance('0');
+    setEthBalance('0');
     setAccounts([]);
   };
-
-  // [Keep all your existing functions: loadBalances, loadSavingsAccounts, create accounts, etc.]
-  // ... (I'm skipping these since they're unchanged from your original code)
 
   const loadBalances = async (account, provider, tokenContract) => {
     try {
       const tokenBal = await tokenContract.balanceOf(account);
       setBalance(ethers.utils.formatUnits(tokenBal, 18));
+      
+      const ethBal = await provider.getBalance(account);
+      setEthBalance(ethers.utils.formatEther(ethBal));
     } catch (error) {
       console.error('Error loading balances:', error);
     }
@@ -444,6 +542,19 @@ function App() {
   const createTimeAccount = async (unlockDate, goalName, initialDeposit) => {
     try {
       setLoading(true);
+      
+      // Check if user has enough OOOWEEE
+      if (parseFloat(balance) < parseFloat(initialDeposit)) {
+        const needed = parseFloat(initialDeposit) - parseFloat(balance);
+        
+        if (window.confirm(`You need ${needed.toFixed(2)} more OOOWEEE. Buy with ETH now?`)) {
+          await buyAndCreateAccount(needed);
+        } else {
+          setLoading(false);
+          return;
+        }
+      }
+      
       const unlockTime = Math.floor(new Date(unlockDate).getTime() / 1000);
       const depositAmount = ethers.utils.parseUnits(initialDeposit.toString(), 18);
       
@@ -486,6 +597,19 @@ function App() {
   const createGrowthAccount = async (targetAmountEur, goalName, initialDeposit) => {
     try {
       setLoading(true);
+      
+      // Check if user has enough OOOWEEE
+      if (parseFloat(balance) < parseFloat(initialDeposit)) {
+        const needed = parseFloat(initialDeposit) - parseFloat(balance);
+        
+        if (window.confirm(`You need ${needed.toFixed(2)} more OOOWEEE. Buy with ETH now?`)) {
+          await buyAndCreateAccount(needed);
+        } else {
+          setLoading(false);
+          return;
+        }
+      }
+      
       const targetOooweee = convertEurToOooweee(targetAmountEur);
       const target = ethers.utils.parseUnits(targetOooweee.toString(), 18);
       const depositAmount = ethers.utils.parseUnits(initialDeposit.toString(), 18);
@@ -529,6 +653,19 @@ function App() {
   const createBalanceAccount = async (targetAmountEur, recipientAddress, goalName, initialDeposit) => {
     try {
       setLoading(true);
+      
+      // Check if user has enough OOOWEEE
+      if (parseFloat(balance) < parseFloat(initialDeposit)) {
+        const needed = parseFloat(initialDeposit) - parseFloat(balance);
+        
+        if (window.confirm(`You need ${needed.toFixed(2)} more OOOWEEE. Buy with ETH now?`)) {
+          await buyAndCreateAccount(needed);
+        } else {
+          setLoading(false);
+          return;
+        }
+      }
+      
       const targetOooweee = convertEurToOooweee(targetAmountEur);
       const target = ethers.utils.parseUnits(targetOooweee.toString(), 18);
       const depositAmount = ethers.utils.parseUnits(initialDeposit.toString(), 18);
@@ -620,6 +757,45 @@ function App() {
   const depositToAccount = async (accountId, amount) => {
     try {
       setLoading(true);
+      
+      // Check if user has enough OOOWEEE
+      if (parseFloat(balance) < parseFloat(amount)) {
+        const needed = parseFloat(amount) - parseFloat(balance);
+        
+        if (window.confirm(`You need ${needed.toFixed(2)} more OOOWEEE. Buy with ETH now?`)) {
+          const requiredEth = needed * oooweeePrice * 1.05;
+          
+          const ethAmount = ethers.utils.parseEther(requiredEth.toFixed(6));
+          const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.token];
+          const deadline = Math.floor(Date.now() / 1000) + 3600;
+          
+          const amounts = await routerContract.getAmountsOut(ethAmount, path);
+          const minOutput = amounts[1].mul(98).div(100);
+          
+          const buyTx = await routerContract.swapExactETHForTokens(
+            minOutput,
+            path,
+            account,
+            deadline,
+            { value: ethAmount }
+          );
+          
+          await toast.promise(
+            buyTx.wait(),
+            {
+              loading: '🔄 Buying OOOWEEE first...',
+              success: '✅ OOOWEEE purchased!',
+              error: '❌ Failed to buy OOOWEEE'
+            }
+          );
+          
+          await loadBalances(account, provider, tokenContract);
+        } else {
+          setLoading(false);
+          return;
+        }
+      }
+      
       const depositAmount = ethers.utils.parseUnits(amount.toString(), 18);
       
       const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.savings, depositAmount);
@@ -685,6 +861,64 @@ function App() {
       </div>
     );
   }
+
+  // Buy Modal
+  const BuyModal = () => (
+    <div className="modal-overlay" onClick={() => setShowBuyModal(false)}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <h2>🛒 Buy $OOOWEEE</h2>
+        <button className="close-modal" onClick={() => setShowBuyModal(false)}>✕</button>
+        
+        <div className="buy-form">
+          <div className="balance-info">
+            <p>ETH Balance: {parseFloat(ethBalance).toFixed(4)} ETH</p>
+            <p>Current Rate: 1 ETH = {(1/oooweeePrice).toFixed(0)} OOOWEEE</p>
+          </div>
+          
+          <div className="input-group">
+            <label>ETH Amount:</label>
+            <input
+              type="number"
+              value={ethToBuy}
+              onChange={(e) => setEthToBuy(e.target.value)}
+              min="0.001"
+              step="0.001"
+              max={ethBalance}
+            />
+          </div>
+          
+          <div className="output-estimate">
+            <p>You will receive approximately:</p>
+            <h3>{parseFloat(estimatedOooweee).toLocaleString()} $OOOWEEE</h3>
+            {ethPrice && (
+              <p className="fiat-value">
+                ≈ {getOooweeeInFiat(estimatedOooweee, 'eur')}
+              </p>
+            )}
+          </div>
+          
+          <div className="quick-amounts">
+            <button onClick={() => setEthToBuy('0.01')}>0.01 ETH</button>
+            <button onClick={() => setEthToBuy('0.05')}>0.05 ETH</button>
+            <button onClick={() => setEthToBuy('0.1')}>0.1 ETH</button>
+            <button onClick={() => setEthToBuy('0.5')}>0.5 ETH</button>
+          </div>
+          
+          <button 
+            className="buy-btn rainbow-btn"
+            onClick={buyOooweee}
+            disabled={loading || parseFloat(ethToBuy) <= 0 || parseFloat(ethToBuy) > parseFloat(ethBalance)}
+          >
+            {loading ? '⏳ Processing...' : '🚀 Buy OOOWEEE'}
+          </button>
+          
+          <p className="slippage-note">
+            ⚠️ Includes 2% slippage protection
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 
   // About page content
   const renderAboutPage = () => (
@@ -809,6 +1043,9 @@ function App() {
     <div className="App">
       <Toaster position="top-right" />
       
+      {/* Buy Modal */}
+      {showBuyModal && <BuyModal />}
+      
       {/* Floating coins background */}
       <div className="floating-coins">
         {[...Array(10)].map((_, i) => (
@@ -911,6 +1148,11 @@ function App() {
                       </button>
                     </div>
                     
+                    <div className="balance-row">
+                      <span>ETH:</span>
+                      <span>{parseFloat(ethBalance).toFixed(4)} ETH</span>
+                    </div>
+                    
                     <div className="balance-row highlight">
                       <span>$OOOWEEE:</span>
                       <span>
@@ -925,6 +1167,19 @@ function App() {
                         ≈ {parseFloat(balance).toLocaleString()} $OOOWEEE
                       </p>
                     )}
+                    
+                    {parseFloat(balance) === 0 && (
+                      <div className="zero-balance-notice">
+                        <p>👋 No OOOWEEE yet? Get started!</p>
+                      </div>
+                    )}
+                    
+                    <button 
+                      className="add-oooweee-btn rainbow-btn"
+                      onClick={() => setShowBuyModal(true)}
+                    >
+                      🛒 Buy $OOOWEEE
+                    </button>
                   </div>
 
                   {/* Validator Card */}
@@ -973,7 +1228,7 @@ function App() {
                   </div>
                 </div>
                 
-                {/* Rest of your existing dashboard content */}
+                {/* Accounts section */}
                 <div className="accounts-container">
                   <div className="section-header">
                     <h2>🎮 Active Savings Quests</h2>
@@ -1175,6 +1430,11 @@ function App() {
                     <p className="fee-note">
                       💡 1% creation fee from initial deposit
                     </p>
+                    {parseFloat(balance) < parseFloat(initialDepositInput) && initialDepositInput && (
+                      <p className="swap-notice">
+                        ⚠️ Insufficient balance - will offer to buy with ETH
+                      </p>
+                    )}
                   </div>
                   
                   {accountType === 'time' && (
