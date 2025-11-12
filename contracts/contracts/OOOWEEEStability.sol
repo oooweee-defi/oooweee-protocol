@@ -3,15 +3,17 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
+import "@chainlink/contracts/src/v0.8/automation/AutomationCompatible.sol";
 
-contract OOOWEEEStability is Ownable {
+contract OOOWEEEStability is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     IERC20 public immutable oooweeeToken;
     IUniswapV2Router02 public immutable uniswapRouter;
     IUniswapV2Pair public liquidityPair;
     
-    address public immutable validatorPurchaseWallet;
+    address public validatorPurchaseWallet;
     
     // Stealth parameters - private so not readable on-chain
     uint256 private seed;
@@ -27,19 +29,39 @@ contract OOOWEEEStability is Ownable {
     uint256 public totalTokensUsed;
     uint256 public totalETHCaptured;
     
-    // Configuration
-    uint256 public constant MIN_CHECK_INTERVAL = 4 hours;
-    uint256 public constant MEASUREMENT_WINDOW = 7 days;
-    uint256 public constant MAX_SELL_PERCENT = 10; // Max 10% of reserves per intervention
-    uint256 public constant SLIPPAGE_TOLERANCE = 200; // 2% slippage protection (98/100)
+    // Price tracking for better intervention
+    uint256 public baselinePrice;      // Long-term baseline
+    uint256 public lastInterventionPrice;
+    uint256 public consecutiveSpikes;
     
-    event StabilityCheck(uint256 priceIncrease, bool interventionTriggered);
+    // Adjustable Configuration
+    uint256 public minCheckInterval = 15 minutes;  // Can be changed by owner
+    uint256 public constant MIN_INTERVAL_LIMIT = 5 minutes;   // Safety floor
+    uint256 public constant MAX_INTERVAL_LIMIT = 24 hours;    // Safety ceiling
+    
+    uint256 public constant MEASUREMENT_WINDOW = 1 days;
+    uint256 public constant MAX_SELL_PERCENT = 15;
+    uint256 public constant SLIPPAGE_TOLERANCE = 300;
+    uint256 public constant BASELINE_UPDATE_THRESHOLD = 110;
+    
+    // Events
+    event StabilityCheck(
+        uint256 currentPrice,
+        uint256 priceIncrease,
+        bool interventionTriggered,
+        uint256 threshold
+    );
+    
     event StabilityIntervention(
         uint256 tokensUsed,
         uint256 ethCaptured,
         uint256 oldPrice,
         uint256 newPrice
     );
+    
+    event BaselineUpdated(uint256 oldBaseline, uint256 newBaseline);
+    event TokensDeposited(address indexed from, uint256 amount);
+    event CheckIntervalUpdated(uint256 newInterval);
     
     constructor(
         address _oooweeeToken,
@@ -52,51 +74,208 @@ contract OOOWEEEStability is Ownable {
         
         // Initialize stealth parameters
         seed = uint256(keccak256(abi.encode(block.timestamp, block.difficulty, msg.sender)));
-        baseThreshold = 15;      // 15-35% range
+        baseThreshold = 20;      // 20-40% range
         thresholdRange = 20;
-        baseCaptureRate = 50;    // 50-70% range
+        baseCaptureRate = 60;    // 60-80% range
         captureRange = 20;
     }
+    
+    // ============ Chainlink Automation Functions ============
+    
+    /**
+     * @dev Chainlink Automation check - runs off-chain to determine if intervention needed
+     */
+    function checkUpkeep(bytes calldata /* checkData */) 
+        external 
+        view 
+        override 
+        returns (bool upkeepNeeded, bytes memory /* performData */) 
+    {
+        // Check if basic conditions are met
+        if (address(liquidityPair) == address(0)) {
+            return (false, "");
+        }
+        
+        if (block.timestamp < lastCheckTime + minCheckInterval) {
+            return (false, "");
+        }
+        
+        uint256 balance = oooweeeToken.balanceOf(address(this));
+        if (balance == 0) {
+            return (false, "");
+        }
+        
+        // Check price increase
+        uint256 currentPrice = getCurrentPrice();
+        if (currentPrice == 0) {
+            return (false, "");
+        }
+        
+        uint256 priceIncrease = 0;
+        if (currentPrice > baselinePrice && baselinePrice > 0) {
+            priceIncrease = ((currentPrice - baselinePrice) * 100) / baselinePrice;
+        }
+        
+        // Use minimum threshold for check (actual threshold is random)
+        upkeepNeeded = priceIncrease >= baseThreshold;
+    }
+    
+    /**
+     * @dev Chainlink Automation execution - called when checkUpkeep returns true
+     */
+    function performUpkeep(bytes calldata /* performData */) 
+        external 
+        override 
+        nonReentrant
+    {
+        _doStabilityCheck();
+    }
+    
+    // ============ Admin Functions ============
     
     function setLiquidityPair(address _pair) external onlyOwner {
         require(address(liquidityPair) == address(0), "Already set");
         liquidityPair = IUniswapV2Pair(_pair);
-        lastCheckPrice = getCurrentPrice();
+        uint256 currentPrice = getCurrentPrice();
+        lastCheckPrice = currentPrice;
+        baselinePrice = currentPrice;
+        lastInterventionPrice = currentPrice;
         lastCheckTime = block.timestamp;
     }
     
-    function checkStability() external {
+    function setValidatorWallet(address _wallet) external onlyOwner {
+        validatorPurchaseWallet = _wallet;
+    }
+    
+    /**
+     * @dev Adjust check frequency - owner can change based on market conditions
+     */
+    function setCheckInterval(uint256 _newInterval) external onlyOwner {
+        require(_newInterval >= MIN_INTERVAL_LIMIT, "Too frequent");
+        require(_newInterval <= MAX_INTERVAL_LIMIT, "Too infrequent");
+        minCheckInterval = _newInterval;
+        emit CheckIntervalUpdated(_newInterval);
+    }
+    
+    function updateStealthParameters(
+        uint256 _baseThreshold,
+        uint256 _thresholdRange,
+        uint256 _baseCaptureRate,
+        uint256 _captureRange
+    ) external onlyOwner {
+        require(_baseThreshold >= 10 && _baseThreshold <= 50, "Invalid base threshold");
+        require(_thresholdRange <= 30, "Invalid threshold range");
+        require(_baseCaptureRate >= 30 && _baseCaptureRate <= 80, "Invalid base capture");
+        require(_captureRange <= 40, "Invalid capture range");
+        
+        baseThreshold = _baseThreshold;
+        thresholdRange = _thresholdRange;
+        baseCaptureRate = _baseCaptureRate;
+        captureRange = _captureRange;
+    }
+    
+    function resetBaseline() external onlyOwner {
+        uint256 oldBaseline = baselinePrice;
+        baselinePrice = getCurrentPrice();
+        emit BaselineUpdated(oldBaseline, baselinePrice);
+    }
+    
+    // ============ Public Functions ============
+    
+    /**
+     * @dev Deposit tokens for stability operations (anyone can donate)
+     */
+    function depositTokens(uint256 amount) external {
+        require(amount > 0, "Amount must be > 0");
+        require(
+            oooweeeToken.transferFrom(msg.sender, address(this), amount),
+            "Transfer failed"
+        );
+        emit TokensDeposited(msg.sender, amount);
+    }
+    
+    /**
+     * @dev Manual stability check - can be called by anyone
+     * NO REWARD - all ETH goes to validators
+     */
+    function checkStability() external nonReentrant {
+        _doStabilityCheck();
+    }
+    
+    // ============ Internal Functions ============
+    
+    function _doStabilityCheck() internal {
         require(address(liquidityPair) != address(0), "Pair not set");
-        require(block.timestamp >= lastCheckTime + MIN_CHECK_INTERVAL, "Too soon");
+        require(block.timestamp >= lastCheckTime + minCheckInterval, "Too soon");
         
         uint256 currentPrice = getCurrentPrice();
-        uint256 priceIncrease = 0;
+        require(currentPrice > 0, "Invalid price");
         
-        if (currentPrice > lastCheckPrice && lastCheckPrice > 0) {
-            priceIncrease = ((currentPrice - lastCheckPrice) * 100) / lastCheckPrice;
+        // Calculate price increase from baseline
+        uint256 priceIncrease = 0;
+        if (currentPrice > baselinePrice && baselinePrice > 0) {
+            priceIncrease = ((currentPrice - baselinePrice) * 100) / baselinePrice;
         }
         
         // Generate pseudo-random threshold for this check
-        uint256 threshold = baseThreshold + (seed % thresholdRange);
+        uint256 threshold = baseThreshold + (uint256(keccak256(abi.encode(seed, block.timestamp))) % thresholdRange);
         
-        bool shouldIntervene = priceIncrease > threshold;
+        // Lower threshold if we've had consecutive spikes
+        if (consecutiveSpikes > 0) {
+            threshold = threshold * (100 - (consecutiveSpikes * 5)) / 100;
+            if (threshold < 15) threshold = 15;
+        }
         
-        emit StabilityCheck(priceIncrease, shouldIntervene);
+        bool shouldIntervene = priceIncrease > threshold && 
+                              oooweeeToken.balanceOf(address(this)) > 0;
+        
+        emit StabilityCheck(currentPrice, priceIncrease, shouldIntervene, threshold);
         
         if (shouldIntervene) {
-            // Generate pseudo-random capture rate
-            uint256 captureRate = baseCaptureRate + (seed % captureRange);
+            consecutiveSpikes++;
             
-            _performStabilization(currentPrice, lastCheckPrice, captureRate);
+            // Generate pseudo-random capture rate
+            uint256 captureRate = baseCaptureRate + 
+                (uint256(keccak256(abi.encode(seed, currentPrice))) % captureRange);
+            
+            // Increase capture rate for larger spikes
+            if (priceIncrease > 100) {
+                captureRate = captureRate * 120 / 100;
+                if (captureRate > 90) captureRate = 90;
+            }
+            
+            uint256 ethBefore = address(this).balance;
+            _performStabilization(currentPrice, baselinePrice, captureRate);
+            uint256 ethCaptured = address(this).balance - ethBefore;
+            
+            // Send ALL captured ETH to validators - NO REWARDS
+            if (ethCaptured > 0 && validatorPurchaseWallet != address(0)) {
+                (bool success, ) = validatorPurchaseWallet.call{value: ethCaptured}("");
+                require(success, "ETH transfer failed");
+            }
+            
+            lastInterventionPrice = currentPrice;
             
             // Update seed for next time
-            seed = uint256(keccak256(abi.encode(seed, block.timestamp, currentPrice)));
+            seed = uint256(keccak256(abi.encode(seed, block.timestamp, currentPrice, tx.origin)));
+        } else {
+            // Reset consecutive spikes if no intervention
+            if (priceIncrease < threshold / 2) {
+                consecutiveSpikes = 0;
+            }
+            
+            // Update baseline if price has stabilized at a higher level
+            if (currentPrice > baselinePrice * BASELINE_UPDATE_THRESHOLD / 100 &&
+                currentPrice < baselinePrice * 150 / 100 &&
+                block.timestamp > lastCheckTime + MEASUREMENT_WINDOW) {
+                uint256 oldBaseline = baselinePrice;
+                baselinePrice = (baselinePrice + currentPrice) / 2;
+                emit BaselineUpdated(oldBaseline, baselinePrice);
+            }
         }
         
         // Update checkpoint
-        if (block.timestamp > lastCheckTime + MEASUREMENT_WINDOW) {
-            lastCheckPrice = currentPrice;
-        }
+        lastCheckPrice = currentPrice;
         lastCheckTime = block.timestamp;
     }
     
@@ -116,103 +295,76 @@ contract OOOWEEEStability is Ownable {
         uint256 tokensToSell;
         
         if (liquidityPair.token0() == address(oooweeeToken)) {
-            // Token0 is OOOWEEE, Token1 is ETH/WETH
             tokensToSell = calculateExactTokensToSell(
-                uint256(reserve0),  // OOOWEEE reserves
-                uint256(reserve1),  // ETH reserves
+                uint256(reserve0),
+                uint256(reserve1),
                 targetPrice
             );
         } else {
-            // Token0 is ETH/WETH, Token1 is OOOWEEE
             tokensToSell = calculateExactTokensToSell(
-                uint256(reserve1),  // OOOWEEE reserves
-                uint256(reserve0),  // ETH reserves
+                uint256(reserve1),
+                uint256(reserve0),
                 targetPrice
             );
         }
         
-        // Safety check - don't sell more than 10% of our reserves in one go
-        uint256 maxSell = oooweeeToken.balanceOf(address(this)) * MAX_SELL_PERCENT / 100;
+        // Safety checks
+        uint256 ourBalance = oooweeeToken.balanceOf(address(this));
+        uint256 maxSell = ourBalance * MAX_SELL_PERCENT / 100;
+        
         if (tokensToSell > maxSell) {
             tokensToSell = maxSell;
         }
         
-        // Ensure we have tokens and amount is reasonable
-        require(tokensToSell > 0, "No tokens to sell");
-        require(tokensToSell <= oooweeeToken.balanceOf(address(this)), "Insufficient tokens");
+        if (tokensToSell > ourBalance) {
+            tokensToSell = ourBalance;
+        }
         
-        // Execute the swap
-        _executeSwap(tokensToSell);
+        // Minimum intervention size
+        uint256 minTokens = (100 * 1e18) / currentPrice;
+        
+        if (tokensToSell > minTokens && tokensToSell <= ourBalance) {
+            _executeSwap(tokensToSell);
+        }
     }
     
-    /**
-     * @dev Calculate exact tokens needed to reach target price using Uniswap V2 math
-     * Based on constant product formula: x * y = k
-     * 
-     * When we sell Δx tokens, we get Δy ETH
-     * New reserves: (x + Δx) * (y - Δy) = k
-     * New price = (y - Δy) / (x + Δx) = targetPrice
-     * 
-     * Solving for Δx (tokens to sell):
-     * Δx = sqrt(x * y / targetPrice) - x
-     */
     function calculateExactTokensToSell(
         uint256 tokenReserve,
         uint256 ethReserve,
-        uint256 targetPrice  // Target price in wei per token (scaled by 1e18)
+        uint256 targetPrice
     ) internal pure returns (uint256) {
-        // Current price = ethReserve / tokenReserve (scaled)
         uint256 currentPrice = (ethReserve * 1e18) / tokenReserve;
         
-        // If target price is higher than current, we can't sell to increase price
         if (targetPrice >= currentPrice) {
             return 0;
         }
         
-        // Calculate k (constant product)
         uint256 k = tokenReserve * ethReserve;
-        
-        // Using the constant product formula and target price:
-        // After selling tokens, we want: newEthReserve / newTokenReserve = targetPrice
-        // And: newTokenReserve * newEthReserve = k
-        // 
-        // Solving: newTokenReserve = sqrt(k * 1e18 / targetPrice)
         uint256 newTokenReserve = sqrt((k * 1e18) / targetPrice);
         
-        // Tokens to sell = newTokenReserve - currentTokenReserve
         if (newTokenReserve <= tokenReserve) {
-            return 0; // Safety check
+            return 0;
         }
         
         uint256 tokensToSellBeforeFee = newTokenReserve - tokenReserve;
-        
-        // Adjust for Uniswap's 0.3% fee (need to sell slightly more)
-        // Actual amount considering fee: amount / 0.997
         uint256 tokensToSell = (tokensToSellBeforeFee * 1000) / 997;
         
         return tokensToSell;
     }
     
-    /**
-     * @dev Babylonian method for square root calculation
-     * Gas efficient and accurate for large numbers
-     */
     function sqrt(uint256 x) internal pure returns (uint256) {
         if (x == 0) return 0;
-        
         uint256 z = (x + 1) / 2;
         uint256 y = x;
-        
         while (z < y) {
             y = z;
             z = (x / z + z) / 2;
         }
-        
         return y;
     }
     
     function _executeSwap(uint256 tokensToSell) internal {
-        // Approve router to spend tokens
+        // Approve router
         oooweeeToken.approve(address(uniswapRouter), tokensToSell);
         
         // Set up swap path
@@ -220,68 +372,42 @@ contract OOOWEEEStability is Ownable {
         path[0] = address(oooweeeToken);
         path[1] = uniswapRouter.WETH();
         
-        // Calculate minimum ETH out with slippage protection
-        uint256 expectedETH = getExpectedETHOut(tokensToSell);
-        uint256 minETHOut = (expectedETH * (10000 - SLIPPAGE_TOLERANCE)) / 10000;
+        // Calculate minimum ETH with slippage protection
+        uint256[] memory amounts = uniswapRouter.getAmountsOut(tokensToSell, path);
+        uint256 minETHOut = (amounts[1] * (10000 - SLIPPAGE_TOLERANCE)) / 10000;
         
         uint256 ethBefore = address(this).balance;
         
-        // Execute swap with slippage protection
-        uniswapRouter.swapExactTokensForETHSupportingFeeOnTransferTokens(
+        // Execute swap
+        try uniswapRouter.swapExactTokensForETHSupportingFeeOnTransferTokens(
             tokensToSell,
-            minETHOut,  // Minimum ETH to receive (slippage protection)
+            minETHOut,
             path,
             address(this),
             block.timestamp + 300
-        );
-        
-        uint256 ethCaptured = address(this).balance - ethBefore;
-        
-        // Send 100% to validators - NO EXTRACTION
-        (bool success, ) = validatorPurchaseWallet.call{value: ethCaptured}("");
-        require(success, "ETH transfer failed");
-        
-        // Update statistics
-        totalTokensUsed += tokensToSell;
-        totalETHCaptured += ethCaptured;
-        totalInterventions++;
-        
-        // Get new price after swap
-        uint256 newPrice = getCurrentPrice();
-        
-        emit StabilityIntervention(
-            tokensToSell,
-            ethCaptured,
-            lastCheckPrice,
-            newPrice
-        );
+        ) {
+            uint256 ethCaptured = address(this).balance - ethBefore;
+            
+            // Update statistics
+            totalTokensUsed += tokensToSell;
+            totalETHCaptured += ethCaptured;
+            totalInterventions++;
+            
+            uint256 newPrice = getCurrentPrice();
+            
+            emit StabilityIntervention(
+                tokensToSell,
+                ethCaptured,
+                lastCheckPrice,
+                newPrice
+            );
+        } catch {
+            // Swap failed, reset approval
+            oooweeeToken.approve(address(uniswapRouter), 0);
+        }
     }
     
-    /**
-     * @dev Calculate expected ETH output for given token input
-     * Uses Uniswap V2 formula accounting for 0.3% fee
-     */
-    function getExpectedETHOut(uint256 tokensIn) public view returns (uint256) {
-        (uint112 reserve0, uint112 reserve1,) = liquidityPair.getReserves();
-        
-        uint256 tokenReserve;
-        uint256 ethReserve;
-        
-        if (liquidityPair.token0() == address(oooweeeToken)) {
-            tokenReserve = uint256(reserve0);
-            ethReserve = uint256(reserve1);
-        } else {
-            tokenReserve = uint256(reserve1);
-            ethReserve = uint256(reserve0);
-        }
-        
-        // Uniswap V2 output calculation with 0.3% fee
-        uint256 tokensInWithFee = tokensIn * 997;
-        uint256 numerator = tokensInWithFee * ethReserve;
-        uint256 denominator = (tokenReserve * 1000) + tokensInWithFee;
-        
-        return numerator / denominator;
-    }
+    // ============ View Functions ============
     
     function getCurrentPrice() public view returns (uint256) {
         if (address(liquidityPair) == address(0)) return 0;
@@ -297,75 +423,77 @@ contract OOOWEEEStability is Ownable {
         }
     }
     
-    /**
-     * @dev Simulate what price would be after selling X tokens
-     * Useful for testing and monitoring
-     */
-    function simulatePriceAfterSell(uint256 tokensToSell) external view returns (uint256) {
-        (uint112 reserve0, uint112 reserve1,) = liquidityPair.getReserves();
-        
-        uint256 tokenReserve;
-        uint256 ethReserve;
-        
-        if (liquidityPair.token0() == address(oooweeeToken)) {
-            tokenReserve = uint256(reserve0);
-            ethReserve = uint256(reserve1);
-        } else {
-            tokenReserve = uint256(reserve1);
-            ethReserve = uint256(reserve0);
-        }
-        
-        // Calculate new reserves after swap
-        uint256 tokensInWithFee = tokensToSell * 997;
-        uint256 ethOut = (tokensInWithFee * ethReserve) / ((tokenReserve * 1000) + tokensInWithFee);
-        
-        uint256 newTokenReserve = tokenReserve + tokensToSell;
-        uint256 newEthReserve = ethReserve - ethOut;
-        
-        // Return new price
-        return (newEthReserve * 1e18) / newTokenReserve;
-    }
-    
-    // View functions for monitoring
     function getStabilityInfo() external view returns (
         uint256 currentPrice,
         uint256 tokenBalance,
         uint256 interventions,
         uint256 tokensUsed,
         uint256 ethCaptured,
-        uint256 timeSinceLastCheck
+        uint256 timeSinceLastCheck,
+        uint256 priceIncreaseFromBaseline
     ) {
+        currentPrice = getCurrentPrice();
+        uint256 priceIncrease = 0;
+        if (currentPrice > baselinePrice && baselinePrice > 0) {
+            priceIncrease = ((currentPrice - baselinePrice) * 100) / baselinePrice;
+        }
+        
         return (
-            getCurrentPrice(),
+            currentPrice,
             oooweeeToken.balanceOf(address(this)),
             totalInterventions,
             totalTokensUsed,
             totalETHCaptured,
-            block.timestamp - lastCheckTime
+            block.timestamp - lastCheckTime,
+            priceIncrease
         );
     }
     
-    // Emergency functions
+    function canIntervene() external view returns (bool ready, string memory reason) {
+        if (address(liquidityPair) == address(0)) {
+            return (false, "Pair not set");
+        }
+        
+        if (block.timestamp < lastCheckTime + minCheckInterval) {
+            return (false, "Too soon to check");
+        }
+        
+        uint256 balance = oooweeeToken.balanceOf(address(this));
+        if (balance == 0) {
+            return (false, "No tokens to sell");
+        }
+        
+        uint256 currentPrice = getCurrentPrice();
+        uint256 priceIncrease = 0;
+        if (currentPrice > baselinePrice && baselinePrice > 0) {
+            priceIncrease = ((currentPrice - baselinePrice) * 100) / baselinePrice;
+        }
+        
+        if (priceIncrease < baseThreshold) {
+            return (false, "Price increase below minimum threshold");
+        }
+        
+        return (true, "Ready to check stability");
+    }
+    
+    // ============ Emergency Functions ============
+    
+    /**
+     * @dev Emergency manual intervention - owner can force a specific sell amount
+     */
+    function emergencyIntervene(uint256 tokensToSell) external onlyOwner nonReentrant {
+        require(tokensToSell > 0, "Invalid amount");
+        require(tokensToSell <= oooweeeToken.balanceOf(address(this)), "Insufficient balance");
+        _executeSwap(tokensToSell);
+    }
+    
     function withdrawTokens() external onlyOwner {
         uint256 balance = oooweeeToken.balanceOf(address(this));
         oooweeeToken.transfer(owner(), balance);
     }
     
-    function updateStealthParameters(
-        uint256 _baseThreshold,
-        uint256 _thresholdRange,
-        uint256 _baseCaptureRate,
-        uint256 _captureRange
-    ) external onlyOwner {
-        require(_baseThreshold >= 10 && _baseThreshold <= 30, "Invalid base threshold");
-        require(_thresholdRange <= 30, "Invalid threshold range");
-        require(_baseCaptureRate >= 30 && _baseCaptureRate <= 70, "Invalid base capture");
-        require(_captureRange <= 40, "Invalid capture range");
-        
-        baseThreshold = _baseThreshold;
-        thresholdRange = _thresholdRange;
-        baseCaptureRate = _baseCaptureRate;
-        captureRange = _captureRange;
+    function withdrawETH() external onlyOwner {
+        payable(owner()).transfer(address(this).balance);
     }
     
     receive() external payable {}

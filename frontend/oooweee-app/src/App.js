@@ -18,6 +18,20 @@ const UNISWAP_ROUTER_ABI = [
 const UNISWAP_ROUTER = "0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008";
 const WETH_ADDRESS = "0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9";
 
+// Currency configuration
+const CURRENCIES = {
+  USD: { code: 0, symbol: '$', name: 'US Dollar', decimals: 2, locale: 'en-US' },
+  EUR: { code: 1, symbol: '€', name: 'Euro', decimals: 2, locale: 'en-IE' },
+  GBP: { code: 2, symbol: '£', name: 'British Pound', decimals: 2, locale: 'en-GB' },
+  JPY: { code: 3, symbol: '¥', name: 'Japanese Yen', decimals: 0, locale: 'ja-JP' },
+  CNY: { code: 4, symbol: '¥', name: 'Chinese Yuan', decimals: 2, locale: 'zh-CN' },
+  CAD: { code: 5, symbol: 'C$', name: 'Canadian Dollar', decimals: 2, locale: 'en-CA' },
+  AUD: { code: 6, symbol: 'A$', name: 'Australian Dollar', decimals: 2, locale: 'en-AU' },
+  CHF: { code: 7, symbol: 'CHF', name: 'Swiss Franc', decimals: 2, locale: 'de-CH' },
+  INR: { code: 8, symbol: '₹', name: 'Indian Rupee', decimals: 2, locale: 'en-IN' },
+  KRW: { code: 9, symbol: '₩', name: 'Korean Won', decimals: 0, locale: 'ko-KR' }
+};
+
 // Web3Modal provider options
 const providerOptions = {
   walletconnect: {
@@ -76,6 +90,7 @@ function App() {
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [ethToBuy, setEthToBuy] = useState('0.01');
   const [estimatedOooweee, setEstimatedOooweee] = useState('0');
+  const [accountCurrency, setAccountCurrency] = useState('EUR');
   
   // Validator stats
   const [validatorStats, setValidatorStats] = useState({
@@ -129,12 +144,38 @@ function App() {
 
   const fetchEthPrice = async () => {
     try {
-      const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd,eur,gbp');
+      const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd,eur,gbp,jpy,cny,cad,aud,chf,inr,krw');
       const data = await response.json();
       setEthPrice(data.ethereum);
     } catch (error) {
       console.error('Failed to fetch ETH price');
+      // Set fallback prices
+      setEthPrice({
+        usd: 2000,
+        eur: 1850,
+        gbp: 1600,
+        jpy: 300000,
+        cny: 14000,
+        cad: 2700,
+        aud: 3100,
+        chf: 1800,
+        inr: 166000,
+        krw: 2650000
+      });
     }
+  };
+
+  // Format currency properly
+  const formatCurrency = (amount, currencyCode) => {
+    const currency = CURRENCIES[currencyCode.toUpperCase()];
+    if (!currency) return amount;
+    
+    return new Intl.NumberFormat(currency.locale, {
+      style: 'currency',
+      currency: currencyCode.toUpperCase(),
+      minimumFractionDigits: currency.decimals,
+      maximumFractionDigits: currency.decimals
+    }).format(amount);
   };
 
   // Get OOOWEEE price from router
@@ -214,19 +255,14 @@ function App() {
   const getOooweeeInFiat = (oooweeeAmount, currency = 'eur') => {
     if (!ethPrice) return '...';
     const ethValue = parseFloat(oooweeeAmount) * oooweeePrice;
-    const fiatValue = ethValue * ethPrice[currency];
-    return new Intl.NumberFormat('en-IE', {
-      style: 'currency',
-      currency: currency.toUpperCase(),
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(fiatValue);
+    const fiatValue = ethValue * (ethPrice[currency.toLowerCase()] || ethPrice.eur);
+    return formatCurrency(fiatValue, currency);
   };
 
-  // Convert EUR to OOOWEEE amount
-  const convertEurToOooweee = (eurAmount) => {
-    if (!ethPrice || !eurAmount) return 0;
-    const ethValue = parseFloat(eurAmount) / ethPrice.eur;
+  // Convert fiat to OOOWEEE amount
+  const convertFiatToOooweee = (fiatAmount, currency = 'eur') => {
+    if (!ethPrice || !fiatAmount) return 0;
+    const ethValue = parseFloat(fiatAmount) / (ethPrice[currency.toLowerCase()] || ethPrice.eur);
     const oooweeeAmount = ethValue / oooweeePrice;
     return Math.floor(oooweeeAmount);
   };
@@ -518,19 +554,45 @@ function App() {
       const accountDetails = [];
       
       for (let id of accountIds) {
-        const info = await savingsContract.getAccountInfo(account, id);
-        accountDetails.push({
-          id: id.toString(),
-          type: info[0],
-          goalName: info[1],
-          balance: ethers.utils.formatUnits(info[2], 18),
-          target: ethers.utils.formatUnits(info[3], 18),
-          unlockTime: info[4].toString(),
-          recipient: info[5],
-          isActive: info[6],
-          progress: info[7].toString(),
-          pendingRewards: ethers.utils.formatUnits(info[8], 18)
-        });
+        try {
+          // Try to get extended info first
+          const info = await savingsContract.getAccountInfoExtended(account, id);
+          accountDetails.push({
+            id: id.toString(),
+            type: info[0],
+            goalName: info[1],
+            balance: ethers.utils.formatUnits(info[2], 18),
+            target: ethers.utils.formatUnits(info[3], 18),
+            targetFiat: info[4].toNumber(),
+            targetCurrency: info[5],
+            currentFiatValue: info[6].toNumber(),
+            unlockTime: info[7].toString(),
+            recipient: info[8],
+            isActive: info[9],
+            progress: info[10].toString(),
+            pendingRewards: ethers.utils.formatUnits(info[11], 18),
+            isFiatTarget: info[12]
+          });
+        } catch (extendedError) {
+          // Fall back to legacy getAccountInfo
+          const info = await savingsContract.getAccountInfo(account, id);
+          accountDetails.push({
+            id: id.toString(),
+            type: info[0],
+            goalName: info[1],
+            balance: ethers.utils.formatUnits(info[2], 18),
+            target: ethers.utils.formatUnits(info[3], 18),
+            targetFiat: 0,
+            targetCurrency: 1, // Default to EUR
+            currentFiatValue: 0,
+            unlockTime: info[4].toString(),
+            recipient: info[5],
+            isActive: info[6],
+            progress: info[7].toString(),
+            pendingRewards: ethers.utils.formatUnits(info[8], 18),
+            isFiatTarget: false
+          });
+        }
       }
       
       setAccounts(accountDetails);
@@ -539,7 +601,7 @@ function App() {
     }
   };
 
-  const createTimeAccount = async (unlockDate, goalName, initialDeposit) => {
+  const createTimeAccount = async (unlockDate, goalName, initialDeposit, currency) => {
     try {
       setLoading(true);
       
@@ -569,7 +631,12 @@ function App() {
         }
       );
       
-      const createTx = await savingsContract.createTimeAccount(unlockTime, goalName, depositAmount);
+      const createTx = await savingsContract.createTimeAccountFiat(
+        unlockTime,
+        goalName,
+        depositAmount,
+        CURRENCIES[currency].code
+      );
       
       await toast.promise(
         createTx.wait(),
@@ -594,7 +661,7 @@ function App() {
     }
   };
 
-  const createGrowthAccount = async (targetAmountEur, goalName, initialDeposit) => {
+  const createGrowthAccount = async (targetAmount, goalName, initialDeposit, currency) => {
     try {
       setLoading(true);
       
@@ -610,8 +677,8 @@ function App() {
         }
       }
       
-      const targetOooweee = convertEurToOooweee(targetAmountEur);
-      const target = ethers.utils.parseUnits(targetOooweee.toString(), 18);
+      // Convert target to smallest unit (cents, pence, etc)
+      const targetInSmallestUnit = Math.round(targetAmount * Math.pow(10, CURRENCIES[currency].decimals));
       const depositAmount = ethers.utils.parseUnits(initialDeposit.toString(), 18);
       
       const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.savings, depositAmount);
@@ -625,13 +692,18 @@ function App() {
         }
       );
       
-      const createTx = await savingsContract.createGrowthAccount(target, goalName, depositAmount);
+      const createTx = await savingsContract.createGrowthAccountFiat(
+        targetInSmallestUnit,
+        CURRENCIES[currency].code,
+        goalName,
+        depositAmount
+      );
       
       await toast.promise(
         createTx.wait(),
         {
           loading: '🌱 Planting seed...',
-          success: `🌳 Growth account created with ${initialDeposit} $OOOWEEE! (1% fee applied)`,
+          success: `🌳 Growth account created! Target: ${formatCurrency(targetAmount, currency)}`,
           error: '❌ Failed to create account'
         }
       );
@@ -650,7 +722,7 @@ function App() {
     }
   };
 
-  const createBalanceAccount = async (targetAmountEur, recipientAddress, goalName, initialDeposit) => {
+  const createBalanceAccount = async (targetAmount, recipientAddress, goalName, initialDeposit, currency) => {
     try {
       setLoading(true);
       
@@ -666,8 +738,8 @@ function App() {
         }
       }
       
-      const targetOooweee = convertEurToOooweee(targetAmountEur);
-      const target = ethers.utils.parseUnits(targetOooweee.toString(), 18);
+      // Convert target to smallest unit
+      const targetInSmallestUnit = Math.round(targetAmount * Math.pow(10, CURRENCIES[currency].decimals));
       const depositAmount = ethers.utils.parseUnits(initialDeposit.toString(), 18);
       
       if (!ethers.utils.isAddress(recipientAddress)) {
@@ -686,13 +758,19 @@ function App() {
         }
       );
       
-      const createTx = await savingsContract.createBalanceAccount(target, recipientAddress, goalName, depositAmount);
+      const createTx = await savingsContract.createBalanceAccountFiat(
+        targetInSmallestUnit,
+        CURRENCIES[currency].code,
+        recipientAddress,
+        goalName,
+        depositAmount
+      );
       
       await toast.promise(
         createTx.wait(),
         {
           loading: '⚖️ Setting up scale...',
-          success: `💸 Balance account created with ${initialDeposit} $OOOWEEE! (1% fee applied)`,
+          success: `💸 Balance account created! Target: ${formatCurrency(targetAmount, currency)}`,
           error: '❌ Failed to create account'
         }
       );
@@ -731,14 +809,14 @@ function App() {
         toast.error('Please select an unlock date');
         return;
       }
-      createTimeAccount(unlockDate, goalName, initialDeposit);
+      createTimeAccount(unlockDate, goalName, initialDeposit, accountCurrency);
     } else if (accountType === 'growth') {
       const targetAmount = document.getElementById('targetAmount').value;
       if (!targetAmount || targetAmount <= 0) {
         toast.error('Please enter a valid target amount');
         return;
       }
-      createGrowthAccount(targetAmount, goalName, initialDeposit);
+      createGrowthAccount(targetAmount, goalName, initialDeposit, accountCurrency);
     } else if (accountType === 'balance') {
       const targetAmount = document.getElementById('targetAmount').value;
       const recipientAddress = document.getElementById('recipientAddress').value;
@@ -750,108 +828,114 @@ function App() {
         toast.error('Please enter a recipient address');
         return;
       }
-      createBalanceAccount(targetAmount, recipientAddress, goalName, initialDeposit);
+      createBalanceAccount(targetAmount, recipientAddress, goalName, initialDeposit, accountCurrency);
     }
   };
 
- const depositToAccount = async (accountId, amount) => {
-  try {
-    setLoading(true);
-    
-    const depositAmountNumber = parseFloat(amount);
-    const currentBalance = parseFloat(balance);
-    
-    // Check if user has enough OOOWEEE
-    if (currentBalance < depositAmountNumber) {
-      const needed = depositAmountNumber - currentBalance;
+  const depositToAccount = async (accountId, amount) => {
+    try {
+      setLoading(true);
       
-      if (window.confirm(`You need ${needed.toFixed(2)} more OOOWEEE. Buy with ETH now?`)) {
-        const requiredEth = needed * oooweeePrice * 1.05; // 5% buffer for slippage
+      const depositAmountNumber = parseFloat(amount);
+      const currentBalance = parseFloat(balance);
+      
+      // Check if user has enough OOOWEEE
+      if (currentBalance < depositAmountNumber) {
+        const needed = depositAmountNumber - currentBalance;
         
-        // Check ETH balance
-        if (parseFloat(ethBalance) < requiredEth) {
-          toast.error(`Insufficient ETH. Need ${requiredEth.toFixed(4)} ETH`);
+        if (window.confirm(`You need ${needed.toFixed(2)} more OOOWEEE. Buy with ETH now?`)) {
+          const requiredEth = needed * oooweeePrice * 1.05; // 5% buffer for slippage
+          
+          // Check ETH balance
+          if (parseFloat(ethBalance) < requiredEth) {
+            toast.error(`Insufficient ETH. Need ${requiredEth.toFixed(4)} ETH`);
+            setLoading(false);
+            return;
+          }
+          
+          const ethAmount = ethers.utils.parseEther(requiredEth.toFixed(6));
+          const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.token];
+          const deadline = Math.floor(Date.now() / 1000) + 3600;
+          
+          // Get expected output with slippage
+          const amounts = await routerContract.getAmountsOut(ethAmount, path);
+          const minOutput = ethers.utils.parseUnits(needed.toFixed(0), 18).mul(98).div(100);
+          
+          const buyTx = await routerContract.swapExactETHForTokens(
+            minOutput,
+            path,
+            account,
+            deadline,
+            { value: ethAmount }
+          );
+          
+          await toast.promise(
+            buyTx.wait(),
+            {
+              loading: `🔄 Buying ${needed.toFixed(0)} OOOWEEE...`,
+              success: '✅ OOOWEEE purchased!',
+              error: '❌ Failed to buy OOOWEEE'
+            }
+          );
+          
+          // Reload balance after purchase
+          await loadBalances(account, provider, tokenContract);
+        } else {
           setLoading(false);
           return;
         }
-        
-        const ethAmount = ethers.utils.parseEther(requiredEth.toFixed(6));
-        const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.token];
-        const deadline = Math.floor(Date.now() / 1000) + 3600;
-        
-        // Get expected output with slippage
-        const amounts = await routerContract.getAmountsOut(ethAmount, path);
-        const minOutput = ethers.utils.parseUnits(needed.toFixed(0), 18).mul(98).div(100);
-        
-        const buyTx = await routerContract.swapExactETHForTokens(
-          minOutput,
-          path,
-          account,
-          deadline,
-          { value: ethAmount }
-        );
-        
-        await toast.promise(
-          buyTx.wait(),
-          {
-            loading: `🔄 Buying ${needed.toFixed(0)} OOOWEEE...`,
-            success: '✅ OOOWEEE purchased!',
-            error: '❌ Failed to buy OOOWEEE'
-          }
-        );
-        
-        // Reload balance after purchase
-        await loadBalances(account, provider, tokenContract);
-      } else {
-        setLoading(false);
-        return;
       }
-    }
-    
-    // Now deposit the originally requested amount
-    const depositAmount = ethers.utils.parseUnits(depositAmountNumber.toString(), 18);
-    
-    const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.savings, depositAmount);
-    
-    await toast.promise(
-      approveTx.wait(),
-      {
-        loading: '🔓 Approving tokens...',
-        success: '✅ Tokens approved!',
-        error: '❌ Failed to approve'
-      }
-    );
-    
-    const depositTx = await savingsContract.deposit(accountId, depositAmount);
-    
-    await toast.promise(
-      depositTx.wait(),
-      {
-        loading: `💰 Depositing ${depositAmountNumber} OOOWEEE...`,
-        success: `🎉 Deposited ${depositAmountNumber} $OOOWEEE!`,
-        error: '❌ Failed to deposit'
-      }
-    );
-    
-    await loadSavingsAccounts(account, savingsContract);
-    await loadBalances(account, provider, tokenContract);
+      
+      // Now deposit the originally requested amount
+      const depositAmount = ethers.utils.parseUnits(depositAmountNumber.toString(), 18);
+      
+      const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.savings, depositAmount);
+      
+      await toast.promise(
+        approveTx.wait(),
+        {
+          loading: '🔓 Approving tokens...',
+          success: '✅ Tokens approved!',
+          error: '❌ Failed to approve'
+        }
+      );
+      
+      const depositTx = await savingsContract.deposit(accountId, depositAmount);
+      
+      await toast.promise(
+        depositTx.wait(),
+        {
+          loading: `💰 Depositing ${depositAmountNumber} OOOWEEE...`,
+          success: `🎉 Deposited ${depositAmountNumber} $OOOWEEE!`,
+          error: '❌ Failed to deposit'
+        }
+      );
+      
+      await loadSavingsAccounts(account, savingsContract);
+      await loadBalances(account, provider, tokenContract);
 
-  } catch (error) {
-    console.error(error);
-    if (error.code === 'ACTION_REJECTED') {
-      toast.error('Transaction cancelled');
-    } else {
-      toast.error('Failed to deposit: ' + error.message);
+    } catch (error) {
+      console.error(error);
+      if (error.code === 'ACTION_REJECTED') {
+        toast.error('Transaction cancelled');
+      } else {
+        toast.error('Failed to deposit: ' + error.message);
+      }
+    } finally {
+      setLoading(false);
     }
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const getDaysRemaining = (unlockTime) => {
     const now = Math.floor(Date.now() / 1000);
     const remaining = unlockTime - now;
     return Math.max(0, Math.floor(remaining / 86400));
+  };
+
+  // Get currency code from number
+  const getCurrencyFromCode = (code) => {
+    const currencies = Object.keys(CURRENCIES);
+    return currencies[code] || 'EUR';
   };
 
   // Filter accounts
@@ -1132,7 +1216,7 @@ function App() {
                   <span>🔗</span> Connect Wallet
                 </button>
                 <p className="info-text">Works with MetaMask, Trust Wallet, and more!</p>
-                <p className="disclaimer">💡 Values shown in EUR are estimates based on current market rates</p>
+                <p className="disclaimer">💡 Values shown in your selected currency are estimates based on current market rates</p>
               </div>
             ) : (
               <div className="dashboard">
@@ -1263,63 +1347,92 @@ function App() {
                   ) : (
                     <>
                       <div className="accounts-grid">
-                        {activeAccounts.map(acc => (
-                          <div key={acc.id} className="account-card active">
-                            <div className="account-header">
-                              <h3>{acc.goalName}</h3>
-                              <span className={`account-type ${acc.type.toLowerCase()}`}>
-                                {acc.type === 'Time' && '⏰'}
-                                {acc.type === 'Growth' && '🌱'}
-                                {acc.type === 'Balance' && '⚖️'}
-                                {acc.type}
-                              </span>
-                            </div>
-                            
-                            <div className="account-details">
-                              <div className="balance-display">
-                                <div className="detail-row">
-                                  <span>Balance:</span>
-                                  <span className="primary-amount">
-                                    {displayCurrency === 'crypto'
-                                      ? `${parseFloat(acc.balance).toLocaleString()} $OOOWEEE`
-                                      : getOooweeeInFiat(acc.balance, 'eur')
-                                    }
+                        {activeAccounts.map(acc => {
+                          const currencyCode = getCurrencyFromCode(acc.targetCurrency);
+                          const currency = CURRENCIES[currencyCode];
+                          
+                          return (
+                            <div key={acc.id} className="account-card active">
+                              <div className="account-header">
+                                <h3>{acc.goalName}</h3>
+                                <div className="header-badges">
+                                  <span className={`account-type ${acc.type.toLowerCase()}`}>
+                                    {acc.type === 'Time' && '⏰'}
+                                    {acc.type === 'Growth' && '🌱'}
+                                    {acc.type === 'Balance' && '⚖️'}
+                                    {acc.type}
                                   </span>
+                                  {acc.isFiatTarget && (
+                                    <span className="currency-badge">{currency.symbol}</span>
+                                  )}
                                 </div>
-                                {parseFloat(acc.pendingRewards) > 0 && (
-                                  <div className="detail-row rewards">
-                                    <span>Pending Rewards:</span>
-                                    <span className="value">+{parseFloat(acc.pendingRewards).toFixed(2)} $OOOWEEE</span>
-                                  </div>
-                                )}
-                                {displayCurrency === 'fiat' && (
-                                  <span className="secondary-amount">
-                                    ≈ {parseFloat(acc.balance).toLocaleString()} $OOOWEEE
-                                  </span>
-                                )}
                               </div>
                               
-                              {acc.type === 'Time' && (
-                                <div className="detail-row">
-                                  <span>Days Remaining:</span>
-                                  <span className="value">{getDaysRemaining(acc.unlockTime)}</span>
-                                </div>
-                              )}
-                              
-                              {acc.type === 'Growth' && (
-                                <div className="detail-row">
-                                  <span>Target:</span>
-                                  <span className="value">
-                                    {displayCurrency === 'crypto'
-                                      ? `${parseFloat(acc.target).toLocaleString()} $OOOWEEE`
-                                      : getOooweeeInFiat(acc.target, 'eur')
-                                    }
-                                  </span>
-                                </div>
-                              )}
-                              
-                              {acc.type === 'Balance' && (
-                                <>
+                              <div className="account-details">
+                                {acc.isFiatTarget ? (
+                                  <>
+                                    <div className="balance-display">
+                                      <div className="detail-row">
+                                        <span>Current Value:</span>
+                                        <span className="primary-amount">
+                                          {formatCurrency(acc.currentFiatValue / Math.pow(10, currency.decimals), currencyCode)}
+                                        </span>
+                                      </div>
+                                      {acc.type !== 'Time' && (
+                                        <div className="detail-row">
+                                          <span>Target:</span>
+                                          <span className="value">
+                                            {formatCurrency(acc.targetFiat / Math.pow(10, currency.decimals), currencyCode)}
+                                          </span>
+                                        </div>
+                                      )}
+                                      <div className="detail-row secondary">
+                                        <span>OOOWEEE Balance:</span>
+                                        <span>{parseFloat(acc.balance).toLocaleString()} tokens</span>
+                                      </div>
+                                      {parseFloat(acc.pendingRewards) > 0 && (
+                                        <div className="detail-row rewards">
+                                          <span>Pending Rewards:</span>
+                                          <span className="value">+{parseFloat(acc.pendingRewards).toFixed(2)} $OOOWEEE</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="balance-display">
+                                      <div className="detail-row">
+                                        <span>Balance:</span>
+                                        <span className="primary-amount">
+                                          {displayCurrency === 'crypto'
+                                            ? `${parseFloat(acc.balance).toLocaleString()} $OOOWEEE`
+                                            : getOooweeeInFiat(acc.balance, 'eur')
+                                          }
+                                        </span>
+                                      </div>
+                                      {parseFloat(acc.pendingRewards) > 0 && (
+                                        <div className="detail-row rewards">
+                                          <span>Pending Rewards:</span>
+                                          <span className="value">+{parseFloat(acc.pendingRewards).toFixed(2)} $OOOWEEE</span>
+                                        </div>
+                                      )}
+                                      {displayCurrency === 'fiat' && (
+                                        <span className="secondary-amount">
+                                          ≈ {parseFloat(acc.balance).toLocaleString()} $OOOWEEE
+                                        </span>
+                                      )}
+                                    </div>
+                                  </>
+                                )}
+                                
+                                {acc.type === 'Time' && (
+                                  <div className="detail-row">
+                                    <span>Days Remaining:</span>
+                                    <span className="value">{getDaysRemaining(acc.unlockTime)}</span>
+                                  </div>
+                                )}
+                                
+                                {acc.type === 'Growth' && !acc.isFiatTarget && (
                                   <div className="detail-row">
                                     <span>Target:</span>
                                     <span className="value">
@@ -1329,51 +1442,67 @@ function App() {
                                       }
                                     </span>
                                   </div>
-                                  <div className="detail-row">
-                                    <span>To:</span>
-                                    <span className="value address">{acc.recipient.slice(0, 6)}...{acc.recipient.slice(-4)}</span>
+                                )}
+                                
+                                {acc.type === 'Balance' && (
+                                  <>
+                                    {!acc.isFiatTarget && (
+                                      <div className="detail-row">
+                                        <span>Target:</span>
+                                        <span className="value">
+                                          {displayCurrency === 'crypto'
+                                            ? `${parseFloat(acc.target).toLocaleString()} $OOOWEEE`
+                                            : getOooweeeInFiat(acc.target, 'eur')
+                                          }
+                                        </span>
+                                      </div>
+                                    )}
+                                    <div className="detail-row">
+                                      <span>To:</span>
+                                      <span className="value address">{acc.recipient.slice(0, 6)}...{acc.recipient.slice(-4)}</span>
+                                    </div>
+                                    <p className="info-note">📝 Need 101% for auto-transfer</p>
+                                  </>
+                                )}
+                                
+                                <div className="progress-section">
+                                  <div className="progress-bar">
+                                    <div 
+                                      className="progress-fill rainbow-fill"
+                                      style={{ width: `${Math.min(acc.progress, 100)}%` }}
+                                    />
                                   </div>
-                                  <p className="info-note">📝 Need 101% for auto-transfer</p>
-                                </>
-                              )}
-                              
-                              <div className="progress-section">
-                                <div className="progress-bar">
-                                  <div 
-                                    className="progress-fill rainbow-fill"
-                                    style={{ width: `${Math.min(acc.progress, 100)}%` }}
-                                  />
+                                  <span className="progress-text">{acc.progress}% Complete</span>
                                 </div>
-                                <span className="progress-text">{acc.progress}% Complete</span>
+                              </div>
+                              
+                              <div className="deposit-section">
+                                <input 
+                                  type="number" 
+                                  placeholder="Amount to deposit"
+                                  id={`deposit-${acc.id}`}
+                                  min="0.001"
+                                  step="0.001"
+                                  className="deposit-input"
+                                />
+                                <button 
+                                  onClick={() => {
+                                    const amount = document.getElementById(`deposit-${acc.id}`).value;
+                                    if (amount && amount > 0) {
+                                      depositToAccount(acc.id, amount);
+                                    } else {
+                                      toast.error('Enter an amount');
+                                    }
+                                  }}
+                                  disabled={loading}
+                                  className="deposit-btn"
+                                >
+                                  💰 DEPOSIT
+                                </button>
                               </div>
                             </div>
-                            
-                            <div className="deposit-section">
-                              <input 
-                                type="number" 
-                                placeholder="Amount to deposit"
-                                id={`deposit-${acc.id}`}
-                                min="0.001"
-                                step="0.001"
-                                className="deposit-input"
-                              />
-                              <button 
-                                onClick={() => {
-                                  const amount = document.getElementById(`deposit-${acc.id}`).value;
-                                  if (amount && amount > 0) {
-                                    depositToAccount(acc.id, amount);
-                                  } else {
-                                    toast.error('Enter an amount');
-                                  }
-                                }}
-                                disabled={loading}
-                                className="deposit-btn"
-                              >
-                                💰 DEPOSIT
-                              </button>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                       
                       {showCompleted && completedAccounts.length > 0 && (
@@ -1417,6 +1546,22 @@ function App() {
                       <option value="time">⏰ Time Quest - Lock until date</option>
                       <option value="growth">🌱 Growth Quest - Grow to target</option>
                       <option value="balance">⚖️ Balance Quest - Send at target</option>
+                    </select>
+                  </div>
+                  
+                  {/* Currency selector for all account types */}
+                  <div className="form-group">
+                    <label>💱 Display Currency:</label>
+                    <select 
+                      value={accountCurrency}
+                      onChange={(e) => setAccountCurrency(e.target.value)}
+                      className="select-input"
+                    >
+                      {Object.entries(CURRENCIES).map(([code, info]) => (
+                        <option key={code} value={code}>
+                          {info.symbol} {info.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   
@@ -1464,9 +1609,10 @@ function App() {
                   
                   {(accountType === 'growth' || accountType === 'balance') && (
                     <div className="form-group">
+                      <label>🎯 Target Amount ({CURRENCIES[accountCurrency].symbol}):</label>
                       <input 
                         type="number" 
-                        placeholder="Target amount in EUR (€)"
+                        placeholder={`Target in ${accountCurrency}`}
                         id="targetAmount"
                         min="1"
                         step="0.01"
@@ -1474,10 +1620,15 @@ function App() {
                         value={targetAmountInput}
                         onChange={(e) => setTargetAmountInput(e.target.value)}
                       />
-                      {ethPrice && targetAmountInput && (
-                        <p className="input-helper">
-                          ≈ {convertEurToOooweee(targetAmountInput).toLocaleString()} $OOOWEEE
-                        </p>
+                      {targetAmountInput && (
+                        <>
+                          <p className="input-helper">
+                            {formatCurrency(targetAmountInput, accountCurrency)}
+                          </p>
+                          <p className="conversion-helper">
+                            ≈ {convertFiatToOooweee(targetAmountInput, accountCurrency).toLocaleString()} $OOOWEEE at current price
+                          </p>
+                        </>
                       )}
                     </div>
                   )}

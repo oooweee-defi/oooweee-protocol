@@ -7,12 +7,12 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 contract OOOWEEEToken is ERC20, Ownable {
     uint256 public constant TOTAL_SUPPLY = 100_000_000 * 10**18;
     uint256 public constant FOUNDER_ALLOCATION = 10_000_000 * 10**18;
-    uint256 public constant INITIAL_LIQUIDITY = 1_000_000 * 10**18;
+    uint256 public constant OPERATIONS_ALLOCATION = 1_000_000 * 10**18;  // For initial liquidity & operations
     uint256 public constant STABILITY_RESERVE = 89_000_000 * 10**18;
     
     address public stabilityMechanism;
     address public founderWallet;
-    address public liquidityWallet;
+    address public operationsWallet;  // Renamed from liquidityWallet
     
     // NO TAXES - Essential for circular economy
     uint256 public constant buyTaxRate = 0;
@@ -26,23 +26,23 @@ contract OOOWEEEToken is ERC20, Ownable {
     event TradingEnabled();
     
     constructor(
-    address _founderWallet,
-    address _liquidityWallet
-) ERC20("OOOWEEE", "OOOWEEE") Ownable(msg.sender) {
-    founderWallet = _founderWallet;
-    liquidityWallet = _liquidityWallet;
-    
-    // SET EXEMPTIONS FIRST (before minting!)
-    isExemptFromLimits[msg.sender] = true;
-    isExemptFromLimits[address(this)] = true;
-    isExemptFromLimits[_founderWallet] = true;
-    isExemptFromLimits[_liquidityWallet] = true;
-    
-    // NOW MINT (after exemptions are set)
-    _mint(founderWallet, FOUNDER_ALLOCATION);      // 10M
-    _mint(liquidityWallet, INITIAL_LIQUIDITY);     // 1M  
-    _mint(address(this), STABILITY_RESERVE);       // 89M
-}
+        address _founderWallet,
+        address _operationsWallet  // Changed parameter name
+    ) ERC20("OOOWEEE", "OOOWEEE") Ownable(msg.sender) {
+        founderWallet = _founderWallet;
+        operationsWallet = _operationsWallet;  // Changed from liquidityWallet
+        
+        // SET EXEMPTIONS FIRST (before minting!)
+        isExemptFromLimits[msg.sender] = true;
+        isExemptFromLimits[address(this)] = true;
+        isExemptFromLimits[_founderWallet] = true;
+        isExemptFromLimits[_operationsWallet] = true;
+        
+        // MINT ALLOCATIONS
+        _mint(founderWallet, FOUNDER_ALLOCATION);         // 10M to founder
+        _mint(operationsWallet, OPERATIONS_ALLOCATION);   // 1M to operations (for liquidity + expenses)
+        _mint(address(this), STABILITY_RESERVE);          // 89M held for stability mechanism
+    }
     
     function setStabilityMechanism(address _mechanism) external onlyOwner {
         require(stabilityMechanism == address(0), "Already set");
