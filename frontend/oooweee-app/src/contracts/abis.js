@@ -49,9 +49,9 @@ export const OOOWEEE_VALIDATORS_ABI = [
 ];
 
 export const CONTRACT_ADDRESSES = {
-  token: "0x42fc7b7175b5B9116c38bbBd5b88C1c968Dd7b77",
-  savings: "0xBFB865389A907d35B540080d299ad70697dBdFF5",
-  stability: "0xa4001E0E85502F0a3D7e6AE03e639B4d625a9C9c", // Add from your deployment
-  validators: "0x4106F3f19f288C4455e7998C661Ec558dB4D0cc3", // Add after deployment
-  rewardsReceiver: "0xdF12e7A67Cee3E25b03E67e0a0157c52CB4486FF" // Add after deployment
+    "token": "0xD4eEa41F12FBb3e2030B17FDeaaF8b38c471B32a",
+    "savings": "0x08292751eDBedF6e4A09eD1d133FA6b28af49Fc8",
+    "validators": "0xC0E5434c7086b4A5cb1Ff86Ba9372a171CA178Ae",
+    "stability": "0xBf12716D81F55A9105Fef47816D67Fa84bCd6373",
+    "rewardsReceiver": "0x609413Ac27E1c55474d2D8A5721F887d4c8bEdED"
 };
