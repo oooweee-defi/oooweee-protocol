@@ -1,47 +1,71 @@
+const hre = require("hardhat");
+
 async function main() {
-  const [deployer] = await ethers.getSigners();
-  console.log("🚀 Deploying OOOWEEE Protocol!");
-  console.log("Deploying with account:", deployer.address);
-  console.log("Account balance:", (await deployer.provider.getBalance(deployer.address)).toString());
-
+  console.log("Deploying OOOWEEE Protocol to Sepolia...");
+  
+  const [deployer] = await hre.ethers.getSigners();
+  console.log("Deploying contracts with:", deployer.address);
+  
   // Deploy Token
-  console.log("\n🪙 Deploying OOOWEEE Token...");
-  const Token = await ethers.getContractFactory("OOOWEEEToken");
-  const token = await Token.deploy();
-  await token.waitForDeployment();
-  const tokenAddress = await token.getAddress();
-  console.log("✅ Token deployed to:", tokenAddress);
-
-  // Deploy Savings
-  console.log("\n🏦 Deploying OOOWEEE Savings...");
-  const Savings = await ethers.getContractFactory("OOOWEEESavings");
-  const savings = await Savings.deploy(tokenAddress);
-  await savings.waitForDeployment();
-  const savingsAddress = await savings.getAddress();
-  console.log("✅ Savings deployed to:", savingsAddress);
-
-  // Save addresses to file
-  const fs = require('fs');
-  const addresses = {
-    token: tokenAddress,
-    savings: savingsAddress,
-    deployer: deployer.address,
-    network: network.name,
-    ticker: "OOOWEEE"
-  };
-  
-  fs.writeFileSync(
-    './deployed-addresses.json',
-    JSON.stringify(addresses, null, 2)
+  const Token = await hre.ethers.getContractFactory("OOOWEEEToken");
+  const token = await Token.deploy(
+    deployer.address,  // founder wallet
+    deployer.address   // liquidity wallet
   );
+  await token.deployed();
+  console.log("Token deployed to:", token.address);
   
-  console.log("\n🎉 OOOWEEE! Deployment complete!");
-  console.log("📄 Addresses saved to deployed-addresses.json");
+  // Deploy Savings (with Uniswap Router)
+  const UNISWAP_ROUTER = "0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008"; // Sepolia Uniswap V2 Router
+  const Savings = await hre.ethers.getContractFactory("OOOWEEESavings");
+  const savings = await Savings.deploy(
+    token.address,
+    UNISWAP_ROUTER
+  );
+  await savings.deployed();
+  console.log("Savings deployed to:", savings.address);
   
-  // Verify you received tokens
-  const balance = await token.balanceOf(deployer.address);
-  console.log("\n💰 Your balance:", ethers.formatUnits(balance, 18), "OOOWEEE");
-  console.log("🎬 Rick would be proud! OOOWEEE!");
+  // Deploy Validators
+  const Validators = await hre.ethers.getContractFactory("OOOWEEEValidators");
+  const validators = await Validators.deploy(
+    token.address,
+    UNISWAP_ROUTER,
+    deployer.address  // founder wallet
+  );
+  await validators.deployed();
+  console.log("Validators deployed to:", validators.address);
+  
+  // Deploy Stability
+  const Stability = await hre.ethers.getContractFactory("OOOWEEEStability");
+  const stability = await Stability.deploy(
+    token.address,
+    UNISWAP_ROUTER,
+    validators.address  // validators receive ETH
+  );
+  await stability.deployed();
+  console.log("Stability deployed to:", stability.address);
+  
+  // Setup connections
+  console.log("\nSetting up contract connections...");
+  
+  // Set stability mechanism in token
+  await token.setStabilityMechanism(stability.address);
+  console.log("✓ Stability mechanism set in token");
+  
+  // Set savings contract in validators
+  await validators.setSavingsContract(savings.address);
+  console.log("✓ Savings contract set in validators");
+  
+  // Set validator contract in savings
+  await savings.setValidatorContract(validators.address);
+  console.log("✓ Validator contract set in savings");
+  
+  console.log("\n=== Deployment Complete ===");
+  console.log("Token:", token.address);
+  console.log("Savings:", savings.address);
+  console.log("Validators:", validators.address);
+  console.log("Stability:", stability.address);
+  console.log("\nSave these addresses for your frontend!");
 }
 
 main()

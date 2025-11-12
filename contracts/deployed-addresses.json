@@ -1,7 +1,16 @@
 {
-  "token": "0x26201D30f17d7a607bfbCb13Cf724AbEbE9cF649",
-  "savings": "0x3B6CB4042367d96bD9E14A3A48DF26d15537c05c",
-  "deployer": "0x335bB9E071F10a414308170045A5Bc614BcC97B6",
   "network": "sepolia",
-  "ticker": "OOOWEEE"
+  "chainId": 11155111,
+  "deployer": "0x335bB9E071F10a414308170045A5Bc614BcC97B6",
+  "operationsWallet": "0x335bB9E071F10a414308170045A5Bc614BcC97B6",
+  "timestamp": "2025-11-11T22:12:37.152Z",
+  "contracts": {
+    "token": "0x42fc7b7175b5B9116c38bbBd5b88C1c968Dd7b77",
+    "savings": "0xBFB865389A907d35B540080d299ad70697dBdFF5",
+    "validators": "0x4106F3f19f288C4455e7998C661Ec558dB4D0cc3",
+    "stability": "0xa4001E0E85502F0a3D7e6AE03e639B4d625a9C9c",
+    "rewardsReceiver": "0xdF12e7A67Cee3E25b03E67e0a0157c52CB4486FF"
+  },
+  "ticker": "OOOWEEE",
+  "uniswapRouter": "0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008"
 }

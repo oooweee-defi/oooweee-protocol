@@ -6,71 +6,84 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract OOOWEEEToken is ERC20, Ownable {
     uint256 public constant TOTAL_SUPPLY = 100_000_000 * 10**18;
+    uint256 public constant FOUNDER_ALLOCATION = 10_000_000 * 10**18;
+    uint256 public constant INITIAL_LIQUIDITY = 1_000_000 * 10**18;
+    uint256 public constant STABILITY_RESERVE = 89_000_000 * 10**18;
     
-    uint256 public buyTaxRate = 0;
-    uint256 public sellTaxRate = 500;
-    uint256 public constant TAX_DIVISOR = 10000;
+    address public stabilityMechanism;
+    address public founderWallet;
+    address public liquidityWallet;
     
-    address public treasuryWallet;
+    // NO TAXES - Essential for circular economy
+    uint256 public constant buyTaxRate = 0;
+    uint256 public constant sellTaxRate = 0;
     
     mapping(address => bool) public isLiquidityPair;
-    mapping(address => bool) public isExemptFromTax;
-    
+    mapping(address => bool) public isExemptFromLimits;
     bool public tradingEnabled = false;
     
-    constructor() ERC20("OOOWEEE", "OOOWEEE") Ownable(msg.sender) {
-        _mint(msg.sender, TOTAL_SUPPLY);
-        treasuryWallet = msg.sender;
-        isExemptFromTax[msg.sender] = true;
-        isExemptFromTax[address(this)] = true;
-    }
+    event StabilityMechanismSet(address indexed mechanism);
+    event TradingEnabled();
     
-    function _update(
-        address from,
-        address to,
-        uint256 amount
-    ) internal override {
-        if (!tradingEnabled) {
-            require(from == owner() || to == owner(), "Trading not enabled");
-        }
+    constructor(
+    address _founderWallet,
+    address _liquidityWallet
+) ERC20("OOOWEEE", "OOOWEEE") Ownable(msg.sender) {
+    founderWallet = _founderWallet;
+    liquidityWallet = _liquidityWallet;
+    
+    // SET EXEMPTIONS FIRST (before minting!)
+    isExemptFromLimits[msg.sender] = true;
+    isExemptFromLimits[address(this)] = true;
+    isExemptFromLimits[_founderWallet] = true;
+    isExemptFromLimits[_liquidityWallet] = true;
+    
+    // NOW MINT (after exemptions are set)
+    _mint(founderWallet, FOUNDER_ALLOCATION);      // 10M
+    _mint(liquidityWallet, INITIAL_LIQUIDITY);     // 1M  
+    _mint(address(this), STABILITY_RESERVE);       // 89M
+}
+    
+    function setStabilityMechanism(address _mechanism) external onlyOwner {
+        require(stabilityMechanism == address(0), "Already set");
+        require(_mechanism != address(0), "Invalid address");
+        stabilityMechanism = _mechanism;
+        isExemptFromLimits[_mechanism] = true;
         
-        uint256 taxAmount = 0;
+        // Transfer stability reserve to mechanism
+        _transfer(address(this), stabilityMechanism, STABILITY_RESERVE);
         
-        if (!isExemptFromTax[from] && !isExemptFromTax[to]) {
-            if (isLiquidityPair[to]) {
-                taxAmount = (amount * sellTaxRate) / TAX_DIVISOR;
-            }
-        }
-        
-        if (taxAmount > 0) {
-            super._update(from, treasuryWallet, taxAmount);
-            super._update(from, to, amount - taxAmount);
-        } else {
-            super._update(from, to, amount);
-        }
+        emit StabilityMechanismSet(_mechanism);
     }
     
     function enableTrading() external onlyOwner {
+        require(!tradingEnabled, "Already enabled");
         tradingEnabled = true;
+        emit TradingEnabled();
     }
     
     function setLiquidityPair(address pair, bool value) external onlyOwner {
         isLiquidityPair[pair] = value;
     }
     
-    function setTaxExemption(address account, bool exempt) external onlyOwner {
-        isExemptFromTax[account] = exempt;
+    function setExemption(address account, bool exempt) external onlyOwner {
+        isExemptFromLimits[account] = exempt;
     }
     
-    function updateTaxRates(uint256 _buyTax, uint256 _sellTax) external onlyOwner {
-        require(_buyTax <= 500, "Buy tax too high");
-        require(_sellTax <= 1000, "Sell tax too high");
-        buyTaxRate = _buyTax;
-        sellTaxRate = _sellTax;
-    }
-    
-    function setTreasuryWallet(address _treasury) external onlyOwner {
-        require(_treasury != address(0), "Invalid treasury");
-        treasuryWallet = _treasury;
+    // Override transfer to check trading status (but NO taxes)
+    function _update(
+        address from,
+        address to,
+        uint256 amount
+    ) internal override {
+        if (!tradingEnabled) {
+            require(
+                isExemptFromLimits[from] || isExemptFromLimits[to],
+                "Trading not enabled"
+            );
+        }
+        
+        // NO TAX LOGIC - Just transfer
+        super._update(from, to, amount);
     }
 }

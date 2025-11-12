@@ -84,6 +84,349 @@
   25%, 75% { opacity: 0.5; }
 }
 
+/* Tab Navigation */
+.tab-navigation {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.1);
+  border-bottom: 4px solid rgba(255, 255, 255, 0.2);
+}
+
+.tab-btn {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.8rem;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border: 3px solid transparent;
+  padding: 0.8rem 1.5rem;
+  cursor: pointer;
+  transition: all 0.3s;
+  text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.3);
+}
+
+.tab-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.tab-btn.active {
+  background: linear-gradient(90deg, 
+    var(--oooweee-yellow),
+    var(--oooweee-lime),
+    var(--oooweee-green));
+  color: #000;
+  border-color: #000;
+  box-shadow: 4px 4px 0px #000;
+  transform: translateY(-2px);
+}
+
+/* About Page Styles */
+.about-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.about-hero {
+  text-align: center;
+  margin-bottom: 3rem;
+  animation: slideDown 0.5s ease-out;
+}
+
+.about-logo {
+  max-width: 300px;
+  margin-bottom: 1.5rem;
+  filter: drop-shadow(4px 4px 0px #000);
+}
+
+.about-page h1 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 2rem;
+  color: #FFD700;
+  text-shadow: 3px 3px 0px #000;
+  margin-bottom: 1rem;
+}
+
+.vision-section {
+  background: rgba(255, 255, 255, 0.95);
+  border: 4px solid #000;
+  padding: 2rem;
+  margin-bottom: 3rem;
+  box-shadow: 8px 8px 0px #000;
+}
+
+.vision-section h2 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 1.2rem;
+  color: #000;
+  margin-bottom: 1.5rem;
+}
+
+.vision-card {
+  background: linear-gradient(135deg, #FFF9C4 0%, #FFE082 100%);
+  border: 3px solid #000;
+  padding: 1.5rem;
+  border-radius: 8px;
+}
+
+.vision-text {
+  font-family: 'VT323', monospace;
+  font-size: 1.4rem;
+  line-height: 1.6;
+  color: #333;
+  margin-bottom: 1rem;
+}
+
+.vision-text strong {
+  color: #000;
+  font-size: 1.5rem;
+}
+
+.how-it-works {
+  margin-bottom: 3rem;
+}
+
+.how-it-works h2 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 1.5rem;
+  color: #fff;
+  text-shadow: 3px 3px 0px #000;
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.feature-card {
+  background: rgba(255, 255, 255, 0.95);
+  border: 4px solid #000;
+  padding: 1.5rem;
+  box-shadow: 6px 6px 0px #000;
+  transition: all 0.2s;
+  height: 100%;
+}
+
+.feature-card:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 8px 8px 0px #000;
+}
+
+.feature-icon {
+  font-size: 2.5rem;
+  display: block;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.feature-card h3 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+  color: #000;
+}
+
+.feature-card p,
+.feature-card li {
+  font-family: 'VT323', monospace;
+  font-size: 1.3rem;
+  line-height: 1.5;
+  color: #333;
+}
+
+.feature-card ul {
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.tokenomics-section {
+  background: rgba(255, 255, 255, 0.95);
+  border: 4px solid #000;
+  padding: 2rem;
+  margin-bottom: 3rem;
+  box-shadow: 8px 8px 0px #000;
+}
+
+.tokenomics-section h2 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 1.2rem;
+  color: #000;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.tokenomics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+}
+
+.token-stat {
+  background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%);
+  border: 3px solid #000;
+  padding: 1rem;
+  text-align: center;
+  border-radius: 8px;
+}
+
+.token-stat h4 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.7rem;
+  margin-bottom: 0.5rem;
+  color: #000;
+}
+
+.token-stat p {
+  font-family: 'VT323', monospace;
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #1976D2;
+}
+
+.cta-section {
+  text-align: center;
+  padding: 3rem 1rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+  margin-bottom: 2rem;
+}
+
+.cta-section h2 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 1.5rem;
+  color: #FFD700;
+  text-shadow: 3px 3px 0px #000;
+  margin-bottom: 1rem;
+}
+
+.cta-section p {
+  font-family: 'VT323', monospace;
+  font-size: 1.5rem;
+  color: #fff;
+  margin-bottom: 2rem;
+  text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.3);
+}
+
+.cta-button {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 1rem;
+  padding: 1rem 2rem;
+  border: 4px solid #000;
+  box-shadow: 6px 6px 0px #000;
+  cursor: pointer;
+  transition: all 0.1s;
+  color: #000;
+  text-shadow: none;
+}
+
+.cta-button:hover {
+  transform: translate(2px, 2px);
+  box-shadow: 4px 4px 0px #000;
+}
+
+/* Validator Card */
+.validator-card {
+  background: rgba(255, 255, 255, 0.95);
+  border: 4px solid #000;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  box-shadow: 8px 8px 0px #000;
+  position: relative;
+  overflow: hidden;
+}
+
+.validator-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #9C27B0, #E91E63, #F44336);
+  animation: gradient-shift 3s ease infinite;
+}
+
+.validator-header {
+  margin-bottom: 1rem;
+}
+
+.validator-header h3 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.8rem;
+  color: #000;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.stat {
+  text-align: center;
+  padding: 0.5rem;
+  background: #F5F5F5;
+  border: 2px solid #000;
+  border-radius: 4px;
+}
+
+.stat .label {
+  display: block;
+  font-size: 0.9rem;
+  color: #666;
+  margin-bottom: 0.3rem;
+}
+
+.stat .value {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 1.2rem;
+  color: #000;
+}
+
+.donation-info {
+  text-align: center;
+  margin: 1rem 0;
+  padding: 0.5rem;
+  background: #E8F5E9;
+  border: 2px dashed #4CAF50;
+  border-radius: 4px;
+}
+
+.donation-info p {
+  font-size: 1.1rem;
+  color: #333;
+  margin: 0;
+}
+
+.donate-btn {
+  width: 100%;
+  padding: 0.8rem;
+  border: 3px solid #000;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.6rem;
+  cursor: pointer;
+  box-shadow: 4px 4px 0px #000;
+  transition: all 0.1s;
+  color: #000;
+  margin-top: 1rem;
+}
+
+.donate-btn:hover {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px #000;
+}
+
+.donate-btn:active {
+  transform: translate(4px, 4px);
+  box-shadow: none;
+}
+
+.donate-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .App {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -112,7 +455,6 @@
 }
 
 .App-header {
-  padding: 2rem;
   position: relative;
   z-index: 2;
 }
@@ -170,17 +512,7 @@
   text-shadow: 2px 2px 0px rgba(0,0,0,0.3);
 }
 
-.price-ticker {
-  margin-top: 1rem;
-  display: flex;
-  justify-content: center;
-  gap: 1rem;
-  font-size: 0.9rem;
-  color: #fff;
-  text-shadow: 1px 1px 0px rgba(0,0,0,0.3);
-}
-
-/* Connect Section - Fixed for proper button centering */
+/* Connect Section */
 .connect-section {
   display: flex;
   flex-direction: column;
@@ -208,7 +540,6 @@
   100% { background-position: 0% 50%; }
 }
 
-/* Connect Button - Fixed centering and mobile touch */
 .connect-btn {
   font-family: 'Press Start 2P', cursive;
   color: #000;
@@ -219,10 +550,9 @@
   position: relative;
   transition: all 0.1s;
   box-shadow: 4px 4px 0px #000;
-  touch-action: manipulation; /* Improves touch responsiveness on mobile */
-  -webkit-tap-highlight-color: transparent; /* Remove tap highlight on iOS */
-  min-height: 48px; /* Better touch target for mobile */
-  /* Center the button properly */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 48px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -257,7 +587,6 @@
   text-align: center;
 }
 
-/* Fixed Feature Grid Layout */
 .feature-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -295,138 +624,25 @@
   line-height: 1.3;
 }
 
-/* Mobile Wallet Modal Styles - Fixed with smooth animation */
-.mobile-wallet-modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 10000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.modal-backdrop {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
-  animation: fadeIn 0.3s ease-in-out;
-}
-
-.modal-content {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: white;
-  border: 4px solid #000;
-  padding: 2rem;
-  border-radius: 12px;
-  box-shadow: 10px 10px 0px #000;
-  width: 90%;
-  max-width: 400px;
-  animation: slideUpFadeIn 0.3s ease-out;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes slideUpFadeIn {
-  from {
-    opacity: 0;
-    transform: translate(-50%, -45%) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-  }
-}
-
-.modal-content h3 {
-  font-family: 'Press Start 2P', cursive;
-  font-size: 1rem;
-  margin-bottom: 1rem;
-  text-align: center;
-  color: #000;
-}
-
-.modal-content p {
-  font-family: 'VT323', monospace;
-  font-size: 1.3rem;
-  margin-bottom: 1.5rem;
-  text-align: center;
-  color: #333;
-}
-
-.wallet-option-btn {
+/* Dashboard & Wallet */
+.dashboard {
   width: 100%;
-  padding: 1rem;
-  margin: 0.5rem 0;
-  font-family: 'VT323', monospace;
-  font-size: 1.3rem;
-  border: 3px solid #000;
-  cursor: pointer;
-  transition: all 0.1s;
-  box-shadow: 3px 3px 0px #000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-}
-
-.wallet-option-btn:hover {
-  transform: translate(1px, 1px);
-  box-shadow: 2px 2px 0px #000;
-}
-
-.wallet-option-btn:active {
-  transform: translate(3px, 3px);
-  box-shadow: none;
-}
-
-.metamask-btn {
-  background: linear-gradient(135deg, #f6851b, #e2761b);
-  color: white;
-}
-
-.trust-btn {
-  background: linear-gradient(135deg, #3375BB, #2563EB);
-  color: white;
-}
-
-.instructions-btn {
-  background: #FFF9C4;
-  color: #000;
-}
-
-.cancel-btn {
-  background: #f0f0f0;
-  color: #666;
-}
-
-/* Enhanced Wallet Card */
-.wallet-info {
-  width: 100%;
-  max-width: 600px;
+  max-width: 1200px;
   margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.wallet-info {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+  margin-bottom: 2rem;
 }
 
 .wallet-card {
   background: rgba(255, 255, 255, 0.95);
   border: 4px solid #000;
   padding: 1.5rem;
-  margin-bottom: 2rem;
   box-shadow: 8px 8px 0px #000;
   position: relative;
   overflow: hidden;
@@ -455,6 +671,8 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .wallet-header h3 {
@@ -566,6 +784,7 @@
   text-shadow: 1px 1px 0px rgba(0,0,0,0.3);
 }
 
+/* Accounts Section */
 .accounts-container {
   margin-top: 2rem;
 }
@@ -690,6 +909,12 @@
   font-size: 1.2rem;
 }
 
+.detail-row.rewards {
+  background: #FFF9C4;
+  padding: 0.3rem 0.5rem;
+  border: 1px dashed #FBC02D;
+}
+
 .detail-row .value {
   font-weight: bold;
   color: #333;
@@ -776,13 +1001,6 @@
   font-weight: bold;
 }
 
-.status-text {
-  text-align: center;
-  font-size: 1rem;
-  color: #666;
-  margin-top: 0.5rem;
-}
-
 .deposit-section {
   margin-top: 1rem;
   padding-top: 1rem;
@@ -796,8 +1014,8 @@
   font-family: 'VT323', monospace;
   font-size: 1.3rem;
   margin-bottom: 0.5rem;
-  -webkit-appearance: none; /* Fix iOS input styling */
-  border-radius: 0; /* Remove iOS default border radius */
+  -webkit-appearance: none;
+  border-radius: 0;
 }
 
 .deposit-btn {
@@ -849,6 +1067,7 @@
   margin-bottom: 0.5rem;
 }
 
+/* Create Section */
 .create-section {
   background: rgba(255, 255, 255, 0.95);
   border: 4px solid #000;
@@ -885,11 +1104,10 @@
   font-family: 'VT323', monospace;
   font-size: 1.3rem;
   background: white;
-  -webkit-appearance: none; /* Fix iOS input styling */
-  border-radius: 0; /* Remove iOS default border radius */
+  -webkit-appearance: none;
+  border-radius: 0;
 }
 
-/* Prevent zoom on iOS when focusing inputs */
 input, select, textarea {
   font-size: 16px !important;
 }
@@ -965,71 +1183,49 @@ input, select, textarea {
   opacity: 0.1;
 }
 
-/* Web3Modal and WalletConnect Mobile Fixes */
-.web3modal-modal-card {
-  max-height: 90vh !important;
-  overflow-y: auto !important;
-}
-
-.web3modal-modal-lightbox {
-  z-index: 9999 !important;
-}
-
-.web3modal-provider-container {
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.web3modal-provider-container:active {
-  transform: scale(0.98);
-}
-
-.walletconnect-modal__base {
-  z-index: 10000 !important;
-}
-
-/* iOS Safari specific fixes */
-@supports (-webkit-touch-callout: none) {
-  .connect-btn {
-    -webkit-user-select: none;
-    user-select: none;
-  }
-  
-  /* Fix for iOS modal positioning */
-  .web3modal-modal-card {
-    position: fixed !important;
-    top: 50% !important;
-    left: 50% !important;
-    transform: translate(-50%, -50%) !important;
-    -webkit-transform: translate(-50%, -50%) !important;
-  }
-}
-
-/* Mobile Responsive Fixes */
+/* Mobile Responsive */
 @media (max-width: 768px) {
-  /* Web3Modal mobile optimizations */
-  .walletconnect-modal__base {
-    padding: 20px !important;
+  .tab-navigation {
+    padding: 0.5rem;
+    gap: 0.5rem;
   }
   
-  .walletconnect-qrcode__image {
-    width: 100% !important;
-    max-width: 250px !important;
-    margin: 0 auto !important;
+  .tab-btn {
+    font-size: 0.6rem;
+    padding: 0.6rem 1rem;
   }
   
-  .walletconnect-modal__mobile__toggle {
-    margin: 20px auto !important;
+  .about-page {
+    padding: 1rem;
   }
   
-  /* Ensure proper viewport handling */
-  body {
-    overflow-x: hidden;
+  .about-page h1 {
+    font-size: 1.2rem;
   }
   
-  .App {
-    overflow-x: hidden;
-    position: relative;
+  .vision-section,
+  .tokenomics-section {
+    padding: 1rem;
+  }
+  
+  .vision-text {
+    font-size: 1.2rem;
+  }
+  
+  .feature-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .tokenomics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .wallet-info {
+    grid-template-columns: 1fr;
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr;
   }
 
   .App-header {
@@ -1043,109 +1239,10 @@ input, select, textarea {
   .main-logo {
     max-width: 300px;
   }
-  
-  /* Connect Section mobile fixes */
-  .connect-section {
-    padding: 1rem;
-    width: 100%;
-    max-width: 100%;
-  }
-  
-  /* Fix Connect Button centering on mobile */
-  .connect-btn {
-    font-size: 16px !important; /* Prevents zoom on iOS */
-    padding: 1rem 2rem;
-    width: 90%;
-    max-width: 300px;
-    min-height: 56px; /* Bigger touch target for mobile */
-    margin: 1rem auto !important; /* Center with margin auto */
-    display: flex !important; /* Force flex for better centering */
-    align-items: center;
-    justify-content: center;
-    -webkit-tap-highlight-color: transparent;
-  }
-  
-  /* Make sure the button text doesn't wrap */
-  .connect-btn span {
-    white-space: nowrap;
-  }
-  
-  /* Fix the welcome card alignment */
-  .welcome-card {
-    padding: 1.5rem;
-    margin: 0 auto 2rem auto;
-    width: 90%;
-    max-width: 400px;
-    box-sizing: border-box;
-  }
-  
-  /* Fix feature grid for mobile - stack vertically */
-  .feature-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-    align-items: center;
-  }
-  
-  .feature {
-    width: 100%;
-    max-width: 250px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-  }
-  
-  .feature .icon {
-    font-size: 2rem;
-  }
-  
-  .feature h4 {
-    font-size: 0.8rem;
-    white-space: normal;
-    word-wrap: break-word;
-  }
-  
-  .feature p {
-    font-size: 1.1rem;
-  }
 
   .wallet-card {
     margin: 1rem;
     padding: 1rem;
-    overflow: visible;
-  }
-
-  .wallet-header {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    align-items: flex-start;
-  }
-
-  .wallet-header .address {
-    font-size: 0.9rem;
-  }
-
-  .disconnect-btn {
-    font-size: 0.7rem;
-    padding: 0.3rem 0.6rem;
-  }
-
-  .balance-row.highlight {
-    font-size: 0.7rem;
-    padding: 0.6rem;
-    margin: 0.5rem 0;
-    word-break: break-all;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.3rem;
-  }
-
-  .balance-row.highlight span:last-child {
-    font-size: 0.9rem;
-    width: 100%;
   }
 
   .accounts-grid {
@@ -1154,139 +1251,10 @@ input, select, textarea {
     padding: 0 1rem;
   }
 
-  .account-card {
-    width: 100%;
-    margin: 0;
-    padding: 1rem;
-  }
-
-  .account-header h3 {
-    font-size: 1rem;
-  }
-
-  .create-section {
-    margin: 1rem;
-    padding: 1rem;
-  }
-
-  .create-section h2 {
-    font-size: 0.9rem;
-  }
-
-  .form-group input,
-  .form-group select {
-    font-size: 16px !important; /* Prevents zoom on iOS */
-    padding: 0.6rem;
-    touch-action: manipulation; /* Improves touch responsiveness */
-  }
-
-  .create-btn {
-    font-size: 0.6rem;
-    padding: 0.8rem;
-    min-height: 48px; /* Better touch target */
-  }
-
-  .deposit-input {
-    font-size: 16px !important; /* Prevents zoom on iOS */
-    padding: 0.6rem;
-  }
-
-  .deposit-btn {
-    font-size: 0.6rem;
-    padding: 0.6rem;
-    min-height: 44px; /* Better touch target */
-  }
-
-  .price-ticker {
-    font-size: 0.7rem;
-    padding: 0.5rem;
-    text-align: center;
-    flex-direction: column;
-  }
-
-  .price-ticker .separator {
-    display: none;
-  }
-
-  .currency-toggle {
+  .feature-grid {
     display: flex;
-    gap: 0.3rem;
-    margin: 0.5rem 0;
-  }
-
-  .toggle-btn {
-    font-size: 1rem;
-    padding: 0.4rem 0.8rem;
-  }
-
-  .conversion-note {
-    font-size: 0.8rem;
-    margin-top: 0.3rem;
-  }
-
-  .tagline {
-    font-size: 1.2rem;
-    padding: 0 1rem;
-  }
-
-  .info-text,
-  .disclaimer {
-    font-size: 0.9rem;
-    padding: 0 1rem;
-    width: 100%;
-    text-align: center;
-    margin: 0.5rem 0;
-  }
-
-  .fee-note,
-  .input-helper,
-  .help-text {
-    font-size: 0.8rem;
-  }
-}
-
-/* Extra small devices - even better centering */
-@media (max-width: 480px) {
-  .main-logo {
-    max-width: 250px;
-  }
-  
-  .connect-btn {
-    width: 85%;
-    font-size: 14px !important;
-    padding: 0.8rem 1.5rem;
-  }
-  
-  .welcome-card {
-    width: 95%;
-    padding: 1rem;
-  }
-  
-  .welcome-card h3 {
-    font-size: 0.8rem;
-  }
-  
-  .feature h4 {
-    font-size: 0.6rem;
-  }
-
-  .balance-row.highlight {
-    font-size: 0.6rem;
-  }
-
-  .create-btn {
-    font-size: 0.55rem;
-  }
-  
-  .section-header h2 {
-    font-size: 0.9rem;
-  }
-  
-  .account-header h3 {
-    font-size: 0.8rem;
-  }
-  
-  .account-type {
-    font-size: 0.4rem;
+    flex-direction: column;
+    gap: 1.5rem;
+    align-items: center;
   }
 }
