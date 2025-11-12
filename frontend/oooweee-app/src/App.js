@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
 import toast, { Toaster } from 'react-hot-toast';
 import './App.css';
@@ -111,15 +111,6 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Load validator stats
-  useEffect(() => {
-    if (validatorsContract) {
-      loadValidatorStats();
-      const interval = setInterval(loadValidatorStats, 10000);
-      return () => clearInterval(interval);
-    }
-  }, [validatorsContract]);
-
   const fetchEthPrice = async () => {
     try {
       const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd,eur,gbp');
@@ -130,11 +121,11 @@ function App() {
     }
   };
 
-  const loadValidatorStats = async () => {
+  const loadValidatorStats = useCallback(async () => {
     try {
       const stats = await validatorsContract.getStats();
       const ethNeeded = await validatorsContract.ethUntilNextValidator();
-      const [progress, total] = await validatorsContract.progressToNextValidator();
+      const [progress] = await validatorsContract.progressToNextValidator();
       
       setValidatorStats({
         validators: stats[0].toString(),
@@ -147,7 +138,16 @@ function App() {
     } catch (error) {
       console.error('Error loading validator stats:', error);
     }
-  };
+  }, [validatorsContract]);
+
+  // Load validator stats
+  useEffect(() => {
+    if (validatorsContract) {
+      loadValidatorStats();
+      const interval = setInterval(loadValidatorStats, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [validatorsContract, loadValidatorStats]);
 
   // Calculate fiat value
   const getOooweeeInFiat = (oooweeeAmount, currency = 'eur') => {
