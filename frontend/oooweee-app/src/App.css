@@ -930,6 +930,7 @@
   font-size: 1.3rem;
   background: white;
   -webkit-appearance: none;
+  appearance: none;
   border-radius: 0;
 }
 
@@ -1279,6 +1280,7 @@
   font-family: 'VT323', monospace;
   font-size: 1.3rem;
   -webkit-appearance: none;
+  appearance: none;
   border-radius: 0;
 }
 
@@ -1376,6 +1378,7 @@
   font-size: 1.3rem;
   background: white;
   -webkit-appearance: none;
+  appearance: none;
   border-radius: 0;
 }
 

@@ -131,11 +131,6 @@ function App() {
       
       setWeb3Modal(web3ModalInstance);
       
-      // Check if wallet was previously connected
-      if (web3ModalInstance.cachedProvider) {
-        await connectWallet();
-      }
-      
       // Fetch ETH prices
       try {
         const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd,eur,gbp,jpy,cny,cad,aud,chf,inr,krw');
@@ -151,12 +146,19 @@ function App() {
     
     init();
   }, []);
+
+  // Auto-reconnect wallet if cached
+  useEffect(() => {
+    if (web3Modal && web3Modal.cachedProvider && !account) {
+      connectWallet();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [web3Modal, account]);
   
   // Format currency
   const formatCurrency = (amount, currency = 'eur') => {
     const curr = Object.entries(CURRENCIES).find(([_, info]) => info.code === currency) || ['EUR', CURRENCIES.EUR];
     const locale = curr[1].locale;
-    const symbol = curr[1].symbol;
     
     return new Intl.NumberFormat(locale, {
       style: 'currency',
@@ -874,7 +876,7 @@ function App() {
           const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.token];
           const deadline = Math.floor(Date.now() / 1000) + 3600;
           
-          // Get expected output with slippage - FIXED: Remove unused variable
+          // Get expected output with slippage
           const minOutput = ethers.utils.parseUnits(needed.toFixed(0), 18).mul(97).div(100);
           
           const buyTx = await routerContract.swapExactETHForTokens(
