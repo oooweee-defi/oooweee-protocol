@@ -3,7 +3,7 @@ import { ethers } from 'ethers';
 import toast, { Toaster } from 'react-hot-toast';
 import './App.css';
 import oooweeLogo from './assets/oooweee-logo.png';
-import { OOOWEEE_TOKEN_ABI, OOOWEEE_SAVINGS_ABI, OOOWEEE_VALIDATORS_ABI, CONTRACT_ADDRESSES } from './contracts/abis';
+import { OOOWEEE_TOKEN_ABI, OOOWEEE_SAVINGS_ABI, OOOWEEE_VALIDATOR_FUND_ABI, OOOWEEE_STABILITY_ABI, CONTRACT_ADDRESSES } from './contracts/abis';
 import Web3Modal from "web3modal";
 import WalletConnectProvider from "@walletconnect/web3-provider";
 
@@ -72,7 +72,8 @@ function App() {
   const [provider, setProvider] = useState(null);
   const [tokenContract, setTokenContract] = useState(null);
   const [savingsContract, setSavingsContract] = useState(null);
-  const [validatorsContract, setValidatorsContract] = useState(null);
+  const [validatorFundContract, setValidatorFundContract] = useState(null);
+  const [stabilityContract, setStabilityContract] = useState(null);
   const [routerContract, setRouterContract] = useState(null);
   const [balance, setBalance] = useState('0');
   const [ethBalance, setEthBalance] = useState('0');
@@ -92,93 +93,80 @@ function App() {
   const [estimatedOooweee, setEstimatedOooweee] = useState('0');
   const [accountCurrency, setAccountCurrency] = useState('EUR');
   
-  // Validator stats
+  // Validator stats - Updated for new contract
   const [validatorStats, setValidatorStats] = useState({
     validators: 0,
     nextValidatorIn: '32',
     progress: 0,
     pendingETH: '0',
+    totalDonations: '0',
     donors: 0,
-    totalDonations: '0'
+    fromStability: '0',
+    fromRewards: '0'
   });
 
-  // OOOWEEE to ETH conversion rate (will be updated from pool)
+  // Circuit breaker status - NEW
+  const [circuitBreakerStatus, setCircuitBreakerStatus] = useState({
+    tripStatus: false,
+    dailyInterventions: 0,
+    dailyTokensUsed: '0',
+    maxInterventions: 10,
+    maxTokens: '1000000',
+    timeUntilReset: 0
+  });
+  
+  // Price tracking
   const [oooweeePrice, setOooweeePrice] = useState(0.00001);
-
-  // Initialize Web3Modal
+  
+  // Initialize on load
   useEffect(() => {
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    
-    const modal = new Web3Modal({
-      network: "sepolia",
-      cacheProvider: false,
-      providerOptions,
-      disableInjectedProvider: false,
-      theme: {
-        background: "rgb(39, 49, 56)",
-        main: "rgb(199, 199, 199)",
-        secondary: "rgb(136, 136, 136)",
-        border: "rgba(195, 195, 195, 0.14)",
-        hover: "rgb(16, 26, 32)"
-      }
-    });
-    
-    if (isMobile && modal.cachedProvider) {
-      modal.clearCachedProvider();
-    }
-    
-    setWeb3Modal(modal);
-  }, []);
-
-  // Loading screen
-  useEffect(() => {
-    setTimeout(() => setIsAppLoading(false), 2000);
-  }, []);
-
-  // Fetch ETH price
-  useEffect(() => {
-    fetchEthPrice();
-    const interval = setInterval(fetchEthPrice, 60000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const fetchEthPrice = async () => {
-    try {
-      const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd,eur,gbp,jpy,cny,cad,aud,chf,inr,krw');
-      const data = await response.json();
-      setEthPrice(data.ethereum);
-    } catch (error) {
-      console.error('Failed to fetch ETH price');
-      // Set fallback prices
-      setEthPrice({
-        usd: 2000,
-        eur: 1850,
-        gbp: 1600,
-        jpy: 300000,
-        cny: 14000,
-        cad: 2700,
-        aud: 3100,
-        chf: 1800,
-        inr: 166000,
-        krw: 2650000
+    const init = async () => {
+      setIsAppLoading(true);
+      
+      // Initialize Web3Modal
+      const web3ModalInstance = new Web3Modal({
+        cacheProvider: true,
+        providerOptions
       });
-    }
-  };
-
-  // Format currency properly
-  const formatCurrency = (amount, currencyCode) => {
-    const currency = CURRENCIES[currencyCode.toUpperCase()];
-    if (!currency) return amount;
+      
+      setWeb3Modal(web3ModalInstance);
+      
+      // Check if wallet was previously connected
+      if (web3ModalInstance.cachedProvider) {
+        await connectWallet();
+      }
+      
+      // Fetch ETH prices
+      try {
+        const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd,eur,gbp,jpy,cny,cad,aud,chf,inr,krw');
+        const data = await response.json();
+        setEthPrice(data.ethereum);
+      } catch (error) {
+        console.error('Error fetching ETH price:', error);
+        setEthPrice({ usd: 2000, eur: 1850, gbp: 1600, jpy: 280000, cny: 14000, cad: 2600, aud: 3000, chf: 1800, inr: 165000, krw: 2600000 });
+      }
+      
+      setTimeout(() => setIsAppLoading(false), 2000);
+    };
     
-    return new Intl.NumberFormat(currency.locale, {
+    init();
+  }, []);
+  
+  // Format currency
+  const formatCurrency = (amount, currency = 'eur') => {
+    const curr = Object.entries(CURRENCIES).find(([_, info]) => info.code === currency) || ['EUR', CURRENCIES.EUR];
+    const locale = curr[1].locale;
+    const symbol = curr[1].symbol;
+    
+    return new Intl.NumberFormat(locale, {
       style: 'currency',
-      currency: currencyCode.toUpperCase(),
-      minimumFractionDigits: currency.decimals,
-      maximumFractionDigits: currency.decimals
+      currency: curr[0],
+      minimumFractionDigits: curr[1].decimals,
+      maximumFractionDigits: curr[1].decimals
     }).format(amount);
   };
 
-  // Get OOOWEEE price from router
+  // Update OOOWEEE price
   const updateOooweeePrice = useCallback(async () => {
     if (!routerContract) return;
     
@@ -193,7 +181,7 @@ function App() {
     }
   }, [routerContract]);
 
-  // Update OOOWEEE price when router is available
+  // Update price periodically
   useEffect(() => {
     if (routerContract) {
       updateOooweeePrice();
@@ -223,11 +211,12 @@ function App() {
     estimateOooweee();
   }, [ethToBuy, routerContract]);
 
+  // Load validator stats - UPDATED for new contract
   const loadValidatorStats = useCallback(async () => {
     try {
-      const stats = await validatorsContract.getStats();
-      const ethNeeded = await validatorsContract.ethUntilNextValidator();
-      const [progress] = await validatorsContract.progressToNextValidator();
+      const stats = await validatorFundContract.getStats();
+      const ethNeeded = await validatorFundContract.ethUntilNextValidator();
+      const [progress] = await validatorFundContract.progressToNextValidator();
       
       setValidatorStats({
         validators: stats[0].toString(),
@@ -235,21 +224,51 @@ function App() {
         progress: (parseFloat(ethers.utils.formatEther(progress)) / 32) * 100,
         pendingETH: ethers.utils.formatEther(stats[1]),
         totalDonations: ethers.utils.formatEther(stats[4]),
-        donors: stats[5].toString()
+        donors: stats[5].toString(),
+        fromStability: ethers.utils.formatEther(stats[6]), // NEW
+        fromRewards: ethers.utils.formatEther(stats[7])    // NEW
       });
     } catch (error) {
       console.error('Error loading validator stats:', error);
     }
-  }, [validatorsContract]);
+  }, [validatorFundContract]);
+
+  // Load circuit breaker status - NEW
+  const loadCircuitBreakerStatus = useCallback(async () => {
+    if (!stabilityContract) return;
+    
+    try {
+      const status = await stabilityContract.getCircuitBreakerStatus();
+      setCircuitBreakerStatus({
+        tripStatus: status[0],
+        dailyInterventions: status[1].toNumber(),
+        dailyTokensUsed: ethers.utils.formatUnits(status[2], 18),
+        maxInterventions: status[3].toNumber(),
+        maxTokens: ethers.utils.formatUnits(status[4], 18),
+        timeUntilReset: status[5].toNumber()
+      });
+    } catch (error) {
+      console.error('Error loading circuit breaker status:', error);
+    }
+  }, [stabilityContract]);
 
   // Load validator stats
   useEffect(() => {
-    if (validatorsContract) {
+    if (validatorFundContract) {
       loadValidatorStats();
       const interval = setInterval(loadValidatorStats, 10000);
       return () => clearInterval(interval);
     }
-  }, [validatorsContract, loadValidatorStats]);
+  }, [validatorFundContract, loadValidatorStats]);
+
+  // Load circuit breaker status
+  useEffect(() => {
+    if (stabilityContract) {
+      loadCircuitBreakerStatus();
+      const interval = setInterval(loadCircuitBreakerStatus, 15000);
+      return () => clearInterval(interval);
+    }
+  }, [stabilityContract, loadCircuitBreakerStatus]);
 
   // Calculate fiat value
   const getOooweeeInFiat = (oooweeeAmount, currency = 'eur') => {
@@ -281,9 +300,9 @@ function App() {
       const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.token];
       const deadline = Math.floor(Date.now() / 1000) + 3600;
       
-      // Get minimum output (with 2% slippage)
+      // Get minimum output (with 3% slippage to match contracts)
       const amounts = await routerContract.getAmountsOut(ethAmount, path);
-      const minOutput = amounts[1].mul(98).div(100);
+      const minOutput = amounts[1].mul(97).div(100);
       
       const tx = await routerContract.swapExactETHForTokens(
         minOutput,
@@ -333,7 +352,7 @@ function App() {
           const deadline = Math.floor(Date.now() / 1000) + 3600;
           
           const amounts = await routerContract.getAmountsOut(ethAmount, path);
-          const minOutput = amounts[1].mul(98).div(100);
+          const minOutput = amounts[1].mul(97).div(100); // 3% slippage
           
           const tx = await routerContract.swapExactETHForTokens(
             minOutput,
@@ -348,13 +367,11 @@ function App() {
           resolve(true);
         } catch (error) {
           reject(error);
-        } finally {
-          setLoading(false);
         }
       }),
       {
-        loading: '🔄 Buying OOOWEEE first...',
-        success: '✅ OOOWEEE purchased! Now creating account...',
+        loading: `🔄 Buying ${requiredOooweee.toFixed(0)} OOOWEEE...`,
+        success: '✅ OOOWEEE purchased! Creating account...',
         error: '❌ Failed to buy OOOWEEE'
       }
     );
@@ -362,140 +379,92 @@ function App() {
     return result;
   };
 
-  // Connect Wallet
+  // Connect wallet
   const connectWallet = async () => {
     try {
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      const isWalletBrowser = typeof window.ethereum !== 'undefined';
+      setLoading(true);
       
-      let instance, provider, signer, address;
-      
-      // Mobile wallet browser - connect directly
-      if (isMobile && isWalletBrowser) {
-        const accounts = await window.ethereum.request({
-          method: 'eth_requestAccounts'
-        });
-        
-        if (accounts.length > 0) {
-          provider = new ethers.providers.Web3Provider(window.ethereum);
-          signer = provider.getSigner();
-          address = await signer.getAddress();
-          instance = window.ethereum;
-        }
-      } else if (!isMobile) {
-        // Desktop - use Web3Modal
-        if (web3Modal && web3Modal.cachedProvider) {
-          web3Modal.clearCachedProvider();
-        }
-        
-        instance = await web3Modal.connect();
-        provider = new ethers.providers.Web3Provider(instance);
-        signer = provider.getSigner();
-        address = await signer.getAddress();
+      if (!web3Modal) {
+        toast.error('Web3Modal not initialized');
+        return;
       }
+      
+      const instance = await web3Modal.connect();
+      const web3Provider = new ethers.providers.Web3Provider(instance);
+      const signer = web3Provider.getSigner();
+      const address = await signer.getAddress();
       
       // Check network
-      const network = await provider.getNetwork();
+      const network = await web3Provider.getNetwork();
       if (network.chainId !== 11155111) {
-        try {
-          await instance.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: '0xaa36a7' }],
-          });
-        } catch (switchError) {
-          if (switchError.code === 4902) {
-            await instance.request({
-              method: 'wallet_addEthereumChain',
-              params: [{
-                chainId: '0xaa36a7',
-                chainName: 'Sepolia',
-                nativeCurrency: {
-                  name: 'Sepolia ETH',
-                  symbol: 'SEP',
-                  decimals: 18
-                },
-                rpcUrls: ['https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161'],
-                blockExplorerUrls: ['https://sepolia.etherscan.io']
-              }]
-            });
-          }
-        }
+        toast.error('Please switch to Sepolia network');
+        setLoading(false);
+        return;
       }
       
-      // Initialize contracts
-      const tokenContract = new ethers.Contract(
-        CONTRACT_ADDRESSES.token,
-        OOOWEEE_TOKEN_ABI,
-        signer
-      );
-      
-      const savingsContract = new ethers.Contract(
-        CONTRACT_ADDRESSES.savings,
-        OOOWEEE_SAVINGS_ABI,
-        signer
-      );
-
-      const validatorsContract = new ethers.Contract(
-        CONTRACT_ADDRESSES.validators,
-        OOOWEEE_VALIDATORS_ABI,
-        signer
-      );
-      
-      const routerContract = new ethers.Contract(
-        UNISWAP_ROUTER,
-        UNISWAP_ROUTER_ABI,
-        signer
-      );
+      // Initialize contracts - UPDATED
+      const token = new ethers.Contract(CONTRACT_ADDRESSES.token, OOOWEEE_TOKEN_ABI, signer);
+      const savings = new ethers.Contract(CONTRACT_ADDRESSES.savings, OOOWEEE_SAVINGS_ABI, signer);
+      const validatorFund = new ethers.Contract(CONTRACT_ADDRESSES.validatorFund, OOOWEEE_VALIDATOR_FUND_ABI, signer);
+      const stability = new ethers.Contract(CONTRACT_ADDRESSES.stability, OOOWEEE_STABILITY_ABI, signer);
+      const router = new ethers.Contract(UNISWAP_ROUTER, UNISWAP_ROUTER_ABI, signer);
       
       setAccount(address);
-      setProvider(provider);
-      setTokenContract(tokenContract);
-      setSavingsContract(savingsContract);
-      setValidatorsContract(validatorsContract);
-      setRouterContract(routerContract);
+      setProvider(web3Provider);
+      setTokenContract(token);
+      setSavingsContract(savings);
+      setValidatorFundContract(validatorFund);
+      setStabilityContract(stability);
+      setRouterContract(router);
       
-      toast.success('Wallet connected! OOOWEEE!');
+      // Load user data
+      await loadBalances(address, web3Provider, token);
+      await loadSavingsAccounts(address, savings);
       
-      loadBalances(address, provider, tokenContract);
-      loadSavingsAccounts(address, savingsContract);
+      // Subscribe to events
+      if (instance.on) {
+        instance.on("accountsChanged", handleAccountsChanged);
+        instance.on("chainChanged", handleChainChanged);
+      }
       
-      // Event listeners
-      instance.on("accountsChanged", (accounts) => {
-        if (accounts.length === 0) {
-          disconnectWallet();
-        } else {
-          window.location.reload();
-        }
-      });
-
-      instance.on("chainChanged", () => {
-        window.location.reload();
-      });
-      
+      toast.success('Wallet connected!');
     } catch (error) {
-      console.error('Wallet connection error:', error);
-      toast.error(error.message?.includes('User rejected') ? 
-        'Connection cancelled' : 
-        'Failed to connect wallet'
-      );
+      console.error(error);
+      toast.error('Failed to connect wallet');
+    } finally {
+      setLoading(false);
     }
+  };
+
+  // Handle account change
+  const handleAccountsChanged = async (accounts) => {
+    if (accounts.length === 0) {
+      disconnectWallet();
+    } else {
+      window.location.reload();
+    }
+  };
+
+  // Handle chain change
+  const handleChainChanged = (chainId) => {
+    window.location.reload();
   };
 
   // Donate to validators
   const donateToValidators = async () => {
-    const amount = prompt("How much ETH would you like to donate to bootstrap validators?");
-    if (amount && parseFloat(amount) >= 0.001) {
+    const amount = prompt('Enter ETH amount to donate:');
+    if (amount && parseFloat(amount) > 0) {
       try {
         setLoading(true);
-        const tx = await validatorsContract.donate({
-          value: ethers.utils.parseEther(amount)
+        const tx = await validatorFundContract.donate({ 
+          value: ethers.utils.parseEther(amount) 
         });
         
         await toast.promise(
           tx.wait(),
           {
-            loading: '💎 Sending donation...',
-            success: `🎉 Thank you! Donated ${amount} ETH to validators!`,
+            loading: '💰 Sending donation...',
+            success: `🎉 Donated ${amount} ETH to validator fund!`,
             error: '❌ Donation failed'
           }
         );
@@ -529,7 +498,8 @@ function App() {
     setProvider(null);
     setTokenContract(null);
     setSavingsContract(null);
-    setValidatorsContract(null);
+    setValidatorFundContract(null);
+    setStabilityContract(null);
     setRouterContract(null);
     setBalance('0');
     setEthBalance('0');
@@ -566,7 +536,7 @@ function App() {
             targetFiat: info[4].toNumber(),
             targetCurrency: info[5],
             currentFiatValue: info[6].toNumber(),
-            unlockTime: info[7].toString(),
+            unlockTime: info[7].toNumber(), // Now uint32
             recipient: info[8],
             isActive: info[9],
             progress: info[10].toString(),
@@ -585,7 +555,7 @@ function App() {
             targetFiat: 0,
             targetCurrency: 1, // Default to EUR
             currentFiatValue: 0,
-            unlockTime: info[4].toString(),
+            unlockTime: info[4].toNumber(),
             recipient: info[5],
             isActive: info[6],
             progress: info[7].toString(),
@@ -598,6 +568,58 @@ function App() {
       setAccounts(accountDetails);
     } catch (error) {
       console.error('Error loading accounts:', error);
+    }
+  };
+
+  // Claim rewards for an account - NEW
+  const claimRewards = async (accountId) => {
+    try {
+      setLoading(true);
+      
+      const tx = await savingsContract.claimRewards(accountId);
+      
+      await toast.promise(
+        tx.wait(),
+        {
+          loading: '🎁 Claiming rewards...',
+          success: '✅ Rewards claimed!',
+          error: '❌ Failed to claim rewards'
+        }
+      );
+      
+      await loadSavingsAccounts(account, savingsContract);
+      
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to claim rewards');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Claim all rewards - NEW
+  const claimAllRewards = async () => {
+    try {
+      setLoading(true);
+      
+      const tx = await savingsContract.claimAllRewards();
+      
+      await toast.promise(
+        tx.wait(),
+        {
+          loading: '🎁 Claiming all rewards (max 20 accounts)...',
+          success: '✅ All rewards claimed!',
+          error: '❌ Failed to claim rewards'
+        }
+      );
+      
+      await loadSavingsAccounts(account, savingsContract);
+      
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to claim rewards');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -702,8 +724,8 @@ function App() {
       await toast.promise(
         createTx.wait(),
         {
-          loading: '🌱 Planting seed...',
-          success: `🌳 Growth account created! Target: ${formatCurrency(targetAmount, currency)}`,
+          loading: '🌱 Planting money tree...',
+          success: `🎉 Growth account created! Target: ${CURRENCIES[currency].symbol}${targetAmount}`,
           error: '❌ Failed to create account'
         }
       );
@@ -742,11 +764,6 @@ function App() {
       const targetInSmallestUnit = Math.round(targetAmount * Math.pow(10, CURRENCIES[currency].decimals));
       const depositAmount = ethers.utils.parseUnits(initialDeposit.toString(), 18);
       
-      if (!ethers.utils.isAddress(recipientAddress)) {
-        toast.error('Invalid recipient address');
-        return;
-      }
-      
       const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.savings, depositAmount);
       
       await toast.promise(
@@ -769,8 +786,8 @@ function App() {
       await toast.promise(
         createTx.wait(),
         {
-          loading: '⚖️ Setting up scale...',
-          success: `💸 Balance account created! Target: ${formatCurrency(targetAmount, currency)}`,
+          loading: '⚖️ Setting up balance account...',
+          success: `🎉 Balance account created! Will send to ${recipientAddress.slice(0,6)}...`,
           error: '❌ Failed to create account'
         }
       );
@@ -789,12 +806,12 @@ function App() {
     }
   };
 
-  const handleCreateAccount = () => {
+  const handleCreateAccount = async () => {
     const goalName = document.getElementById('goalName').value;
     const initialDeposit = document.getElementById('initialDeposit').value;
     
     if (!goalName) {
-      toast.error('Please enter a goal name');
+      toast.error('Please enter a quest name');
       return;
     }
     
@@ -857,9 +874,8 @@ function App() {
           const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.token];
           const deadline = Math.floor(Date.now() / 1000) + 3600;
           
-          // Get expected output with slippage
-          const amounts = await routerContract.getAmountsOut(ethAmount, path);
-          const minOutput = ethers.utils.parseUnits(needed.toFixed(0), 18).mul(98).div(100);
+          // Get expected output with slippage - FIXED: Remove unused variable
+          const minOutput = ethers.utils.parseUnits(needed.toFixed(0), 18).mul(97).div(100);
           
           const buyTx = await routerContract.swapExactETHForTokens(
             minOutput,
@@ -938,6 +954,13 @@ function App() {
     return currencies[code] || 'EUR';
   };
 
+  // Format time until reset
+  const formatTimeRemaining = (seconds) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    return `${hours}h ${minutes}m`;
+  };
+
   // Filter accounts
   const activeAccounts = accounts.filter(acc => acc.isActive);
   const completedAccounts = accounts.filter(acc => !acc.isActive);
@@ -1004,15 +1027,57 @@ function App() {
           <button 
             className="buy-btn rainbow-btn"
             onClick={buyOooweee}
-            disabled={loading || parseFloat(ethToBuy) <= 0 || parseFloat(ethToBuy) > parseFloat(ethBalance)}
+            disabled={loading || parseFloat(ethToBuy) <= 0}
           >
-            {loading ? '⏳ Processing...' : '🚀 Buy OOOWEEE'}
+            {loading ? '⏳ Processing...' : '🚀 Swap for OOOWEEE'}
           </button>
-          
-          <p className="slippage-note">
-            ⚠️ Includes 2% slippage protection
-          </p>
         </div>
+      </div>
+    </div>
+  );
+
+  // Circuit Breaker Card - NEW
+  const CircuitBreakerCard = () => (
+    <div className="circuit-breaker-card">
+      <div className="card-header">
+        <h3>🚨 Stability System</h3>
+        <span className={`status-badge ${circuitBreakerStatus.tripStatus ? 'paused' : 'active'}`}>
+          {circuitBreakerStatus.tripStatus ? '⚠️ Paused' : '✅ Active'}
+        </span>
+      </div>
+      
+      <div className="stats-grid">
+        <div className="stat">
+          <span className="label">Daily Interventions</span>
+          <span className="value">
+            {circuitBreakerStatus.dailyInterventions}/{circuitBreakerStatus.maxInterventions}
+          </span>
+        </div>
+        
+        <div className="stat">
+          <span className="label">Tokens Used Today</span>
+          <span className="value">
+            {parseFloat(circuitBreakerStatus.dailyTokensUsed).toLocaleString()}/
+            {parseFloat(circuitBreakerStatus.maxTokens).toLocaleString()}
+          </span>
+        </div>
+        
+        {circuitBreakerStatus.timeUntilReset > 0 && (
+          <div className="stat">
+            <span className="label">Resets In</span>
+            <span className="value">{formatTimeRemaining(circuitBreakerStatus.timeUntilReset)}</span>
+          </div>
+        )}
+      </div>
+      
+      <div className="progress-bar">
+        <div 
+          className="progress-fill"
+          style={{ 
+            width: `${(circuitBreakerStatus.dailyInterventions / circuitBreakerStatus.maxInterventions) * 100}%`,
+            background: circuitBreakerStatus.tripStatus ? '#ff4444' : 'var(--oooweee-green)'
+          }}
+        />
       </div>
     </div>
   );
@@ -1020,83 +1085,47 @@ function App() {
   // About page content
   const renderAboutPage = () => (
     <div className="about-page">
-      <div className="about-hero">
+      <div className="about-header">
         <img src={oooweeLogo} alt="OOOWEEE" className="about-logo pixel-art" />
         <h1>The OOOWEEE Protocol</h1>
-        <p className="tagline">Financial Freedom Through Protected Savings</p>
+        <p className="subtitle">Decentralized Savings Revolution</p>
       </div>
 
-      <div className="vision-section">
-        <h2>💭 Founder's Vision</h2>
-        <div className="vision-card">
-          <p className="vision-text">
-            Today's world bombards us with advertisements designed to separate us from our money. 
-            Every scroll, every click, every moment online is filled with temptations to spend on 
-            things we don't need. This constant marketing assault is the invisible barrier keeping 
-            people from climbing the financial ladder.
-          </p>
-          <p className="vision-text">
-            <strong>You are your own worst enemy when it comes to financial independence.</strong> 
-            That's why we built OOOWEEE - a protocol that makes your savings truly untouchable, 
-            even by yourself. No compromise. No exceptions. Your future self will thank you.
-          </p>
-          <p className="vision-text">
-            We're creating a shield against the ultra-invasive nature of modern marketing. 
-            A tool that gives you the power to fight back against impulse spending and build 
-            real wealth, one locked savings account at a time.
-          </p>
-        </div>
+      <div className="about-section">
+        <h2>🎯 The Problem</h2>
+        <p>Traditional banks make it too easy to break your savings goals. That "7-day cooling period"? You can still break it. Those withdrawal fees? They're not enough to stop impulsive spending.</p>
       </div>
 
-      <div className="how-it-works">
-        <h2>⚙️ How It Works</h2>
-        
-        <div className="feature-grid">
-          <div className="feature-card">
-            <span className="feature-icon">🔒</span>
-            <h3>Smart Contract Savings</h3>
-            <p>Your savings are locked in immutable smart contracts on Ethereum. Once created, 
-            not even you can break your commitment. True financial discipline enforced by code.</p>
-          </div>
+      <div className="about-section">
+        <h2>💡 The Solution</h2>
+        <p>OOOWEEE creates truly immutable savings accounts using smart contracts. When you lock your funds, they're REALLY locked - no bank manager can override it, no "forgot password" backdoor. Your future self will thank you.</p>
+      </div>
 
-          <div className="feature-card">
-            <span className="feature-icon">🛡️</span>
-            <h3>SSA Protection</h3>
-            <p>The Speculative Spike Absorber (SSA) captures value from price pumps and converts 
-            it to stable ETH for validator creation. This protects savers from speculation while 
-            building long-term value.</p>
+      <div className="value-flow">
+        <h2>🔄 How It Works</h2>
+        <div className="flow-diagram">
+          <div className="flow-step">
+            <span className="step-icon">📈</span>
+            <h3>Speculation</h3>
+            <p>Traders buy OOOWEEE, price increases</p>
           </div>
-
-          <div className="feature-card">
-            <span className="feature-icon">🎯</span>
-            <h3>Three Account Types</h3>
-            <ul>
-              <li><strong>Time Accounts:</strong> Lock until a specific date</li>
-              <li><strong>Growth Accounts:</strong> Auto-unlock at target amount</li>
-              <li><strong>Balance Accounts:</strong> Auto-send to recipient at target</li>
-            </ul>
+          <div className="flow-arrow">→</div>
+          <div className="flow-step">
+            <span className="step-icon">🛡️</span>
+            <h3>Stability</h3>
+            <p>System sells into pumps, captures ETH</p>
           </div>
-
-          <div className="feature-card">
-            <span className="feature-icon">🔄</span>
-            <h3>Circular Economy</h3>
-            <p>Price spikes fund validators → Validators earn rewards → 33% to savers, 
-            33% to operations, 34% to next validator. Continuous value creation long after 
-            all 100M tokens are in circulation.</p>
+          <div className="flow-arrow">→</div>
+          <div className="flow-step">
+            <span className="step-icon">🔐</span>
+            <h3>Validators</h3>
+            <p>ETH funds validators, earns 4% APY</p>
           </div>
-
-          <div className="feature-card">
-            <span className="feature-icon">💎</span>
-            <h3>Validator Network</h3>
-            <p>Community-funded Ethereum validators generate sustainable rewards. Every 32 ETH 
-            accumulated creates a new validator, compounding returns for all savers.</p>
-          </div>
-
-          <div className="feature-card">
-            <span className="feature-icon">🌍</span>
-            <h3>True Decentralization</h3>
-            <p>Built on Ethereum mainnet, not Layer 2s. Your funds are truly decentralized 
-            with no central authority able to freeze or confiscate them.</p>
+          <div className="flow-arrow">→</div>
+          <div className="flow-step">
+            <span className="step-icon">🎁</span>
+            <h3>Rewards</h3>
+            <p>Savers earn passive income</p>
           </div>
         </div>
       </div>
@@ -1279,7 +1308,7 @@ function App() {
                     </button>
                   </div>
 
-                  {/* Validator Card */}
+                  {/* Validator Card - UPDATED */}
                   <div className="validator-card">
                     <div className="validator-header">
                       <h3>🔐 Validator Network</h3>
@@ -1295,107 +1324,102 @@ function App() {
                         <span className="label">Next Validator In</span>
                         <span className="value">{parseFloat(validatorStats.nextValidatorIn).toFixed(2)} ETH</span>
                       </div>
+                      
+                      <div className="stat">
+                        <span className="label">From Stability</span>
+                        <span className="value">{parseFloat(validatorStats.fromStability).toFixed(4)} ETH</span>
+                      </div>
+                      
+                      <div className="stat">
+                        <span className="label">From Rewards</span>
+                        <span className="value">{parseFloat(validatorStats.fromRewards).toFixed(4)} ETH</span>
+                      </div>
                     </div>
                     
                     <div className="progress-bar">
                       <div 
-                        className="progress-fill rainbow-fill" 
+                        className="progress-fill validator-progress"
                         style={{ width: `${validatorStats.progress}%` }}
                       />
-                      <span className="progress-text">
-                        {(32 - parseFloat(validatorStats.nextValidatorIn)).toFixed(2)} / 32 ETH
-                      </span>
                     </div>
+                    <p className="progress-label">
+                      {parseFloat(validatorStats.pendingETH).toFixed(4)} / 32 ETH
+                    </p>
                     
-                    <div className="donation-info">
-                      <p>🤝 {validatorStats.donors} donors contributed {parseFloat(validatorStats.totalDonations).toFixed(3)} ETH</p>
+                    <div className="donation-stats">
+                      <p>💝 Total Donations: {parseFloat(validatorStats.totalDonations).toFixed(4)} ETH</p>
+                      <p>👥 Donors: {validatorStats.donors}</p>
                     </div>
                     
                     <button 
-                      className="donate-btn rainbow-btn"
+                      className="donate-btn"
                       onClick={donateToValidators}
                       disabled={loading}
                     >
-                      💎 Donate ETH to Bootstrap Validators
+                      💰 Donate ETH
                     </button>
-                    
-                    <p className="help-text">
-                      Help launch validators to earn rewards for all OOOWEEE savers!
-                    </p>
                   </div>
+
+                  {/* Circuit Breaker Card - NEW */}
+                  {stabilityContract && <CircuitBreakerCard />}
                 </div>
-                
-                {/* Accounts section */}
-                <div className="accounts-container">
-                  <div className="section-header">
-                    <h2>🎮 Active Savings Quests</h2>
-                    {completedAccounts.length > 0 && (
-                      <button 
-                        className="toggle-completed"
-                        onClick={() => setShowCompleted(!showCompleted)}
-                      >
-                        {showCompleted ? '👁️ Hide' : '👁️ Show'} Completed ({completedAccounts.length})
-                      </button>
-                    )}
-                  </div>
-                  
-                  {activeAccounts.length === 0 && completedAccounts.length === 0 ? (
-                    <div className="empty-state">
-                      <p>🎯 No savings quests yet!</p>
-                      <p>Start your first quest below!</p>
-                    </div>
-                  ) : (
+
+                <div className="savings-section">
+                  {activeAccounts.length > 0 && (
                     <>
+                      <div className="section-header">
+                        <h2>🎮 Your Active Quests</h2>
+                        {activeAccounts.some(acc => parseFloat(acc.pendingRewards) > 0) && (
+                          <button 
+                            className="claim-all-btn"
+                            onClick={claimAllRewards}
+                            disabled={loading}
+                          >
+                            🎁 Claim All Rewards
+                          </button>
+                        )}
+                      </div>
                       <div className="accounts-grid">
                         {activeAccounts.map(acc => {
-                          const currencyCode = getCurrencyFromCode(acc.targetCurrency);
-                          const currency = CURRENCIES[currencyCode];
+                          const currency = getCurrencyFromCode(acc.targetCurrency);
+                          const currencyInfo = CURRENCIES[currency];
                           
                           return (
-                            <div key={acc.id} className="account-card active">
+                            <div key={acc.id} className="account-card">
                               <div className="account-header">
                                 <h3>{acc.goalName}</h3>
-                                <div className="header-badges">
-                                  <span className={`account-type ${acc.type.toLowerCase()}`}>
-                                    {acc.type === 'Time' && '⏰'}
-                                    {acc.type === 'Growth' && '🌱'}
-                                    {acc.type === 'Balance' && '⚖️'}
-                                    {acc.type}
-                                  </span>
-                                  {acc.isFiatTarget && (
-                                    <span className="currency-badge">{currency.symbol}</span>
-                                  )}
-                                </div>
+                                <span className={`account-type ${acc.type.toLowerCase()}`}>
+                                  {acc.type}
+                                </span>
                               </div>
                               
                               <div className="account-details">
                                 {acc.isFiatTarget ? (
                                   <>
-                                    <div className="balance-display">
-                                      <div className="detail-row">
-                                        <span>Current Value:</span>
-                                        <span className="primary-amount">
-                                          {formatCurrency(acc.currentFiatValue / Math.pow(10, currency.decimals), currencyCode)}
-                                        </span>
-                                      </div>
-                                      {acc.type !== 'Time' && (
+                                    <div className="fiat-target-display">
+                                      {(acc.type === 'Growth' || acc.type === 'Balance') && (
                                         <div className="detail-row">
                                           <span>Target:</span>
-                                          <span className="value">
-                                            {formatCurrency(acc.targetFiat / Math.pow(10, currency.decimals), currencyCode)}
+                                          <span className="primary-amount">
+                                            {currencyInfo.symbol}
+                                            {(acc.targetFiat / Math.pow(10, currencyInfo.decimals)).toFixed(currencyInfo.decimals)}
                                           </span>
                                         </div>
                                       )}
-                                      <div className="detail-row secondary">
-                                        <span>OOOWEEE Balance:</span>
-                                        <span>{parseFloat(acc.balance).toLocaleString()} tokens</span>
+                                      
+                                      <div className="detail-row">
+                                        <span>Current Value:</span>
+                                        <span className="primary-amount">
+                                          {currencyInfo.symbol}
+                                          {(acc.currentFiatValue / Math.pow(10, currencyInfo.decimals)).toFixed(currencyInfo.decimals)}
+                                        </span>
                                       </div>
-                                      {parseFloat(acc.pendingRewards) > 0 && (
-                                        <div className="detail-row rewards">
-                                          <span>Pending Rewards:</span>
-                                          <span className="value">+{parseFloat(acc.pendingRewards).toFixed(2)} $OOOWEEE</span>
-                                        </div>
-                                      )}
+                                      
+                                      <div className="balance-in-tokens">
+                                        <span className="secondary-amount">
+                                          {parseFloat(acc.balance).toLocaleString()} $OOOWEEE
+                                        </span>
+                                      </div>
                                     </div>
                                   </>
                                 ) : (
@@ -1414,6 +1438,13 @@ function App() {
                                         <div className="detail-row rewards">
                                           <span>Pending Rewards:</span>
                                           <span className="value">+{parseFloat(acc.pendingRewards).toFixed(2)} $OOOWEEE</span>
+                                          <button 
+                                            className="claim-btn"
+                                            onClick={() => claimRewards(acc.id)}
+                                            disabled={loading}
+                                          >
+                                            Claim
+                                          </button>
                                         </div>
                                       )}
                                       {displayCurrency === 'fiat' && (
@@ -1612,49 +1643,54 @@ function App() {
                       <label>🎯 Target Amount ({CURRENCIES[accountCurrency].symbol}):</label>
                       <input 
                         type="number" 
-                        placeholder={`Target in ${accountCurrency}`}
+                        placeholder={`Target in ${CURRENCIES[accountCurrency].name}`}
                         id="targetAmount"
-                        min="1"
-                        step="0.01"
-                        className="number-input"
                         value={targetAmountInput}
                         onChange={(e) => setTargetAmountInput(e.target.value)}
+                        min="1"
+                        step="1"
+                        className="number-input"
                       />
                       {targetAmountInput && (
-                        <>
-                          <p className="input-helper">
-                            {formatCurrency(targetAmountInput, accountCurrency)}
-                          </p>
-                          <p className="conversion-helper">
-                            ≈ {convertFiatToOooweee(targetAmountInput, accountCurrency).toLocaleString()} $OOOWEEE at current price
-                          </p>
-                        </>
+                        <p className="conversion-note">
+                          ≈ {convertFiatToOooweee(targetAmountInput, accountCurrency.toLowerCase()).toLocaleString()} $OOOWEEE at current rate
+                        </p>
                       )}
                     </div>
                   )}
                   
                   {accountType === 'balance' && (
                     <div className="form-group">
+                      <label>📮 Recipient Address:</label>
                       <input 
                         type="text" 
-                        placeholder="Recipient wallet (0x...)"
+                        placeholder="0x..." 
                         id="recipientAddress"
                         className="text-input"
                       />
-                      <p className="help-text">
-                        ⚠️ Save 101% to cover the 1% transfer fee!
-                      </p>
+                      <p className="info-note">Auto-sends when target + 1% is reached</p>
                     </div>
                   )}
                   
                   <button 
-                    onClick={handleCreateAccount}
+                    onClick={handleCreateAccount} 
                     disabled={loading}
                     className="create-btn rainbow-btn"
                   >
-                    {loading ? '⏳ Creating Quest...' : '🚀 START QUEST'}
+                    {loading ? '⏳ Processing...' : '🚀 Create Account'}
                   </button>
                 </div>
+                
+                {completedAccounts.length > 0 && (
+                  <div className="toggle-completed">
+                    <button 
+                      onClick={() => setShowCompleted(!showCompleted)}
+                      className="toggle-btn"
+                    >
+                      {showCompleted ? '📦 Hide' : '👁️ Show'} Completed ({completedAccounts.length})
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </>
