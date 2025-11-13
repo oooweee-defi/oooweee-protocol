@@ -12,6 +12,9 @@ interface IUniswapV2Router02 {
         uint deadline
     ) external payable;
     
+    function getAmountsOut(uint amountIn, address[] calldata path)
+        external view returns (uint[] memory amounts);
+    
     function WETH() external pure returns (address);
 }
 
@@ -19,9 +22,9 @@ interface IOOOWEEESavings {
     function receiveRewards(uint256 amount) external;
 }
 
-contract OOOWEEERewardsReceiver is Ownable {
+contract OOOWEEERewardsDistributor is Ownable {
     address public immutable operationsWallet;
-    address public immutable validatorsContract;
+    address public immutable validatorFundContract; // Renamed for clarity
     address public immutable savingsContract;
     IUniswapV2Router02 public immutable uniswapRouter;
     IERC20 public immutable oooweeeToken;
@@ -29,6 +32,7 @@ contract OOOWEEERewardsReceiver is Ownable {
     uint256 public constant OPERATIONS_PERCENT = 33;
     uint256 public constant USERS_PERCENT = 33;
     uint256 public constant REINVEST_PERCENT = 34;
+    uint256 public constant SLIPPAGE_TOLERANCE = 300; // 3% slippage tolerance
     
     uint256 public totalRewardsReceived;
     uint256 public totalOperationsDistributed;
@@ -45,23 +49,24 @@ contract OOOWEEERewardsReceiver is Ownable {
         uint256 toReinvest,
         uint256 timestamp
     );
-    event TokensBoughtForUsers(uint256 ethSpent, uint256 tokensReceived);
+    event TokensBoughtForUsers(uint256 ethSpent, uint256 tokensReceived, uint256 minExpected);
+    event DistributionThresholdUpdated(uint256 newThreshold);
     
     constructor(
         address _operationsWallet,
-        address _validatorsContract,
+        address _validatorFundContract,
         address _savingsContract,
         address _uniswapRouter,
         address _oooweeeToken
     ) Ownable(msg.sender) {
         require(_operationsWallet != address(0), "Invalid operations wallet");
-        require(_validatorsContract != address(0), "Invalid validators contract");
+        require(_validatorFundContract != address(0), "Invalid validator fund contract");
         require(_savingsContract != address(0), "Invalid savings contract");
         require(_uniswapRouter != address(0), "Invalid router");
         require(_oooweeeToken != address(0), "Invalid token");
         
         operationsWallet = _operationsWallet;
-        validatorsContract = _validatorsContract;
+        validatorFundContract = _validatorFundContract;
         savingsContract = _savingsContract;
         uniswapRouter = IUniswapV2Router02(_uniswapRouter);
         oooweeeToken = IERC20(_oooweeeToken);
@@ -82,19 +87,22 @@ contract OOOWEEERewardsReceiver is Ownable {
         
         uint256 toOperations = (balance * OPERATIONS_PERCENT) / 100;
         uint256 toUsers = (balance * USERS_PERCENT) / 100;
-        uint256 toReinvest = balance - toOperations - toUsers;
+        uint256 toReinvest = balance - toOperations - toUsers; // Ensures no dust remains
         
         totalOperationsDistributed += toOperations;
         totalUsersDistributed += toUsers;
         totalReinvested += toReinvest;
         lastDistribution = block.timestamp;
         
+        // Send to operations wallet
         (bool opsSuccess,) = payable(operationsWallet).call{value: toOperations}("");
         require(opsSuccess, "Operations transfer failed");
         
-        (bool valSuccess,) = payable(validatorsContract).call{value: toReinvest}("");
-        require(valSuccess, "Validators transfer failed");
+        // Send to validator fund for reinvestment
+        (bool valSuccess,) = payable(validatorFundContract).call{value: toReinvest}("");
+        require(valSuccess, "Validator fund transfer failed");
         
+        // Buy tokens and distribute to savers
         if (toUsers > 0) {
             _buyTokensAndDistributeToSavers(toUsers);
         }
@@ -107,10 +115,16 @@ contract OOOWEEERewardsReceiver is Ownable {
         path[0] = uniswapRouter.WETH();
         path[1] = address(oooweeeToken);
         
+        // Calculate minimum tokens with slippage protection
+        uint256[] memory amounts = uniswapRouter.getAmountsOut(ethAmount, path);
+        uint256 expectedTokens = amounts[1];
+        uint256 minTokensOut = (expectedTokens * (10000 - SLIPPAGE_TOLERANCE)) / 10000;
+        
         uint256 tokensBefore = oooweeeToken.balanceOf(address(this));
         
+        // Execute swap with slippage protection
         uniswapRouter.swapExactETHForTokensSupportingFeeOnTransferTokens{value: ethAmount}(
-            0,
+            minTokensOut, // Use calculated minimum instead of 0
             path,
             address(this),
             block.timestamp + 300
@@ -119,13 +133,22 @@ contract OOOWEEERewardsReceiver is Ownable {
         uint256 tokensBought = oooweeeToken.balanceOf(address(this)) - tokensBefore;
         require(tokensBought > 0, "No tokens received from swap");
         
-        emit TokensBoughtForUsers(ethAmount, tokensBought);
+        emit TokensBoughtForUsers(ethAmount, tokensBought, minTokensOut);
         
-        // Approve exact amount for security
+        // Approve and send tokens to savings contract
         oooweeeToken.approve(savingsContract, tokensBought);
+        
+        // Transfer tokens to savings contract
+        require(
+            oooweeeToken.transfer(savingsContract, tokensBought),
+            "Token transfer to savings failed"
+        );
+        
+        // Notify savings contract of the rewards
         IOOOWEEESavings(savingsContract).receiveRewards(tokensBought);
     }
     
+    // View functions
     function pendingRewards() external view returns (uint256) {
         return address(this).balance;
     }
@@ -150,19 +173,21 @@ contract OOOWEEERewardsReceiver is Ownable {
         );
     }
     
-    function emergencyWithdraw() external onlyOwner {
-        uint256 balance = address(this).balance;
-        require(balance > 0, "No ETH to withdraw");
+    function calculateExpectedTokens(uint256 ethAmount) external view returns (
+        uint256 expected,
+        uint256 minimum
+    ) {
+        if (ethAmount == 0) return (0, 0);
         
-        (bool success,) = payable(owner()).call{value: balance}("");
-        require(success, "Emergency withdraw failed");
-    }
-    
-    function emergencyTokenWithdraw(address token) external onlyOwner {
-        IERC20 tokenContract = IERC20(token);
-        uint256 balance = tokenContract.balanceOf(address(this));
-        require(balance > 0, "No tokens to withdraw");
+        address[] memory path = new address[](2);
+        path[0] = uniswapRouter.WETH();
+        path[1] = address(oooweeeToken);
         
-        tokenContract.transfer(owner(), balance);
+        try uniswapRouter.getAmountsOut(ethAmount, path) returns (uint256[] memory amounts) {
+            expected = amounts[1];
+            minimum = (expected * (10000 - SLIPPAGE_TOLERANCE)) / 10000;
+        } catch {
+            return (0, 0);
+        }
     }
 }

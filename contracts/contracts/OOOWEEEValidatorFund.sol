@@ -3,17 +3,19 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract OOOWEEEValidators is Ownable {
+contract OOOWEEEValidatorFund is Ownable {
     // Core addresses
     address public operator;
     address public stabilityContract;
-    address public rewardsReceiver;
+    address public rewardsDistributor; // Renamed for clarity
     
     // Validator tracking
     uint256 public pendingValidatorETH;
     uint256 public totalValidators;
     uint256 public totalETHWithdrawn;
     uint256 public totalDonationsReceived;
+    uint256 public totalETHFromStability;
+    uint256 public totalETHFromRewards;
     uint256 public donorCount;
     
     // Track unique donors
@@ -28,7 +30,7 @@ contract OOOWEEEValidators is Ownable {
     event ETHReceived(address indexed from, uint256 amount, string source);
     event DonationReceived(address indexed donor, uint256 amount, uint256 totalFromDonor);
     event StabilityContractSet(address indexed stability);
-    event RewardsReceiverSet(address indexed receiver);
+    event RewardsDistributorSet(address indexed distributor);
     event OperatorChanged(address indexed oldOperator, address indexed newOperator);
     
     constructor(address _operator) Ownable(msg.sender) {
@@ -41,9 +43,11 @@ contract OOOWEEEValidators is Ownable {
         // Handle different sources
         if (msg.sender == stabilityContract) {
             pendingValidatorETH += msg.value;
+            totalETHFromStability += msg.value;
             emit ETHReceived(msg.sender, msg.value, "Stability");
-        } else if (msg.sender == rewardsReceiver) {
+        } else if (msg.sender == rewardsDistributor) {
             pendingValidatorETH += msg.value;
+            totalETHFromRewards += msg.value;
             emit ETHReceived(msg.sender, msg.value, "Reinvestment");
         } else {
             // It's a donation - anyone can contribute!
@@ -100,11 +104,11 @@ contract OOOWEEEValidators is Ownable {
         emit StabilityContractSet(_stability);
     }
     
-    function setRewardsReceiver(address _receiver) external onlyOwner {
-        require(_receiver != address(0), "Invalid address");
-        rewardsReceiver = _receiver;
+    function setRewardsDistributor(address _distributor) external onlyOwner {
+        require(_distributor != address(0), "Invalid address");
+        rewardsDistributor = _distributor;
         
-        emit RewardsReceiverSet(_receiver);
+        emit RewardsDistributorSet(_distributor);
     }
     
     function setOperator(address _operator) external onlyOwner {
@@ -144,7 +148,9 @@ contract OOOWEEEValidators is Ownable {
         uint256 totalWithdrawn,
         uint256 availableValidators,
         uint256 totalDonations,
-        uint256 donors
+        uint256 donors,
+        uint256 fromStability,
+        uint256 fromRewards
     ) {
         return (
             totalValidators,
@@ -152,7 +158,9 @@ contract OOOWEEEValidators is Ownable {
             totalETHWithdrawn,
             pendingValidatorETH / VALIDATOR_SIZE,
             totalDonationsReceived,
-            donorCount
+            donorCount,
+            totalETHFromStability,
+            totalETHFromRewards
         );
     }
 }

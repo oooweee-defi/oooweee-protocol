@@ -24,6 +24,8 @@ contract OOOWEEEToken is ERC20, Ownable {
     
     event StabilityMechanismSet(address indexed mechanism);
     event TradingEnabled();
+    event LiquidityPairSet(address indexed pair, bool value);
+    event ExemptionSet(address indexed account, bool exempt);
     
     constructor(
         address _founderWallet,
@@ -64,10 +66,12 @@ contract OOOWEEEToken is ERC20, Ownable {
     
     function setLiquidityPair(address pair, bool value) external onlyOwner {
         isLiquidityPair[pair] = value;
+        emit LiquidityPairSet(pair, value);
     }
     
     function setExemption(address account, bool exempt) external onlyOwner {
         isExemptFromLimits[account] = exempt;
+        emit ExemptionSet(account, exempt);
     }
     
     // Override transfer to check trading status (but NO taxes)
