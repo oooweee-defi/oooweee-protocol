@@ -34,18 +34,22 @@ export const OOOWEEE_STABILITY_ABI = [
   "receive() payable"
 ];
 
-export const OOOWEEE_VALIDATORS_ABI = [
-  "function donate() payable",
-  "function getStats() view returns (uint256, uint256, uint256, uint256, uint256, uint256)",
-  "function ethUntilNextValidator() view returns (uint256)",
-  "function progressToNextValidator() view returns (uint256, uint256)",
-  "function canWithdrawValidator() view returns (bool)",
-  "function validatorsAvailable() view returns (uint256)",
-  "function donorContributions(address) view returns (uint256)",
-  "function pendingValidatorETH() view returns (uint256)",
-  "function totalValidators() view returns (uint256)",
-  "function totalDonationsReceived() view returns (uint256)",
-  "function donorCount() view returns (uint256)"
+export const OOOWEEE_VALIDATOR_FUND_ABI = [
+  "function donate() external payable",
+  "function getStats() external view returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256)",
+  "function ethUntilNextValidator() external view returns (uint256)",
+  "function progressToNextValidator() external view returns (uint256, uint256)",
+  "function validatorCount() external view returns (uint256)",
+  "function pendingETH() external view returns (uint256)",
+  "function totalSentToL1() external view returns (uint256)",
+  "function totalReceivedFromL1() external view returns (uint256)",
+  "function totalDonations() external view returns (uint256)",
+  "function uniqueDonors() external view returns (uint256)",
+  "function totalFromStability() external view returns (uint256)",
+  "function totalFromRewards() external view returns (uint256)",
+  "event DonationReceived(address indexed donor, uint256 amount)",
+  "event ValidatorFunded(uint256 indexed validatorId, uint256 amount)",
+  "event ETHBridgedToL1(uint256 amount, uint256 timestamp)"
 ];
 
 export const CONTRACT_ADDRESSES = {
