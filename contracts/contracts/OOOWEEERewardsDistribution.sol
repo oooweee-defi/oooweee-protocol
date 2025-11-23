@@ -21,7 +21,7 @@ interface ICrossDomainMessenger {
  */
 contract OOOWEEERewardsDistribution is Ownable, ReentrancyGuard {
     // L2 Bridge configuration
-    address public constant L2_CROSS_DOMAIN_MESSENGER = 0x4200000000000000000000000000000000000007;
+    address public constant L2_CROSS_DOMAIN_MESSENGER = 0x58Cc85b8D04EA49cC6DBd3CbFFd00B4B8D6cb3ef; // Sepolia messenger
     address public l1ValidatorCollector; // The L1 address that sends rewards
     
     // Contracts

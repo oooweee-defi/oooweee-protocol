@@ -23,6 +23,7 @@ contract OOOWEEEToken is ERC20, Ownable {
     bool public tradingEnabled = false;
     
     event StabilityMechanismSet(address indexed mechanism);
+    event StabilityMechanismUpdated(address indexed oldMechanism, address indexed newMechanism);
     event TradingEnabled();
     event LiquidityPairSet(address indexed pair, bool value);
     event ExemptionSet(address indexed account, bool exempt);
@@ -56,6 +57,22 @@ contract OOOWEEEToken is ERC20, Ownable {
         _transfer(address(this), stabilityMechanism, STABILITY_RESERVE);
         
         emit StabilityMechanismSet(_mechanism);
+    }
+    
+    // NEW: Allow updating stability mechanism for recovery/fixes
+    function updateStabilityMechanism(address _newMechanism) external onlyOwner {
+        require(_newMechanism != address(0), "Invalid address");
+        
+        address oldMechanism = stabilityMechanism;
+        stabilityMechanism = _newMechanism;
+        
+        // Update exemptions
+        isExemptFromLimits[_newMechanism] = true;
+        // Optionally remove exemption from old mechanism
+        // isExemptFromLimits[oldMechanism] = false;
+        
+        // Note: Tokens remain in old contract, must be recovered separately
+        emit StabilityMechanismUpdated(oldMechanism, _newMechanism);
     }
     
     function enableTrading() external onlyOwner {

@@ -15,7 +15,7 @@ interface IL2StandardBridge {
  */
 contract OOOWEEEValidatorFund is Ownable, ReentrancyGuard {
     // Bridge configuration
-    address public constant L2_BRIDGE = 0x4200000000000000000000000000000000000010;
+    address public constant L2_BRIDGE = 0xFBb0621E0B23b5478B630BD55a5f21f67730B0F1; // Sepolia bridge
     address public operatorL1Address; // L1 address for validator operations
     
     // Fund tracking

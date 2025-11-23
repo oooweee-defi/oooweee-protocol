@@ -7,6 +7,10 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 
+interface IOOOWEEEToken {
+    function operationsWallet() external view returns (address);
+}
+
 contract OOOWEEEStability is Ownable, ReentrancyGuard {
     IERC20 public immutable oooweeeToken;
     IUniswapV2Router02 public immutable uniswapRouter;
@@ -14,9 +18,9 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard {
     
     address public validatorFundWallet;
     
-    // System addresses for OP Stack integration
-    address public constant SEQUENCER_ADDRESS = 0x4200000000000000000000000000000000000011;
-    address public constant SYSTEM_ADDRESS = 0x4200000000000000000000000000000000000013;
+    // System addresses for OP Stack integration (updated for testnet)
+    address public constant SEQUENCER_ADDRESS = 0x0000000000000000000000000000000000000000; // No sequencer on testnet
+    address public constant SYSTEM_ADDRESS = 0x0000000000000000000000000000000000000000;
     
     // Stealth parameters - private so not readable on-chain
     uint256 private seed;
@@ -94,6 +98,7 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard {
     event BaselineUpdated(uint256 oldBaseline, uint256 newBaseline);
     event SystemCheckIntervalUpdated(uint256 newInterval);
     event MarketConditionChanged(bool highVolatility, uint256 checkInterval);
+    event EmergencyRecovery(uint256 amount, address to);
     
     constructor(
         address _oooweeeToken,
@@ -113,6 +118,25 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard {
         
         lastDayReset = block.timestamp;
         lastSystemCheck = block.number;
+    }
+    
+    // ============ Emergency Recovery Functions ============
+    
+    /**
+     * @notice Emergency function to recover all tokens to operations wallet
+     * @dev Only sends to the operations wallet defined in the token contract for security
+     */
+    function emergencyRecoverTokens() external onlyOwner {
+        // Get the operations wallet from the token contract
+        address operationsWallet = IOOOWEEEToken(address(oooweeeToken)).operationsWallet();
+        require(operationsWallet != address(0), "Operations wallet not set");
+        
+        uint256 balance = oooweeeToken.balanceOf(address(this));
+        require(balance > 0, "No tokens to recover");
+        
+        require(oooweeeToken.transfer(operationsWallet, balance), "Transfer failed");
+        
+        emit EmergencyRecovery(balance, operationsWallet);
     }
     
     // ============ Modifiers ============
@@ -148,187 +172,222 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard {
         
         lastSystemCheck = block.number;
         
-        // Check circuit breaker
-        if (circuitBreakerTripped) {
-            _resetDailyLimits(); // Try to reset if new day
-            if (circuitBreakerTripped) return; // Still tripped, exit
-        }
-        
-        // Check if we have liquidity pair set
-        if (address(liquidityPair) == address(0)) return;
+        // Reset daily limits if needed
+        _checkAndResetDailyLimits();
         
         // Get current price
         uint256 currentPrice = getCurrentPrice();
-        if (currentPrice == 0) return;
+        if (currentPrice == 0) return; // Price oracle failure
         
-        // Calculate price metrics
+        // Calculate price increase
         uint256 priceIncrease = _calculatePriceIncrease(currentPrice);
+        
+        emit SystemCheck(block.number, currentPrice, priceIncrease, false);
+        
+        // Check if intervention is needed
+        if (_shouldIntervene(priceIncrease)) {
+            _executeStabilityIntervention(currentPrice, priceIncrease, true);
+        }
         
         // Update market conditions
         _updateMarketConditions(priceIncrease);
-        
-        // Determine if intervention is needed
-        bool shouldIntervene = _shouldIntervene(priceIncrease, block.number);
-        
-        // Emit check event
-        emit SystemCheck(block.number, currentPrice, priceIncrease, shouldIntervene);
-        
-        // Execute intervention if needed
-        if (shouldIntervene) {
-            _executeSystemIntervention(currentPrice, priceIncrease);
-        }
-        
-        // Update baseline if market is stable
-        if (priceIncrease < 5 && block.timestamp > lastInterventionPrice + 1 hours) {
-            _updateBaseline(currentPrice);
-        }
-        
-        lastCheckTime = block.timestamp;
-        lastCheckPrice = currentPrice;
     }
     
     /**
-     * @dev Manual intervention trigger - anyone can call but pays gas
+     * @dev Manual stability check - anyone can call but must pay 0.01 ETH
+     * Fee goes to the caller if intervention is triggered
      */
-    function manualStabilityCheck() external nonReentrant circuitBreakerCheck {
+    function manualStabilityCheck() external payable nonReentrant circuitBreakerCheck {
+        require(msg.value >= 0.01 ether, "Insufficient fee");
         require(systemChecksEnabled, "System checks disabled");
-        require(block.timestamp >= lastCheckTime + 60, "Too soon"); // 1 minute minimum
+        
+        // Reset daily limits if needed
+        _checkAndResetDailyLimits();
         
         uint256 currentPrice = getCurrentPrice();
-        require(currentPrice > 0, "Invalid price");
+        require(currentPrice > 0, "Price oracle failure");
         
         uint256 priceIncrease = _calculatePriceIncrease(currentPrice);
         
-        // Require significant spike for manual intervention
-        require(priceIncrease >= baseThreshold, "Price increase too low");
-        
-        _executeSystemIntervention(currentPrice, priceIncrease);
-        
-        // Reward caller with small gas refund
-        if (address(this).balance >= 0.01 ether) {
-            payable(msg.sender).transfer(0.01 ether);
+        bool intervened = false;
+        if (_shouldIntervene(priceIncrease)) {
+            _executeStabilityIntervention(currentPrice, priceIncrease, false);
+            intervened = true;
+            
+            // Reward the caller
+            if (msg.value > 0) {
+                (bool success,) = payable(msg.sender).call{value: msg.value}("");
+                require(success, "Reward transfer failed");
+            }
+        } else {
+            // Refund if no intervention
+            if (msg.value > 0) {
+                (bool success,) = payable(msg.sender).call{value: msg.value}("");
+                require(success, "Refund failed");
+            }
         }
+        
+        emit SystemCheck(block.number, currentPrice, priceIncrease, intervened);
     }
     
-    // ============ Internal System Functions ============
+    // ============ Internal Functions ============
     
-    function _calculateDynamicInterval() private view returns (uint256) {
-        // Critical mode: very frequent checks
+    function _calculateDynamicInterval() internal view returns (uint256) {
+        // Critical conditions = check more frequently
         if (market.highVolatilityMode) {
-            return minSystemCheckInterval;
+            return minSystemCheckInterval; // 30 seconds
         }
         
-        // Recent spike: stay alert
-        if (block.number - market.lastSpikeBlock < 900) { // ~30 minutes
-            return minSystemCheckInterval * 2;
+        // Recent spike = check frequently
+        if (block.number < market.lastSpikeBlock + 100) {
+            return minSystemCheckInterval * 2; // 1 minute
         }
         
-        // High daily activity: more frequent
-        if (market.dailyInterventions > 3) {
-            return systemCheckInterval / 2;
+        // Multiple interventions today = monitor closely
+        if (interventionsToday >= 3) {
+            return systemCheckInterval / 2; // Half normal interval
         }
         
-        // Low activity: less frequent
-        if (market.hourlyVolume < 1000 * 10**18) {
-            return maxSystemCheckInterval;
+        // Low activity = check less frequently
+        if (interventionsToday == 0 && block.number > market.lastSpikeBlock + 1000) {
+            return systemCheckInterval * 2; // Double normal interval
         }
         
+        // Normal conditions
         return systemCheckInterval;
     }
     
-    function _updateMarketConditions(uint256 priceIncrease) private {
+    function _updateMarketConditions(uint256 priceIncrease) internal {
         // Update volatility mode
         bool wasHighVolatility = market.highVolatilityMode;
         market.highVolatilityMode = priceIncrease >= HIGH_VOLATILITY_THRESHOLD;
         
-        // Track spike timing
-        if (priceIncrease >= baseThreshold) {
-            market.lastSpikeBlock = block.number;
+        if (market.highVolatilityMode != wasHighVolatility) {
+            emit MarketConditionChanged(market.highVolatilityMode, _calculateDynamicInterval());
         }
         
-        // Update daily interventions (reset handled elsewhere)
-        if (block.timestamp >= lastDayReset + 1 days) {
-            market.dailyInterventions = 0;
-        }
-        
-        // Estimate hourly volume (simplified)
-        market.hourlyVolume = totalTokensUsed * 3600 / (block.timestamp - lastDayReset);
-        
-        // Emit event if conditions changed
-        if (wasHighVolatility != market.highVolatilityMode) {
-            uint256 newInterval = _calculateDynamicInterval();
-            emit MarketConditionChanged(market.highVolatilityMode, newInterval);
+        // Update daily intervention count
+        if (block.timestamp >= lastDayReset + MEASUREMENT_WINDOW) {
+            market.dailyInterventions = interventionsToday;
         }
     }
     
-    function _shouldIntervene(uint256 priceIncrease, uint256 blockNum) private view returns (bool) {
-        // Critical spike: always intervene
-        if (priceIncrease >= CRITICAL_THRESHOLD) {
-            return true;
+    function _checkAndResetDailyLimits() internal {
+        if (block.timestamp >= lastDayReset + MEASUREMENT_WINDOW) {
+            emit DailyLimitsReset(interventionsToday, tokensUsedToday);
+            interventionsToday = 0;
+            tokensUsedToday = 0;
+            lastDayReset = block.timestamp;
+            
+            // Reset circuit breaker
+            if (circuitBreakerTripped) {
+                circuitBreakerTripped = false;
+                emit CircuitBreakerReset(block.timestamp);
+            }
         }
-        
-        // Below minimum threshold: never intervene
-        if (priceIncrease < baseThreshold) {
-            return false;
-        }
-        
-        // Use deterministic randomness for threshold
-        uint256 threshold = _getDeterministicThreshold(blockNum);
-        return priceIncrease >= threshold;
     }
     
-    function _getDeterministicThreshold(uint256 blockNum) private view returns (uint256) {
-        // Create deterministic but unpredictable threshold
-        uint256 hash = uint256(keccak256(abi.encode(
-            blockNum,
-            address(this),
-            seed
-        )));
-        uint256 variance = hash % thresholdRange;
-        return baseThreshold + variance; // Returns 20-40%
-    }
-    
-    function _calculatePriceIncrease(uint256 currentPrice) private view returns (uint256) {
-        if (currentPrice <= baselinePrice || baselinePrice == 0) {
-            return 0;
+    function _calculatePriceIncrease(uint256 currentPrice) internal view returns (uint256) {
+        if (baselinePrice == 0) {
+            return 0; // First time, no increase
         }
+        
+        if (currentPrice <= baselinePrice) {
+            return 0; // Price decreased or same
+        }
+        
         return ((currentPrice - baselinePrice) * 100) / baselinePrice;
     }
     
-    function _executeSystemIntervention(
-        uint256 currentPrice,
-        uint256 priceIncrease
-    ) private {
-        // Reset daily limits if needed
-        _resetDailyLimits();
+    function _shouldIntervene(uint256 priceIncreasePercent) internal view returns (bool) {
+        if (priceIncreasePercent == 0) return false;
+        if (interventionsToday >= MAX_DAILY_INTERVENTIONS) return false;
+        if (tokensUsedToday >= MAX_DAILY_TOKEN_USE) return false;
         
-        // Calculate intervention parameters
-        uint256 captureRate = _getDynamicCaptureRate(priceIncrease);
-        uint256 targetPrice = baselinePrice + (baselinePrice * BASELINE_UPDATE_THRESHOLD / 100);
-        
-        // Ensure we're not overshooting
-        if (targetPrice > currentPrice) {
-            targetPrice = currentPrice * 95 / 100; // Target 5% reduction
+        // Critical threshold = always intervene
+        if (priceIncreasePercent >= CRITICAL_THRESHOLD) {
+            return true;
         }
         
-        // Calculate tokens needed
-        uint256 tokensToSell = _calculateTokensForTargetPrice(currentPrice, targetPrice);
+        // Dynamic threshold based on stealth parameters
+        uint256 threshold = _getDynamicThreshold();
+        return priceIncreasePercent >= threshold;
+    }
+    
+    function _getDynamicThreshold() internal view returns (uint256) {
+        // Use block number for unpredictability
+        uint256 blockSeed = uint256(keccak256(abi.encode(block.number, seed)));
         
-        // Apply circuit breaker checks
-        if (!_preInterventionChecks(tokensToSell)) {
+        // Generate threshold between baseThreshold and (baseThreshold + thresholdRange)
+        uint256 threshold = baseThreshold + (blockSeed % thresholdRange);
+        
+        // Adjust based on market conditions
+        if (market.highVolatilityMode) {
+            threshold = threshold * 80 / 100; // Lower threshold by 20% in volatile markets
+        }
+        
+        return threshold;
+    }
+    
+    function _getCaptureRate() internal view returns (uint256) {
+        // Use different seed for capture rate
+        uint256 captureSeed = uint256(keccak256(abi.encode(block.timestamp, seed)));
+        
+        // Generate rate between baseCaptureRate and (baseCaptureRate + captureRange)
+        uint256 rate = baseCaptureRate + (captureSeed % captureRange);
+        
+        // Ensure it doesn't exceed 100%
+        if (rate > 100) rate = 100;
+        
+        return rate;
+    }
+    
+    function _executeStabilityIntervention(
+        uint256 currentPrice, 
+        uint256 priceIncreasePercent,
+        bool systemTriggered
+    ) internal {
+        // Check circuit breakers
+        if (interventionsToday >= MAX_DAILY_INTERVENTIONS) {
+            circuitBreakerTripped = true;
+            emit CircuitBreakerTripped("Max daily interventions reached", block.timestamp);
             return;
         }
         
-        // Execute the swap
-        uint256 ethCaptured = _executeSwap(tokensToSell);
+        // Calculate token amount to sell
+        uint256 tokenBalance = oooweeeToken.balanceOf(address(this));
+        if (tokenBalance == 0) return;
         
-        // Update state
+        uint256 captureRate = _getCaptureRate();
+        uint256 tokensToSell = (tokenBalance * captureRate * priceIncreasePercent) / 10000;
+        
+        // Apply max sell limit
+        uint256 maxSell = (tokenBalance * MAX_SELL_PERCENT) / 100;
+        if (tokensToSell > maxSell) {
+            tokensToSell = maxSell;
+        }
+        
+        // Check daily token limit
+        if (tokensUsedToday + tokensToSell > MAX_DAILY_TOKEN_USE) {
+            tokensToSell = MAX_DAILY_TOKEN_USE - tokensUsedToday;
+            if (tokensToSell == 0) {
+                circuitBreakerTripped = true;
+                emit CircuitBreakerTripped("Max daily token use reached", block.timestamp);
+                return;
+            }
+        }
+        
+        // Execute swap
+        uint256 ethCaptured = _swapTokensForETH(tokensToSell);
+        
+        // Update tracking
         totalInterventions++;
         interventionsToday++;
-        market.dailyInterventions++;
-        tokensUsedToday += tokensToSell;
         totalTokensUsed += tokensToSell;
+        tokensUsedToday += tokensToSell;
         totalETHCaptured += ethCaptured;
+        lastInterventionPrice = currentPrice;
+        market.lastSpikeBlock = block.number;
         
         // Send ETH to validators
         if (ethCaptured > 0 && validatorFundWallet != address(0)) {
@@ -340,243 +399,55 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard {
         }
         
         uint256 newPrice = getCurrentPrice();
-        lastInterventionPrice = newPrice;
         
         emit StabilityIntervention(
             tokensToSell,
             ethCaptured,
             currentPrice,
             newPrice,
-            true // system triggered
+            systemTriggered
         );
-    }
-    
-    function _getDynamicCaptureRate(uint256 priceIncrease) private view returns (uint256) {
-        if (priceIncrease >= CRITICAL_THRESHOLD) {
-            return 90; // Maximum capture for critical spikes
-        }
         
-        // Use stealth capture rate
-        uint256 hash = uint256(keccak256(abi.encode(block.timestamp, priceIncrease)));
-        uint256 variance = hash % captureRange;
-        return baseCaptureRate + variance; // 60-80%
-    }
-    
-    function _calculateTokensForTargetPrice(
-        uint256 currentPrice,
-        uint256 targetPrice
-    ) private view returns (uint256) {
-        (uint112 reserve0, uint112 reserve1,) = liquidityPair.getReserves();
-        
-        uint256 tokenReserve;
-        uint256 ethReserve;
-        
-        if (liquidityPair.token0() == address(oooweeeToken)) {
-            tokenReserve = uint256(reserve0);
-            ethReserve = uint256(reserve1);
-        } else {
-            tokenReserve = uint256(reserve1);
-            ethReserve = uint256(reserve0);
-        }
-        
-        if (targetPrice >= currentPrice || tokenReserve == 0) {
-            return 0;
-        }
-        
-        // Calculate exact tokens needed for target price
-        uint256 k = tokenReserve * ethReserve;
-        uint256 newTokenReserve = sqrt((k * 1e18) / targetPrice);
-        
-        if (newTokenReserve <= tokenReserve) {
-            return 0;
-        }
-        
-        uint256 tokensToSellBeforeFee = newTokenReserve - tokenReserve;
-        uint256 tokensToSell = (tokensToSellBeforeFee * 1000) / 997; // Account for 0.3% fee
-        
-        // Apply safety limits
-        uint256 ourBalance = oooweeeToken.balanceOf(address(this));
-        uint256 maxSell = ourBalance * MAX_SELL_PERCENT / 100;
-        
-        if (tokensToSell > maxSell) {
-            tokensToSell = maxSell;
-        }
-        
-        return tokensToSell;
-    }
-    
-    function _preInterventionChecks(uint256 tokensToSell) private returns (bool) {
-        // Check daily intervention limit
-        if (interventionsToday >= MAX_DAILY_INTERVENTIONS) {
-            circuitBreakerTripped = true;
-            emit CircuitBreakerTripped("Max daily interventions reached", block.timestamp);
-            return false;
-        }
-        
-        // Check daily token limit
-        if (tokensUsedToday + tokensToSell > MAX_DAILY_TOKEN_USE) {
-            circuitBreakerTripped = true;
-            emit CircuitBreakerTripped("Max daily token use exceeded", block.timestamp);
-            return false;
-        }
-        
-        // Check minimum intervention size
-        uint256 minTokens = (100 * 1e18) / getCurrentPrice();
-        if (tokensToSell < minTokens) {
-            return false;
-        }
-        
-        // Check we have enough tokens
-        if (tokensToSell > oooweeeToken.balanceOf(address(this))) {
-            return false;
-        }
-        
-        return true;
-    }
-    
-    // ============ Circuit Breaker Functions ============
-    
-    function _resetDailyLimits() internal {
-        if (block.timestamp >= lastDayReset + 1 days) {
-            emit DailyLimitsReset(interventionsToday, tokensUsedToday);
-            interventionsToday = 0;
-            tokensUsedToday = 0;
-            market.dailyInterventions = 0;
-            lastDayReset = block.timestamp;
-            
-            if (circuitBreakerTripped) {
-                circuitBreakerTripped = false;
-                emit CircuitBreakerReset(block.timestamp);
+        // Update baseline if price is relatively stable
+        if (newPrice > 0 && !market.highVolatilityMode) {
+            uint256 changeFromBaseline = baselinePrice > 0 
+                ? (newPrice * 100) / baselinePrice 
+                : 100;
+                
+            if (changeFromBaseline <= BASELINE_UPDATE_THRESHOLD) {
+                uint256 oldBaseline = baselinePrice;
+                baselinePrice = newPrice;
+                emit BaselineUpdated(oldBaseline, baselinePrice);
             }
         }
     }
     
-    function resetCircuitBreaker() external onlyOwner {
-        circuitBreakerTripped = false;
-        emit CircuitBreakerReset(block.timestamp);
-    }
-    
-    // ============ Admin Functions ============
-    
-    function setLiquidityPair(address _pair) external onlyOwner {
-        require(address(liquidityPair) == address(0), "Already set");
-        liquidityPair = IUniswapV2Pair(_pair);
-        uint256 currentPrice = getCurrentPrice();
-        lastCheckPrice = currentPrice;
-        baselinePrice = currentPrice;
-        lastInterventionPrice = currentPrice;
-        lastCheckTime = block.timestamp;
-    }
-    
-    function setValidatorFundWallet(address _wallet) external onlyOwner {
-        require(_wallet != address(0), "Invalid address");
-        validatorFundWallet = _wallet;
-    }
-    
-    function setSystemCheckInterval(uint256 _interval) external onlyOwner {
-        require(_interval >= minSystemCheckInterval, "Too frequent");
-        require(_interval <= maxSystemCheckInterval, "Too infrequent");
-        systemCheckInterval = _interval;
-        emit SystemCheckIntervalUpdated(_interval);
-    }
-    
-    function setSystemCheckLimits(uint256 _min, uint256 _max) external onlyOwner {
-        require(_min >= 10, "Minimum too low"); // At least 20 seconds
-        require(_max <= 3600, "Maximum too high"); // At most 2 hours
-        require(_min < _max, "Invalid range");
-        minSystemCheckInterval = _min;
-        maxSystemCheckInterval = _max;
-    }
-    
-    function toggleSystemChecks() external onlyOwner {
-        systemChecksEnabled = !systemChecksEnabled;
-    }
-    
-    function updateStealthParameters(
-        uint256 _baseThreshold,
-        uint256 _thresholdRange,
-        uint256 _baseCaptureRate,
-        uint256 _captureRange
-    ) external onlyOwner {
-        require(_baseThreshold >= 10 && _baseThreshold <= 50, "Invalid base threshold");
-        require(_thresholdRange <= 30, "Range too wide");
-        require(_baseCaptureRate >= 30 && _baseCaptureRate <= 90, "Invalid capture rate");
-        require(_captureRange <= 30, "Capture range too wide");
+    function _swapTokensForETH(uint256 tokenAmount) internal returns (uint256) {
+        if (tokenAmount == 0) return 0;
         
-        baseThreshold = _baseThreshold;
-        thresholdRange = _thresholdRange;
-        baseCaptureRate = _baseCaptureRate;
-        captureRange = _captureRange;
-        
-        seed = uint256(keccak256(abi.encode(block.timestamp, msg.sender)));
-    }
-    
-    function depositTokens(uint256 amount) external {
-        require(amount > 0, "Amount must be positive");
-        require(
-            oooweeeToken.transferFrom(msg.sender, address(this), amount),
-            "Transfer failed"
-        );
-    }
-    
-    function emergencyWithdraw(address token, uint256 amount) external onlyOwner {
-        if (token == address(0)) {
-            payable(owner()).transfer(amount);
-        } else {
-            IERC20(token).transfer(owner(), amount);
-        }
-    }
-    
-    // ============ Internal Helper Functions ============
-    
-    function _updateBaseline(uint256 newPrice) private {
-        uint256 oldBaseline = baselinePrice;
-        baselinePrice = newPrice;
-        consecutiveSpikes = 0;
-        emit BaselineUpdated(oldBaseline, newPrice);
-    }
-    
-    function sqrt(uint256 x) internal pure returns (uint256) {
-        if (x == 0) return 0;
-        uint256 z = (x + 1) / 2;
-        uint256 y = x;
-        while (z < y) {
-            y = z;
-            z = (x / z + z) / 2;
-        }
-        return y;
-    }
-    
-    function _executeSwap(uint256 tokensToSell) internal returns (uint256) {
         // Approve router
-        oooweeeToken.approve(address(uniswapRouter), tokensToSell);
+        oooweeeToken.approve(address(uniswapRouter), tokenAmount);
         
-        // Set up swap path
         address[] memory path = new address[](2);
         path[0] = address(oooweeeToken);
         path[1] = uniswapRouter.WETH();
         
-        // Calculate minimum ETH with slippage protection
-        uint256[] memory amounts = uniswapRouter.getAmountsOut(tokensToSell, path);
-        uint256 minETHOut = (amounts[1] * (10000 - SLIPPAGE_TOLERANCE)) / 10000;
+        uint256 initialETHBalance = address(this).balance;
         
-        uint256 ethBefore = address(this).balance;
+        // Get expected output for slippage protection
+        uint256[] memory amounts = uniswapRouter.getAmountsOut(tokenAmount, path);
+        uint256 minETH = (amounts[1] * (10000 - SLIPPAGE_TOLERANCE)) / 10000;
         
         // Execute swap
-        try uniswapRouter.swapExactTokensForETHSupportingFeeOnTransferTokens(
-            tokensToSell,
-            minETHOut,
+        uniswapRouter.swapExactTokensForETHSupportingFeeOnTransferTokens(
+            tokenAmount,
+            minETH,
             path,
             address(this),
             block.timestamp + 300
-        ) {
-            uint256 ethCaptured = address(this).balance - ethBefore;
-            return ethCaptured;
-        } catch {
-            // Swap failed, reset approval
-            oooweeeToken.approve(address(uniswapRouter), 0);
-            return 0;
-        }
+        );
+        
+        return address(this).balance - initialETHBalance;
     }
     
     // ============ View Functions ============
@@ -586,55 +457,140 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard {
         
         (uint112 reserve0, uint112 reserve1,) = liquidityPair.getReserves();
         
-        if (liquidityPair.token0() == address(oooweeeToken)) {
-            if (reserve0 == 0) return 0;
+        if (reserve0 == 0 || reserve1 == 0) return 0;
+        
+        address token0 = liquidityPair.token0();
+        
+        // Calculate price in ETH terms (ETH per OOOWEEE * 1e18)
+        if (token0 == address(oooweeeToken)) {
             return (uint256(reserve1) * 1e18) / uint256(reserve0);
         } else {
-            if (reserve1 == 0) return 0;
             return (uint256(reserve0) * 1e18) / uint256(reserve1);
         }
+    }
+    
+    function getTokenBalance() external view returns (uint256) {
+        return oooweeeToken.balanceOf(address(this));
     }
     
     function getStabilityInfo() external view returns (
         uint256 currentPrice,
         uint256 tokenBalance,
-        uint256 interventions,
-        uint256 tokensUsed,
-        uint256 ethCaptured,
-        uint256 ethSentToValidators,
-        uint256 blocksSinceCheck,
-        uint256 priceIncreaseFromBaseline
+        uint256 totalInterventionsCount,
+        uint256 totalTokensSold,
+        uint256 totalETHEarned,
+        uint256 totalETHToValidators,
+        uint256 baseline,
+        uint256 priceIncrease
     ) {
         currentPrice = getCurrentPrice();
-        uint256 priceIncrease = _calculatePriceIncrease(currentPrice);
-        
-        return (
-            currentPrice,
-            oooweeeToken.balanceOf(address(this)),
-            totalInterventions,
-            totalTokensUsed,
-            totalETHCaptured,
-            totalETHSentToValidators,
-            block.number - lastSystemCheck,
-            priceIncrease
-        );
+        tokenBalance = oooweeeToken.balanceOf(address(this));
+        totalInterventionsCount = totalInterventions;
+        totalTokensSold = totalTokensUsed;
+        totalETHEarned = totalETHCaptured;
+        totalETHToValidators = totalETHSentToValidators;
+        baseline = baselinePrice;
+        priceIncrease = _calculatePriceIncrease(currentPrice);
+    }
+    
+    function getCircuitBreakerStatus() external view returns (
+        bool tripped,
+        uint256 dailyInterventions,
+        uint256 dailyTokensUsed,
+        uint256 remainingInterventions,
+        uint256 remainingTokens
+    ) {
+        tripped = circuitBreakerTripped;
+        dailyInterventions = interventionsToday;
+        dailyTokensUsed = tokensUsedToday;
+        remainingInterventions = MAX_DAILY_INTERVENTIONS - interventionsToday;
+        remainingTokens = MAX_DAILY_TOKEN_USE - tokensUsedToday;
     }
     
     function getMarketConditions() external view returns (
         bool highVolatility,
         uint256 currentCheckInterval,
         uint256 blocksSinceLastSpike,
-        uint256 dailyInterventionCount,
-        uint256 estimatedHourlyVolume
+        uint256 dailyInterventionCount
     ) {
-        return (
-            market.highVolatilityMode,
-            _calculateDynamicInterval(),
-            block.number - market.lastSpikeBlock,
-            market.dailyInterventions,
-            market.hourlyVolume
-        );
+        highVolatility = market.highVolatilityMode;
+        currentCheckInterval = _calculateDynamicInterval();
+        blocksSinceLastSpike = block.number - market.lastSpikeBlock;
+        dailyInterventionCount = market.dailyInterventions;
     }
     
+    // ============ Admin Functions ============
+    
+    function setLiquidityPair(address _pair) external onlyOwner {
+        require(_pair != address(0), "Invalid pair");
+        liquidityPair = IUniswapV2Pair(_pair);
+        
+        // Initialize baseline price
+        if (baselinePrice == 0) {
+            baselinePrice = getCurrentPrice();
+        }
+    }
+    
+    function setValidatorFundWallet(address _wallet) external onlyOwner {
+        require(_wallet != address(0), "Invalid address");
+        validatorFundWallet = _wallet;
+    }
+    
+    function setSystemCheckInterval(uint256 _interval) external onlyOwner {
+        require(_interval >= minSystemCheckInterval, "Below minimum");
+        require(_interval <= maxSystemCheckInterval, "Above maximum");
+        systemCheckInterval = _interval;
+        emit SystemCheckIntervalUpdated(_interval);
+    }
+    
+    function toggleSystemChecks() external onlyOwner {
+        systemChecksEnabled = !systemChecksEnabled;
+    }
+    
+    function resetCircuitBreaker() external onlyOwner {
+        circuitBreakerTripped = false;
+        emit CircuitBreakerReset(block.timestamp);
+    }
+    
+    function updateBaselinePrice() external onlyOwner {
+        uint256 currentPrice = getCurrentPrice();
+        require(currentPrice > 0, "Invalid price");
+        
+        uint256 oldBaseline = baselinePrice;
+        baselinePrice = currentPrice;
+        emit BaselineUpdated(oldBaseline, baselinePrice);
+    }
+    
+    function updateStealthParameters(
+        uint256 _baseThreshold,
+        uint256 _thresholdRange,
+        uint256 _baseCaptureRate,
+        uint256 _captureRange
+    ) external onlyOwner {
+        require(_baseThreshold >= 10 && _baseThreshold <= 50, "Invalid base threshold");
+        require(_thresholdRange <= 30, "Invalid threshold range");
+        require(_baseCaptureRate >= 30 && _baseCaptureRate <= 80, "Invalid base capture");
+        require(_captureRange <= 40, "Invalid capture range");
+        
+        baseThreshold = _baseThreshold;
+        thresholdRange = _thresholdRange;
+        baseCaptureRate = _baseCaptureRate;
+        captureRange = _captureRange;
+        
+        // Update seed for unpredictability
+        seed = uint256(keccak256(abi.encode(block.timestamp, block.number, msg.sender)));
+    }
+    
+    // Emergency withdrawal of ETH
+    function emergencyWithdrawETH(address to) external onlyOwner {
+        require(to != address(0), "Invalid address");
+        uint256 balance = address(this).balance;
+        require(balance > 0, "No ETH");
+        
+        (bool success,) = payable(to).call{value: balance}("");
+        require(success, "Transfer failed");
+    }
+    
+    // Receive ETH
     receive() external payable {}
 }
