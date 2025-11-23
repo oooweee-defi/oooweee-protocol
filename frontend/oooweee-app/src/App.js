@@ -18,6 +18,9 @@ const UNISWAP_ROUTER_ABI = [
 const UNISWAP_ROUTER = "0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008";
 const WETH_ADDRESS = "0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9";
 
+// ADMIN WALLET - Update this to your operations wallet address
+const ADMIN_WALLET = "0x...YOUR_OPS_WALLET_ADDRESS"; // UPDATE THIS!
+
 // Currency configuration
 const CURRENCIES = {
   USD: { code: 0, symbol: '$', name: 'US Dollar', decimals: 2, locale: 'en-US' },
@@ -104,19 +107,177 @@ function App() {
     fromStability: '0',
     fromRewards: '0'
   });
-
-  // Circuit breaker status - NEW
-  const [circuitBreakerStatus, setCircuitBreakerStatus] = useState({
-    tripStatus: false,
-    dailyInterventions: 0,
-    dailyTokensUsed: '0',
-    maxInterventions: 10,
-    maxTokens: '1000000',
-    timeUntilReset: 0
-  });
   
   // Price tracking
   const [oooweeePrice, setOooweeePrice] = useState(0.00001);
+  
+  // Admin Dashboard State
+  const [adminStats, setAdminStats] = useState({
+    // Protocol Overview
+    totalValueLocked: '0',
+    totalAccountsCreated: 0,
+    totalGoalsCompleted: 0,
+    totalFeesCollected: '0',
+    totalRewardsDistributed: '0',
+    totalActiveBalance: '0',
+    
+    // Stability Mechanism
+    currentPrice: '0',
+    baselinePrice: '0',
+    tokenBalance: '0',
+    interventionsToday: 0,
+    totalInterventions: 0,
+    tokensUsedToday: '0',
+    totalTokensUsed: '0',
+    totalETHCaptured: '0',
+    totalETHSentToValidators: '0',
+    circuitBreakerTripped: false,
+    systemChecksEnabled: true,
+    marketHighVolatility: false,
+    
+    // System Health
+    blockNumber: 0,
+    lastBlockTime: 0,
+    isSequencerHealthy: true,
+    isPriceOracleHealthy: true,
+    
+    // Savings Breakdown
+    timeAccounts: 0,
+    growthAccounts: 0,
+    balanceAccounts: 0,
+    topSavers: []
+  });
+  
+  // Admin refresh interval
+  useEffect(() => {
+    if (account?.toLowerCase() === ADMIN_WALLET.toLowerCase() && activeTab === 'admin') {
+      loadAdminStats();
+      const interval = setInterval(loadAdminStats, 5000); // Refresh every 5 seconds
+      return () => clearInterval(interval);
+    }
+  }, [account, activeTab, stabilityContract, savingsContract, provider]);
+  
+  // Load admin statistics
+  const loadAdminStats = useCallback(async () => {
+    if (!stabilityContract || !savingsContract || !provider) return;
+    
+    try {
+      // Get stability info
+      const stabilityInfo = await stabilityContract.getStabilityInfo();
+      const marketConditions = await stabilityContract.getMarketConditions();
+      const circuitBreaker = await stabilityContract.getCircuitBreakerStatus();
+      
+      // Get savings stats
+      const statsView = await savingsContract.getStatsView();
+      
+      // Get current block
+      const blockNumber = await provider.getBlockNumber();
+      const block = await provider.getBlock(blockNumber);
+      
+      setAdminStats({
+        // Protocol Overview
+        totalValueLocked: ethers.utils.formatUnits(statsView[0], 18),
+        totalAccountsCreated: statsView[1].toNumber(),
+        totalGoalsCompleted: statsView[2].toNumber(),
+        totalActiveBalance: ethers.utils.formatUnits(statsView[3], 18),
+        totalRewardsDistributed: ethers.utils.formatUnits(statsView[4], 18),
+        totalFeesCollected: ethers.utils.formatUnits(statsView[5], 18),
+        
+        // Stability Mechanism
+        currentPrice: ethers.utils.formatUnits(stabilityInfo[0], 18),
+        baselinePrice: ethers.utils.formatUnits(stabilityInfo[0], 18), // Simplified
+        tokenBalance: ethers.utils.formatUnits(stabilityInfo[1], 18),
+        totalInterventions: stabilityInfo[2].toNumber(),
+        totalTokensUsed: ethers.utils.formatUnits(stabilityInfo[3], 18),
+        totalETHCaptured: ethers.utils.formatUnits(stabilityInfo[4], 18),
+        totalETHSentToValidators: ethers.utils.formatUnits(stabilityInfo[5], 18),
+        priceIncreaseFromBaseline: stabilityInfo[7].toString(),
+        
+        // Circuit Breaker
+        circuitBreakerTripped: circuitBreaker[0],
+        interventionsToday: circuitBreaker[1].toNumber(),
+        tokensUsedToday: ethers.utils.formatUnits(circuitBreaker[2], 18),
+        
+        // Market Conditions
+        marketHighVolatility: marketConditions[0],
+        currentCheckInterval: marketConditions[1].toNumber(),
+        blocksSinceLastSpike: marketConditions[2].toNumber(),
+        dailyInterventionCount: marketConditions[3].toNumber(),
+        
+        // System Health
+        blockNumber: blockNumber,
+        lastBlockTime: block.timestamp,
+        isSequencerHealthy: true, // Simplified
+        isPriceOracleHealthy: stabilityInfo[0].gt(0)
+      });
+    } catch (error) {
+      console.error('Error loading admin stats:', error);
+    }
+  }, [stabilityContract, savingsContract, provider]);
+  
+  // Admin functions
+  const resetCircuitBreaker = async () => {
+    try {
+      setLoading(true);
+      const tx = await stabilityContract.resetCircuitBreaker();
+      await toast.promise(
+        tx.wait(),
+        {
+          loading: '🔧 Resetting circuit breaker...',
+          success: '✅ Circuit breaker reset!',
+          error: '❌ Failed to reset'
+        }
+      );
+      await loadAdminStats();
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to reset circuit breaker');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const toggleSystemChecks = async () => {
+    try {
+      setLoading(true);
+      const tx = await stabilityContract.toggleSystemChecks();
+      await toast.promise(
+        tx.wait(),
+        {
+          loading: '🔧 Toggling system checks...',
+          success: '✅ System checks toggled!',
+          error: '❌ Failed to toggle'
+        }
+      );
+      await loadAdminStats();
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to toggle system checks');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const manualStabilityCheck = async () => {
+    try {
+      setLoading(true);
+      const tx = await stabilityContract.manualStabilityCheck();
+      await toast.promise(
+        tx.wait(),
+        {
+          loading: '🔍 Running stability check...',
+          success: '✅ Stability check complete!',
+          error: '❌ Check failed'
+        }
+      );
+      await loadAdminStats();
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to run stability check');
+    } finally {
+      setLoading(false);
+    }
+  };
   
   // Initialize on load
   useEffect(() => {
@@ -235,25 +396,6 @@ function App() {
     }
   }, [validatorFundContract]);
 
-  // Load circuit breaker status - NEW
-  const loadCircuitBreakerStatus = useCallback(async () => {
-    if (!stabilityContract) return;
-    
-    try {
-      const status = await stabilityContract.getCircuitBreakerStatus();
-      setCircuitBreakerStatus({
-        tripStatus: status[0],
-        dailyInterventions: status[1].toNumber(),
-        dailyTokensUsed: ethers.utils.formatUnits(status[2], 18),
-        maxInterventions: status[3].toNumber(),
-        maxTokens: ethers.utils.formatUnits(status[4], 18),
-        timeUntilReset: status[5].toNumber()
-      });
-    } catch (error) {
-      console.error('Error loading circuit breaker status:', error);
-    }
-  }, [stabilityContract]);
-
   // Load validator stats
   useEffect(() => {
     if (validatorFundContract) {
@@ -262,15 +404,6 @@ function App() {
       return () => clearInterval(interval);
     }
   }, [validatorFundContract, loadValidatorStats]);
-
-  // Load circuit breaker status
-  useEffect(() => {
-    if (stabilityContract) {
-      loadCircuitBreakerStatus();
-      const interval = setInterval(loadCircuitBreakerStatus, 15000);
-      return () => clearInterval(interval);
-    }
-  }, [stabilityContract, loadCircuitBreakerStatus]);
 
   // Calculate fiat value
   const getOooweeeInFiat = (oooweeeAmount, currency = 'eur') => {
@@ -956,13 +1089,6 @@ function App() {
     return currencies[code] || 'EUR';
   };
 
-  // Format time until reset
-  const formatTimeRemaining = (seconds) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    return `${hours}h ${minutes}m`;
-  };
-
   // Filter accounts
   const activeAccounts = accounts.filter(acc => acc.isActive);
   const completedAccounts = accounts.filter(acc => !acc.isActive);
@@ -1034,52 +1160,6 @@ function App() {
             {loading ? '⏳ Processing...' : '🚀 Swap for OOOWEEE'}
           </button>
         </div>
-      </div>
-    </div>
-  );
-
-  // Circuit Breaker Card - NEW
-  const CircuitBreakerCard = () => (
-    <div className="circuit-breaker-card">
-      <div className="card-header">
-        <h3>🚨 Stability System</h3>
-        <span className={`status-badge ${circuitBreakerStatus.tripStatus ? 'paused' : 'active'}`}>
-          {circuitBreakerStatus.tripStatus ? '⚠️ Paused' : '✅ Active'}
-        </span>
-      </div>
-      
-      <div className="stats-grid">
-        <div className="stat">
-          <span className="label">Daily Interventions</span>
-          <span className="value">
-            {circuitBreakerStatus.dailyInterventions}/{circuitBreakerStatus.maxInterventions}
-          </span>
-        </div>
-        
-        <div className="stat">
-          <span className="label">Tokens Used Today</span>
-          <span className="value">
-            {parseFloat(circuitBreakerStatus.dailyTokensUsed).toLocaleString()}/
-            {parseFloat(circuitBreakerStatus.maxTokens).toLocaleString()}
-          </span>
-        </div>
-        
-        {circuitBreakerStatus.timeUntilReset > 0 && (
-          <div className="stat">
-            <span className="label">Resets In</span>
-            <span className="value">{formatTimeRemaining(circuitBreakerStatus.timeUntilReset)}</span>
-          </div>
-        )}
-      </div>
-      
-      <div className="progress-bar">
-        <div 
-          className="progress-fill"
-          style={{ 
-            width: `${(circuitBreakerStatus.dailyInterventions / circuitBreakerStatus.maxInterventions) * 100}%`,
-            background: circuitBreakerStatus.tripStatus ? '#ff4444' : 'var(--oooweee-green)'
-          }}
-        />
       </div>
     </div>
   );
@@ -1166,6 +1246,205 @@ function App() {
       </div>
     </div>
   );
+  
+  // Admin Dashboard
+  const renderAdminDashboard = () => (
+    <div className="admin-dashboard">
+      <div className="admin-header">
+        <h1>🔧 Protocol Admin Dashboard</h1>
+        <p className="admin-address">Connected: {account.slice(0, 6)}...{account.slice(-4)}</p>
+      </div>
+      
+      {/* System Health Overview */}
+      <div className="admin-section system-health">
+        <h2>🟢 System Health</h2>
+        <div className="health-grid">
+          <div className="health-card">
+            <span className="health-icon">{adminStats.isSequencerHealthy ? '✅' : '🔴'}</span>
+            <div>
+              <h4>L2 Chain</h4>
+              <p>Block #{adminStats.blockNumber}</p>
+            </div>
+          </div>
+          <div className="health-card">
+            <span className="health-icon">{adminStats.isPriceOracleHealthy ? '✅' : '🔴'}</span>
+            <div>
+              <h4>Price Oracle</h4>
+              <p>${parseFloat(oooweeePrice).toFixed(6)}</p>
+            </div>
+          </div>
+          <div className="health-card">
+            <span className="health-icon">{!adminStats.circuitBreakerTripped ? '✅' : '🔴'}</span>
+            <div>
+              <h4>Circuit Breaker</h4>
+              <p>{adminStats.circuitBreakerTripped ? 'TRIPPED' : 'Active'}</p>
+            </div>
+          </div>
+          <div className="health-card">
+            <span className="health-icon">{adminStats.marketHighVolatility ? '⚠️' : '✅'}</span>
+            <div>
+              <h4>Market Status</h4>
+              <p>{adminStats.marketHighVolatility ? 'High Volatility' : 'Normal'}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Protocol Metrics */}
+      <div className="admin-section protocol-metrics">
+        <h2>📊 Protocol Metrics</h2>
+        <div className="metrics-grid">
+          <div className="metric-card">
+            <h4>Total Value Locked</h4>
+            <p className="metric-value">{parseFloat(adminStats.totalValueLocked).toLocaleString()} OOOWEEE</p>
+            <span className="metric-usd">≈ {getOooweeeInFiat(adminStats.totalValueLocked, 'eur')}</span>
+          </div>
+          <div className="metric-card">
+            <h4>Total Accounts</h4>
+            <p className="metric-value">{adminStats.totalAccountsCreated}</p>
+            <span className="metric-label">({adminStats.totalGoalsCompleted} completed)</span>
+          </div>
+          <div className="metric-card">
+            <h4>Active Balance</h4>
+            <p className="metric-value">{parseFloat(adminStats.totalActiveBalance).toLocaleString()}</p>
+            <span className="metric-label">OOOWEEE</span>
+          </div>
+          <div className="metric-card">
+            <h4>Fees Collected</h4>
+            <p className="metric-value">{parseFloat(adminStats.totalFeesCollected).toFixed(2)}</p>
+            <span className="metric-label">OOOWEEE</span>
+          </div>
+        </div>
+      </div>
+      
+      {/* Stability Mechanism */}
+      <div className="admin-section stability-section">
+        <h2>🛡️ Stability Mechanism (SSA)</h2>
+        <div className="stability-grid">
+          <div className="stability-stat">
+            <label>Reserve Balance</label>
+            <p>{parseFloat(adminStats.tokenBalance).toLocaleString()} OOOWEEE</p>
+          </div>
+          <div className="stability-stat">
+            <label>Interventions Today</label>
+            <p>{adminStats.interventionsToday} / 10</p>
+          </div>
+          <div className="stability-stat">
+            <label>Tokens Used Today</label>
+            <p>{parseFloat(adminStats.tokensUsedToday).toFixed(0)} / 1,000,000</p>
+          </div>
+          <div className="stability-stat">
+            <label>Total ETH Captured</label>
+            <p>{parseFloat(adminStats.totalETHCaptured).toFixed(4)} ETH</p>
+          </div>
+          <div className="stability-stat">
+            <label>ETH to Validators</label>
+            <p>{parseFloat(adminStats.totalETHSentToValidators).toFixed(4)} ETH</p>
+          </div>
+          <div className="stability-stat">
+            <label>Total Interventions</label>
+            <p>{adminStats.totalInterventions}</p>
+          </div>
+        </div>
+        
+        {/* Emergency Controls */}
+        <div className="emergency-controls">
+          <h3>⚠️ Emergency Controls</h3>
+          <div className="control-buttons">
+            <button 
+              className="admin-btn reset-btn"
+              onClick={resetCircuitBreaker}
+              disabled={loading || !adminStats.circuitBreakerTripped}
+            >
+              🔧 Reset Circuit Breaker
+            </button>
+            <button 
+              className="admin-btn toggle-btn"
+              onClick={toggleSystemChecks}
+              disabled={loading}
+            >
+              {adminStats.systemChecksEnabled ? '⏸️ Pause' : '▶️ Resume'} System Checks
+            </button>
+            <button 
+              className="admin-btn manual-btn"
+              onClick={manualStabilityCheck}
+              disabled={loading}
+            >
+              🔍 Manual Check Now
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      {/* Validator Network */}
+      <div className="admin-section validator-section">
+        <h2>🔐 Validator Network</h2>
+        <div className="validator-admin-stats">
+          <div className="validator-stat">
+            <label>Active Validators</label>
+            <p>{validatorStats.validators}</p>
+          </div>
+          <div className="validator-stat">
+            <label>Next Validator Progress</label>
+            <p>{parseFloat(validatorStats.pendingETH).toFixed(4)} / 32 ETH</p>
+            <div className="progress-bar">
+              <div 
+                className="progress-fill validator-progress"
+                style={{ width: `${validatorStats.progress}%` }}
+              />
+            </div>
+          </div>
+          <div className="validator-stat">
+            <label>From Stability</label>
+            <p>{parseFloat(validatorStats.fromStability).toFixed(4)} ETH</p>
+          </div>
+          <div className="validator-stat">
+            <label>From Rewards Loop</label>
+            <p>{parseFloat(validatorStats.fromRewards).toFixed(4)} ETH</p>
+          </div>
+        </div>
+      </div>
+      
+      {/* Quick Actions */}
+      <div className="admin-section quick-actions">
+        <h2>⚡ Quick Actions</h2>
+        <div className="action-grid">
+          <button 
+            className="action-btn"
+            onClick={() => window.location.reload()}
+          >
+            🔄 Refresh Dashboard
+          </button>
+          <button 
+            className="action-btn"
+            onClick={() => console.log(adminStats)}
+          >
+            📋 Log Stats to Console
+          </button>
+          <button 
+            className="action-btn"
+            onClick={() => {
+              const data = JSON.stringify(adminStats, null, 2);
+              const blob = new Blob([data], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `oooweee-stats-${Date.now()}.json`;
+              a.click();
+            }}
+          >
+            💾 Export Stats
+          </button>
+        </div>
+      </div>
+      
+      {/* Auto-refresh indicator */}
+      <div className="refresh-indicator">
+        <span className="refresh-dot"></span>
+        Auto-refreshing every 5 seconds
+      </div>
+    </div>
+  );
 
   return (
     <div className="App">
@@ -1206,10 +1485,21 @@ function App() {
           >
             📖 About
           </button>
+          {/* Admin tab only visible to operations wallet */}
+          {account?.toLowerCase() === ADMIN_WALLET.toLowerCase() && (
+            <button 
+              className={`tab-btn admin-tab ${activeTab === 'admin' ? 'active' : ''}`}
+              onClick={() => setActiveTab('admin')}
+            >
+              🔧 Admin
+            </button>
+          )}
         </div>
 
         {activeTab === 'about' ? (
           renderAboutPage()
+        ) : activeTab === 'admin' && account?.toLowerCase() === ADMIN_WALLET.toLowerCase() ? (
+          renderAdminDashboard()
         ) : (
           <>
             <div className="hero-section">
@@ -1251,6 +1541,7 @@ function App() {
               </div>
             ) : (
               <div className="dashboard">
+                {/* Rest of the existing dashboard code remains the same */}
                 <div className="wallet-info">
                   <div className="wallet-card">
                     <div className="wallet-header">
@@ -1361,11 +1652,9 @@ function App() {
                       💰 Donate ETH
                     </button>
                   </div>
-
-                  {/* Circuit Breaker Card - NEW */}
-                  {stabilityContract && <CircuitBreakerCard />}
                 </div>
 
+                {/* Rest of the existing savings sections, create account forms, etc. remain unchanged */}
                 <div className="savings-section">
                   {activeAccounts.length > 0 && (
                     <>
