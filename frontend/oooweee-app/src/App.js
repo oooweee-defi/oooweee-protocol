@@ -1630,7 +1630,7 @@ function App() {
                       
                       <div className="stat">
                         <span className="label">Next Validator In</span>
-                        <span className="value">{parseFloat(validatorStats.nextValidatorIn).toFixed(2)} ETH</span>
+                        <span className="value">{parseFloat(validatorStats.nextValidatorIn).toFixed(4)} ETH</span>
                       </div>
                       
                       <div className="stat">

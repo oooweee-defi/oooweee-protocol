@@ -1133,6 +1133,113 @@ export const OOOWEEESavingsABI = [
     {
       "inputs": [
         {
+          "internalType": "uint256",
+          "name": "targetFiatAmount",
+          "type": "uint256"
+        },
+        {
+          "internalType": "enum SavingsPriceOracle.Currency",
+          "name": "targetCurrency",
+          "type": "uint8"
+        },
+        {
+          "internalType": "address",
+          "name": "recipient",
+          "type": "address"
+        },
+        {
+          "internalType": "string",
+          "name": "goalName",
+          "type": "string"
+        },
+        {
+          "internalType": "uint256",
+          "name": "initialDeposit",
+          "type": "uint256"
+        }
+      ],
+      "name": "createBalanceAccountFiat",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "targetFiatAmount",
+          "type": "uint256"
+        },
+        {
+          "internalType": "enum SavingsPriceOracle.Currency",
+          "name": "targetCurrency",
+          "type": "uint8"
+        },
+        {
+          "internalType": "string",
+          "name": "goalName",
+          "type": "string"
+        },
+        {
+          "internalType": "uint256",
+          "name": "initialDeposit",
+          "type": "uint256"
+        }
+      ],
+      "name": "createGrowthAccountFiat",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "unlockTime",
+          "type": "uint256"
+        },
+        {
+          "internalType": "string",
+          "name": "goalName",
+          "type": "string"
+        },
+        {
+          "internalType": "uint256",
+          "name": "initialDeposit",
+          "type": "uint256"
+        },
+        {
+          "internalType": "enum SavingsPriceOracle.Currency",
+          "name": "displayCurrency",
+          "type": "uint8"
+        }
+      ],
+      "name": "createTimeAccountFiat",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
           "internalType": "address",
           "name": "user",
           "type": "address"
