@@ -778,6 +778,13 @@ export const OOOWEEEValidatorFundABI = [
     },
     {
       "inputs": [],
+      "name": "donate",
+      "outputs": [],
+      "stateMutability": "payable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
       "name": "ethUntilNextValidator",
       "outputs": [
         {
@@ -1376,19 +1383,6 @@ export const OOOWEEESavingsABI = [
         }
       ],
       "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "address",
-          "name": "newOwner",
-          "type": "address"
-        }
-      ],
-      "name": "transferOwnership",
-      "outputs": [],
-      "stateMutability": "nonpayable",
       "type": "function"
     },
     {
