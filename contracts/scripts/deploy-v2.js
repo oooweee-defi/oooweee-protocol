@@ -56,47 +56,58 @@ async function main() {
   contracts.token = token.address;
   console.log("✅ Token deployed:", token.address);
   
+  // === DEPLOY SAVINGS PRICE ORACLE ===
+  console.log("\n2️⃣  Deploying SavingsPriceOracle...");
+  const Oracle = await hre.ethers.getContractFactory("SavingsPriceOracle");
+  const oracleArgs = [CONFIG.UNISWAP_V2_ROUTER_SEPOLIA];
+  const oracle = await Oracle.deploy(...oracleArgs);
+  await oracle.deployed();
+  contracts.oracle = oracle.address;
+  console.log("✅ SavingsPriceOracle deployed:", oracle.address);
+  
   // === DEPLOY SAVINGS ===
-  console.log("\n2️⃣  Deploying OOOWEEESavings...");
+  console.log("\n3️⃣  Deploying OOOWEEESavings...");
   const Savings = await hre.ethers.getContractFactory("OOOWEEESavings");
-  const savingsArgs = [token.address, CONFIG.UNISWAP_V2_ROUTER_SEPOLIA];
+  const savingsArgs = [token.address, CONFIG.UNISWAP_V2_ROUTER_SEPOLIA, oracle.address];
   const savings = await Savings.deploy(...savingsArgs);
   await savings.deployed();
   contracts.savings = savings.address;
   console.log("✅ Savings deployed:", savings.address);
   
-  // === DEPLOY VALIDATORS (New simplified version) ===
-  console.log("\n3️⃣  Deploying OOOWEEEValidators...");
-  const Validators = await hre.ethers.getContractFactory("OOOWEEEValidators");
-  const validatorsArgs = [deployer.address]; // Just operator address
-  const validators = await Validators.deploy(...validatorsArgs);
-  await validators.deployed();
-  contracts.validators = validators.address;
-  console.log("✅ Validators deployed:", validators.address);
+  // === DEPLOY VALIDATOR FUND (Step 1: Deploy with placeholders) ===
+  console.log("\n4️⃣  Deploying OOOWEEEValidatorFund...");
+  const ValidatorFund = await hre.ethers.getContractFactory("OOOWEEEValidatorFund");
+  // Pass deployer as placeholder for stability and rewards contracts
+  const validatorFundArgs = [deployer.address, deployer.address]; 
+  const validatorFund = await ValidatorFund.deploy(...validatorFundArgs);
+  await validatorFund.deployed();
+  contracts.validatorFund = validatorFund.address;
+  console.log("✅ ValidatorFund deployed:", validatorFund.address);
   
   // === DEPLOY STABILITY ===
-  console.log("\n4️⃣  Deploying OOOWEEEStability...");
+  console.log("\n5️⃣  Deploying OOOWEEEStability...");
   const Stability = await hre.ethers.getContractFactory("OOOWEEEStability");
-  const stabilityArgs = [token.address, CONFIG.UNISWAP_V2_ROUTER_SEPOLIA, validators.address];
+  const stabilityArgs = [token.address, CONFIG.UNISWAP_V2_ROUTER_SEPOLIA, validatorFund.address];
   const stability = await Stability.deploy(...stabilityArgs);
   await stability.deployed();
   contracts.stability = stability.address;
   console.log("✅ Stability deployed:", stability.address);
   
-  // === DEPLOY REWARDS RECEIVER ===
-  console.log("\n5️⃣  Deploying OOOWEEERewardsReceiver...");
-  const RewardsReceiver = await hre.ethers.getContractFactory("OOOWEEERewardsReceiver");
-  const rewardsReceiverArgs = [
-    deployer.address,     // operations wallet (can be same as deployer)
-    validators.address,   // validators contract
+  // === DEPLOY REWARDS DISTRIBUTION ===
+  console.log("\n6️⃣  Deploying OOOWEEERewardsDistribution...");
+  const RewardsDistribution = await hre.ethers.getContractFactory("OOOWEEERewardsDistribution");
+  const rewardsArgs = [
     savings.address,      // savings contract
+    token.address,        // OOOWEEE token
     CONFIG.UNISWAP_V2_ROUTER_SEPOLIA, // Uniswap router
-    token.address        // OOOWEEE token
+    validatorFund.address, // validator fund
+    deployer.address,     // operations wallet (can be same as deployer)
+    deployer.address      // L1 validator collector (placeholder)
   ];
-  const rewardsReceiver = await RewardsReceiver.deploy(...rewardsReceiverArgs);
-  await rewardsReceiver.deployed();
-  contracts.rewardsReceiver = rewardsReceiver.address;
-  console.log("✅ RewardsReceiver deployed:", rewardsReceiver.address);
+  const rewardsDistribution = await RewardsDistribution.deploy(...rewardsArgs);
+  await rewardsDistribution.deployed();
+  contracts.rewardsDistribution = rewardsDistribution.address;
+  console.log("✅ RewardsDistribution deployed:", rewardsDistribution.address);
   
   // === SETUP CONNECTIONS ===
   console.log("\n🔗 Setting up contract connections...");
@@ -107,23 +118,19 @@ async function main() {
   await tx1.wait();
   console.log("  ✅ Stability mechanism set");
   
-  // 2. Set stability contract in validators
-  console.log("  Setting stability contract in validators...");
-  const tx2 = await validators.setStabilityContract(stability.address);
+  // 2. Update ValidatorFund with correct addresses
+  console.log("  Updating ValidatorFund configuration...");
+  const tx2 = await validatorFund.setStabilityContract(stability.address);
   await tx2.wait();
-  console.log("  ✅ Stability contract set");
-  
-  // 3. Set rewards receiver in validators
-  console.log("  Setting rewards receiver in validators...");
-  const tx3 = await validators.setRewardsReceiver(rewardsReceiver.address);
+  const tx3 = await validatorFund.setRewardsContract(rewardsDistribution.address);
   await tx3.wait();
-  console.log("  ✅ Rewards receiver set");
+  console.log("  ✅ ValidatorFund connected to Stability and Rewards");
   
-  // 4. Set validator contract in savings (for old compatibility if needed)
-  console.log("  Setting validator contract in savings...");
-  const tx4 = await savings.setValidatorContract(validators.address);
+  // 3. Set rewards distributor in savings
+  console.log("  Setting rewards distributor in savings...");
+  const tx4 = await savings.setRewardsDistributor(rewardsDistribution.address);
   await tx4.wait();
-  console.log("  ✅ Validator contract set in savings");
+  console.log("  ✅ Rewards distributor set in savings");
   
   // === VERIFY TOKEN DISTRIBUTION ===
   console.log("\n📊 Verifying token distribution...");
@@ -145,9 +152,10 @@ async function main() {
     contracts: {
       token: token.address,
       savings: savings.address,
-      validators: validators.address,
+      validatorFund: validatorFund.address,
       stability: stability.address,
-      rewardsReceiver: rewardsReceiver.address
+      rewardsDistribution: rewardsDistribution.address,
+      oracle: oracle.address
     },
     ticker: "OOOWEEE",
     uniswapRouter: CONFIG.UNISWAP_V2_ROUTER_SEPOLIA
@@ -169,9 +177,10 @@ async function main() {
     
     await verifyContract(token.address, tokenArgs, "Token");
     await verifyContract(savings.address, savingsArgs, "Savings");
-    await verifyContract(validators.address, validatorsArgs, "Validators");
+    await verifyContract(validatorFund.address, validatorFundArgs, "ValidatorFund");
     await verifyContract(stability.address, stabilityArgs, "Stability");
-    await verifyContract(rewardsReceiver.address, rewardsReceiverArgs, "RewardsReceiver");
+    await verifyContract(rewardsDistribution.address, rewardsArgs, "RewardsDistribution");
+    await verifyContract(oracle.address, oracleArgs, "Oracle");
   }
   
   // === DEPLOYMENT SUMMARY ===
@@ -179,11 +188,12 @@ async function main() {
   console.log("🎉 DEPLOYMENT COMPLETE!");
   console.log("=".repeat(50));
   console.log("\n📝 Contract Addresses:");
-  console.log("  Token:          ", token.address);
-  console.log("  Savings:        ", savings.address);
-  console.log("  Validators:     ", validators.address);
-  console.log("  Stability:      ", stability.address);
-  console.log("  RewardsReceiver:", rewardsReceiver.address);
+  console.log("  Token:              ", token.address);
+  console.log("  Savings:            ", savings.address);
+  console.log("  ValidatorFund:      ", validatorFund.address);
+  console.log("  Stability:          ", stability.address);
+  console.log("  RewardsDistribution:", rewardsDistribution.address);
+  console.log("  Oracle:             ", oracle.address);
   console.log("\n💼 Configuration:");
   console.log("  Operations Wallet:", deployer.address);
   console.log("  Operator:         ", deployer.address);
@@ -193,9 +203,9 @@ async function main() {
   console.log("  3. Call stability.setLiquidityPair() with pool address");
   console.log("  4. Enable trading with token.enableTrading()");
   console.log("  5. Lock founder tokens in UniCrypt");
-  console.log("  6. When creating validators, set withdrawal address to:", rewardsReceiver.address);
+  console.log("  6. When creating validators, set withdrawal address to:", rewardsDistribution.address);
   console.log("\n🔐 IMPORTANT: Validator Withdrawal Address:");
-  console.log("  Use this for ALL validators:", rewardsReceiver.address);
+  console.log("  Use this for ALL validators:", rewardsDistribution.address);
   console.log("\n✨ Happy building with OOOWEEE!");
 }
 

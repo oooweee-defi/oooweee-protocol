@@ -31,7 +31,7 @@ contract OOOWEEEToken is ERC20, Ownable {
     constructor(
         address _founderWallet,
         address _operationsWallet  // Changed parameter name
-    ) ERC20("OOOWEEE", "OOOWEEE") Ownable(msg.sender) {
+    ) ERC20("OOOWEEE", "OOOWEEE") Ownable() {
         founderWallet = _founderWallet;
         operationsWallet = _operationsWallet;  // Changed from liquidityWallet
         
@@ -91,8 +91,8 @@ contract OOOWEEEToken is ERC20, Ownable {
         emit ExemptionSet(account, exempt);
     }
     
-    // Override transfer to check trading status (but NO taxes)
-    function _update(
+    // Override ERC20 hook to check trading status (but NO taxes)
+    function _beforeTokenTransfer(
         address from,
         address to,
         uint256 amount
@@ -103,8 +103,8 @@ contract OOOWEEEToken is ERC20, Ownable {
                 "Trading not enabled"
             );
         }
-        
-        // NO TAX LOGIC - Just transfer
-        super._update(from, to, amount);
+
+        // NO TAX LOGIC - Just allow transfer
+        super._beforeTokenTransfer(from, to, amount);
     }
 }

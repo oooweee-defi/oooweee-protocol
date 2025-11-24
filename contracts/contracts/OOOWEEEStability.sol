@@ -104,7 +104,7 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard {
         address _oooweeeToken,
         address _uniswapRouter,
         address _validatorFundWallet
-    ) Ownable(msg.sender) {
+    ) Ownable() {
         oooweeeToken = IERC20(_oooweeeToken);
         uniswapRouter = IUniswapV2Router02(_uniswapRouter);
         validatorFundWallet = _validatorFundWallet;

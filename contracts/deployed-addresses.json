@@ -3,15 +3,18 @@
   "chainId": 11155111,
   "deployer": "0x335bB9E071F10a414308170045A5Bc614BcC97B6",
   "operationsWallet": "0x335bB9E071F10a414308170045A5Bc614BcC97B6",
-  "timestamp": "2025-11-12T15:45:00.000Z",
+  "timestamp": "2025-11-24T12:42:48.116Z",
   "contracts": {
-    "token": "0xD4eEa41F12FBb3e2030B17FDeaaF8b38c471B32a",
-    "savings": "0x08292751eDBedF6e4A09eD1d133FA6b28af49Fc8",
-    "validators": "0xC0E5434c7086b4A5cb1Ff86Ba9372a171CA178Ae",
-    "stability": "0xBf12716D81F55A9105Fef47816D67Fa84bCd6373",
-    "rewardsReceiver": "0x609413Ac27E1c55474d2D8A5721F887d4c8bEdED"
+    "token": "0xE42dE98792A3D4ebD5E95450eACcFf1be2C2A2c7",
+    "savings": "0x3bE2a33fC10c71fFae64c1087bBfBA4263574b81",
+    "validatorFund": "0x1F9D3c4354383B0907F8014161185faC2A860Dd8",
+    "stability": "0x5Ca78b600d7144622A28e6C79D0839225f9aA5fA",
+    "rewardsDistribution": "0x9325bc00015e01243A18f8344BaBe3B094eD1eC0",
+    "oracle": "0x36D185F2B7815A82f8794E38DAe6cE772869CFD7"
   },
   "ticker": "OOOWEEE",
   "uniswapRouter": "0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008",
-  "notes": "Fresh deployment with safe swap approvals"
+  "uniswapPair": "0xCF841ff4380189C394388d685947Ac4c8Abd545B",
+  "setupComplete": true,
+  "setupTimestamp": "2025-11-24T13:07:12.940Z"
 }

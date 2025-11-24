@@ -1,5 +1,5 @@
 require("@nomiclabs/hardhat-waffle");
-require("@nomicfoundation/hardhat-verify");
+require("@nomiclabs/hardhat-etherscan");  // ← Changed this line
 require("dotenv").config();
 
 // Ensure we have required environment variables
