@@ -795,27 +795,37 @@ export const OOOWEEEValidatorFundABI = [
       "outputs": [
         {
           "internalType": "uint256",
-          "name": "totalRewards",
+          "name": "_validatorsCreated",
           "type": "uint256"
         },
         {
           "internalType": "uint256",
-          "name": "pendingRewards",
+          "name": "_pendingETH",
           "type": "uint256"
         },
         {
           "internalType": "uint256",
-          "name": "validatorCount",
+          "name": "_validatorsToCreate",
           "type": "uint256"
         },
         {
           "internalType": "uint256",
-          "name": "nextValidatorEth",
+          "name": "_totalETHReceived",
           "type": "uint256"
         },
         {
           "internalType": "uint256",
-          "name": "progress",
+          "name": "_totalDonations",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "_donorCount",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "_totalETHBridged",
           "type": "uint256"
         }
       ],
@@ -854,7 +864,12 @@ export const OOOWEEEValidatorFundABI = [
       "outputs": [
         {
           "internalType": "uint256",
-          "name": "",
+          "name": "current",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "required",
           "type": "uint256"
         }
       ],
