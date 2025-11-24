@@ -675,43 +675,44 @@ function App() {
       
       for (let id of accountIds) {
         try {
-          // Try to get extended info first
-          const info = await savingsContract.getAccountInfoExtended(account, id);
+          // Use new getAccountDetails function
+          const info = await savingsContract.getAccountDetails(account, id);
+          
+          // Get progress if it's a fiat target
+          let progress = '0';
+          let currentFiatValue = 0;
+          
+          // info[4] is targetFiat (uint256)
+          if (info[4].gt(0)) {
+             try {
+               const progressInfo = await savingsContract.getAccountFiatProgress(account, id);
+               currentFiatValue = progressInfo[0].toNumber(); // currentValue
+               progress = progressInfo[2].toString(); // percentComplete
+             } catch (e) {
+               console.log("Error fetching progress", e);
+             }
+          }
+
           accountDetails.push({
             id: id.toString(),
-            type: info[0],
-            goalName: info[1],
-            balance: ethers.utils.formatUnits(info[2], 18),
-            target: ethers.utils.formatUnits(info[3], 18),
-            targetFiat: info[4].toNumber(),
-            targetCurrency: info[5],
-            currentFiatValue: info[6].toNumber(),
-            unlockTime: info[7].toNumber(), // Now uint32
-            recipient: info[8],
-            isActive: info[9],
-            progress: info[10].toString(),
-            pendingRewards: ethers.utils.formatUnits(info[11], 18),
-            isFiatTarget: info[12]
+            type: info[0], // accountType
+            isActive: info[1], // isActive
+            balance: ethers.utils.formatUnits(info[2], 18), // balance (includes pending rewards)
+            target: ethers.utils.formatUnits(info[3], 18), // targetAmount
+            targetFiat: info[4].toNumber(), // targetFiat
+            targetCurrency: info[5], // targetCurrency
+            unlockTime: info[6].toNumber(), // unlockTime
+            recipient: info[7], // recipient
+            goalName: info[8], // goalName
+            
+            // Derived/Extra fields
+            currentFiatValue: currentFiatValue,
+            progress: progress,
+            pendingRewards: '0', // Included in balance now
+            isFiatTarget: info[4].gt(0)
           });
-        } catch (extendedError) {
-          // Fall back to legacy getAccountInfo
-          const info = await savingsContract.getAccountInfo(account, id);
-          accountDetails.push({
-            id: id.toString(),
-            type: info[0],
-            goalName: info[1],
-            balance: ethers.utils.formatUnits(info[2], 18),
-            target: ethers.utils.formatUnits(info[3], 18),
-            targetFiat: 0,
-            targetCurrency: 1, // Default to EUR
-            currentFiatValue: 0,
-            unlockTime: info[4].toNumber(),
-            recipient: info[5],
-            isActive: info[6],
-            progress: info[7].toString(),
-            pendingRewards: ethers.utils.formatUnits(info[8], 18),
-            isFiatTarget: false
-          });
+        } catch (error) {
+          console.error(`Error loading account ${id}:`, error);
         }
       }
       

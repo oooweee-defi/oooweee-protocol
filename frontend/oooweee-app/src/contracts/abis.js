@@ -1241,34 +1241,103 @@ export const OOOWEEESavingsABI = [
       "inputs": [
         {
           "internalType": "address",
-          "name": "user",
+          "name": "owner",
           "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "accountId",
+          "type": "uint256"
         }
       ],
-      "name": "getAccountInfoExtended",
+      "name": "getAccountDetails",
       "outputs": [
         {
+          "internalType": "uint8",
+          "name": "accountType",
+          "type": "uint8"
+        },
+        {
+          "internalType": "bool",
+          "name": "isActive",
+          "type": "bool"
+        },
+        {
           "internalType": "uint256",
-          "name": "totalLocked",
+          "name": "balance",
           "type": "uint256"
         },
         {
           "internalType": "uint256",
-          "name": "unlockedRewards",
+          "name": "targetAmount",
           "type": "uint256"
         },
         {
           "internalType": "uint256",
-          "name": "pendingRewards",
+          "name": "targetFiat",
           "type": "uint256"
         },
         {
+          "internalType": "uint8",
+          "name": "targetCurrency",
+          "type": "uint8"
+        },
+        {
           "internalType": "uint256",
-          "name": "activeLocks",
+          "name": "unlockTime",
           "type": "uint256"
+        },
+        {
+          "internalType": "address",
+          "name": "recipient",
+          "type": "address"
+        },
+        {
+          "internalType": "string",
+          "name": "goalName",
+          "type": "string"
         }
       ],
       "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "accountId",
+          "type": "uint256"
+        }
+      ],
+      "name": "getAccountFiatProgress",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "currentValue",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "targetValue",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "percentComplete",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bool",
+          "name": "canWithdraw",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "nonpayable",
       "type": "function"
     },
     {
