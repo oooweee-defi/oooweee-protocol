@@ -693,9 +693,11 @@ function App() {
              }
           }
 
+          const ACCOUNT_TYPES = ['Time', 'Balance', 'Growth'];
+
           accountDetails.push({
             id: id.toString(),
-            type: info[0], // accountType
+            type: ACCOUNT_TYPES[info[0]], // accountType mapped to string
             isActive: info[1], // isActive
             balance: ethers.utils.formatUnits(info[2], 18), // balance (includes pending rewards)
             target: ethers.utils.formatUnits(info[3], 18), // targetAmount
