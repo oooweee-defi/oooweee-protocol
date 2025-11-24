@@ -3,7 +3,7 @@ import { ethers } from 'ethers';
 import toast, { Toaster } from 'react-hot-toast';
 import './App.css';
 import oooweeLogo from './assets/oooweee-logo.png';
-import { OOOWEEE_TOKEN_ABI, OOOWEEE_SAVINGS_ABI, OOOWEEE_VALIDATOR_FUND_ABI, OOOWEEE_STABILITY_ABI, CONTRACT_ADDRESSES } from './contracts/abis';
+import { OOOWEEETokenABI, OOOWEEESavingsABI, OOOWEEEValidatorFundABI, OOOWEEEStabilityABI, CONTRACT_ADDRESSES } from './contracts/abis';
 import Web3Modal from "web3modal";
 import WalletConnectProvider from "@walletconnect/web3-provider";
 
@@ -538,10 +538,10 @@ function App() {
       }
       
       // Initialize contracts - UPDATED
-      const token = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEToken, OOOWEEE_TOKEN_ABI, signer);
-      const savings = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEESavings, OOOWEEE_SAVINGS_ABI, signer);
-      const validatorFund = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEValidatorFund, OOOWEEE_VALIDATOR_FUND_ABI, signer);
-      const stability = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEStability, OOOWEEE_STABILITY_ABI, signer);
+      const token = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEToken, OOOWEEETokenABI, signer);
+      const savings = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEESavings, OOOWEEESavingsABI, signer);
+      const validatorFund = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEValidatorFund, OOOWEEEValidatorFundABI, signer);
+      const stability = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEStability, OOOWEEEStabilityABI, signer);
       const router = new ethers.Contract(UNISWAP_ROUTER, UNISWAP_ROUTER_ABI, signer);
       
       setAccount(address);
