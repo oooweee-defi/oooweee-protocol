@@ -383,15 +383,28 @@ function App() {
       const ethNeeded = await validatorFundContract.ethUntilNextValidator();
       const [progress] = await validatorFundContract.progressToNextValidator();
       
+      // Fetch total rewards separately as it's not in getStats
+      let totalRewards = ethers.BigNumber.from(0);
+      try {
+        totalRewards = await validatorFundContract.totalValidatorRewards();
+      } catch (e) {
+        console.log("Could not fetch totalValidatorRewards", e);
+      }
+
+      // Calculate fromStability: totalETHReceived (index 3) - totalDonations (index 4)
+      const totalETHReceived = stats[3];
+      const totalDonations = stats[4];
+      const fromStability = totalETHReceived.sub(totalDonations);
+      
       setValidatorStats({
         validators: stats[0].toString(),
         nextValidatorIn: ethers.utils.formatEther(ethNeeded),
         progress: (parseFloat(ethers.utils.formatEther(progress)) / 32) * 100,
         pendingETH: ethers.utils.formatEther(stats[1]),
-        totalDonations: ethers.utils.formatEther(stats[4]),
+        totalDonations: ethers.utils.formatEther(totalDonations),
         donors: stats[5].toString(),
-        fromStability: ethers.utils.formatEther(stats[6]), // NEW
-        fromRewards: ethers.utils.formatEther(stats[7])    // NEW
+        fromStability: ethers.utils.formatEther(fromStability),
+        fromRewards: ethers.utils.formatEther(totalRewards)
       });
     } catch (error) {
       console.error('Error loading validator stats:', error);
