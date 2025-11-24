@@ -19,7 +19,7 @@ const UNISWAP_ROUTER = "0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008";
 const WETH_ADDRESS = "0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9";
 
 // ADMIN WALLET - Update this to your operations wallet address
-const ADMIN_WALLET = "0x...YOUR_OPS_WALLET_ADDRESS"; // UPDATE THIS!
+const ADMIN_WALLET = "0x335bB9E071F10a414308170045A5Bc614BcC97B6"; // Updated to deployer address
 
 // Currency configuration
 const CURRENCIES = {
@@ -335,7 +335,7 @@ function App() {
     
     try {
       const ethAmount = ethers.utils.parseEther("1");
-      const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.token];
+      const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.OOOWEEEToken];
       const amounts = await routerContract.getAmountsOut(ethAmount, path);
       const oooweeePerEth = parseFloat(ethers.utils.formatUnits(amounts[1], 18));
       setOooweeePrice(1 / oooweeePerEth);
@@ -363,7 +363,7 @@ function App() {
       
       try {
         const ethAmount = ethers.utils.parseEther(ethToBuy);
-        const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.token];
+        const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.OOOWEEEToken];
         const amounts = await routerContract.getAmountsOut(ethAmount, path);
         setEstimatedOooweee(ethers.utils.formatUnits(amounts[1], 18));
       } catch (error) {
@@ -432,7 +432,7 @@ function App() {
       setLoading(true);
       
       const ethAmount = ethers.utils.parseEther(ethToBuy);
-      const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.token];
+      const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.OOOWEEEToken];
       const deadline = Math.floor(Date.now() / 1000) + 3600;
       
       // Get minimum output (with 3% slippage to match contracts)
@@ -483,7 +483,7 @@ function App() {
           setLoading(true);
           
           const ethAmount = ethers.utils.parseEther(requiredEth.toFixed(6));
-          const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.token];
+          const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.OOOWEEEToken];
           const deadline = Math.floor(Date.now() / 1000) + 3600;
           
           const amounts = await routerContract.getAmountsOut(ethAmount, path);
@@ -538,10 +538,10 @@ function App() {
       }
       
       // Initialize contracts - UPDATED
-      const token = new ethers.Contract(CONTRACT_ADDRESSES.token, OOOWEEE_TOKEN_ABI, signer);
-      const savings = new ethers.Contract(CONTRACT_ADDRESSES.savings, OOOWEEE_SAVINGS_ABI, signer);
-      const validatorFund = new ethers.Contract(CONTRACT_ADDRESSES.validatorFund, OOOWEEE_VALIDATOR_FUND_ABI, signer);
-      const stability = new ethers.Contract(CONTRACT_ADDRESSES.stability, OOOWEEE_STABILITY_ABI, signer);
+      const token = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEToken, OOOWEEE_TOKEN_ABI, signer);
+      const savings = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEESavings, OOOWEEE_SAVINGS_ABI, signer);
+      const validatorFund = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEValidatorFund, OOOWEEE_VALIDATOR_FUND_ABI, signer);
+      const stability = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEStability, OOOWEEE_STABILITY_ABI, signer);
       const router = new ethers.Contract(UNISWAP_ROUTER, UNISWAP_ROUTER_ABI, signer);
       
       setAccount(address);
@@ -777,7 +777,7 @@ function App() {
       const unlockTime = Math.floor(new Date(unlockDate).getTime() / 1000);
       const depositAmount = ethers.utils.parseUnits(initialDeposit.toString(), 18);
       
-      const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.savings, depositAmount);
+      const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
       
       await toast.promise(
         approveTx.wait(),
@@ -838,7 +838,7 @@ function App() {
       const targetInSmallestUnit = Math.round(targetAmount * Math.pow(10, CURRENCIES[currency].decimals));
       const depositAmount = ethers.utils.parseUnits(initialDeposit.toString(), 18);
       
-      const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.savings, depositAmount);
+      const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
       
       await toast.promise(
         approveTx.wait(),
@@ -899,7 +899,7 @@ function App() {
       const targetInSmallestUnit = Math.round(targetAmount * Math.pow(10, CURRENCIES[currency].decimals));
       const depositAmount = ethers.utils.parseUnits(initialDeposit.toString(), 18);
       
-      const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.savings, depositAmount);
+      const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
       
       await toast.promise(
         approveTx.wait(),
@@ -1006,7 +1006,7 @@ function App() {
           }
           
           const ethAmount = ethers.utils.parseEther(requiredEth.toFixed(6));
-          const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.token];
+          const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.OOOWEEEToken];
           const deadline = Math.floor(Date.now() / 1000) + 3600;
           
           // Get expected output with slippage
@@ -1040,7 +1040,7 @@ function App() {
       // Now deposit the originally requested amount
       const depositAmount = ethers.utils.parseUnits(depositAmountNumber.toString(), 18);
       
-      const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.savings, depositAmount);
+      const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
       
       await toast.promise(
         approveTx.wait(),
@@ -1370,7 +1370,7 @@ function App() {
               onClick={manualStabilityCheck}
               disabled={loading}
             >
-              🔍 Manual Check Now
+              🔍 Manual Check Now!
             </button>
           </div>
         </div>
