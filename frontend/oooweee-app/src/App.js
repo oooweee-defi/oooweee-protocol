@@ -261,7 +261,9 @@ function App() {
   const manualStabilityCheck = async () => {
     try {
       setLoading(true);
-      const tx = await stabilityContract.manualStabilityCheck();
+      const tx = await stabilityContract.manualStabilityCheck({
+        value: ethers.utils.parseEther("0.01")
+      });
       await toast.promise(
         tx.wait(),
         {
