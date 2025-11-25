@@ -8,7 +8,8 @@ async function main() {
 
   const [deployer] = await ethers.getSigners();
   console.log("Deployer:", deployer.address);
-  console.log("Balance:", ethers.formatEther(await ethers.provider.getBalance(deployer.address)), "ETH\n");
+  const balance = await deployer.getBalance();
+  console.log("Balance:", ethers.utils.formatEther(balance), "ETH\n");
 
   // Sepolia Config
   const UNISWAP_ROUTER = "0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008";
@@ -22,27 +23,27 @@ async function main() {
   console.log("1/6 Deploying OOOWEEEToken...");
   const Token = await ethers.getContractFactory("OOOWEEEToken");
   const token = await Token.deploy(FOUNDER_WALLET, OPERATIONS_WALLET);
-  await token.waitForDeployment();
-  deployed.token = await token.getAddress();
+  await token.deployed();
+  deployed.token = token.address;
   console.log("    ✅", deployed.token);
 
   // 2. SavingsPriceOracle
   console.log("2/6 Deploying SavingsPriceOracle...");
   const Oracle = await ethers.getContractFactory("SavingsPriceOracle");
   const oracle = await Oracle.deploy(UNISWAP_ROUTER);
-  await oracle.waitForDeployment();
-  deployed.oracle = await oracle.getAddress();
+  await oracle.deployed();
+  deployed.oracle = oracle.address;
   console.log("    ✅", deployed.oracle);
 
   // 3. OOOWEEEValidatorFund
   console.log("3/6 Deploying OOOWEEEValidatorFund...");
   const ValidatorFund = await ethers.getContractFactory("OOOWEEEValidatorFund");
   const validatorFund = await ValidatorFund.deploy(
-    ethers.ZeroAddress,  // stability - set later
-    ethers.ZeroAddress   // rewards - set later
+    ethers.constants.AddressZero,  // stability - set later
+    ethers.constants.AddressZero   // rewards - set later
   );
-  await validatorFund.waitForDeployment();
-  deployed.validatorFund = await validatorFund.getAddress();
+  await validatorFund.deployed();
+  deployed.validatorFund = validatorFund.address;
   console.log("    ✅", deployed.validatorFund);
 
   // 4. OOOWEEEStability
@@ -53,8 +54,8 @@ async function main() {
     UNISWAP_ROUTER,
     deployed.validatorFund
   );
-  await stability.waitForDeployment();
-  deployed.stability = await stability.getAddress();
+  await stability.deployed();
+  deployed.stability = stability.address;
   console.log("    ✅", deployed.stability);
 
   // 5. OOOWEEESavings
@@ -65,8 +66,8 @@ async function main() {
     UNISWAP_ROUTER,
     deployed.oracle
   );
-  await savings.waitForDeployment();
-  deployed.savings = await savings.getAddress();
+  await savings.deployed();
+  deployed.savings = savings.address;
   console.log("    ✅", deployed.savings);
 
   // 6. OOOWEEERewardsDistribution
@@ -78,10 +79,10 @@ async function main() {
     UNISWAP_ROUTER,
     deployed.validatorFund,
     OPERATIONS_WALLET,
-    ethers.ZeroAddress  // L1 collector - not used on testnet
+    ethers.constants.AddressZero  // L1 collector - not used on testnet
   );
-  await rewards.waitForDeployment();
-  deployed.rewards = await rewards.getAddress();
+  await rewards.deployed();
+  deployed.rewards = rewards.address;
   console.log("    ✅", deployed.rewards);
 
   // ============================================
@@ -90,41 +91,51 @@ async function main() {
   console.log("\n🔧 Configuring contracts...\n");
 
   // ValidatorFund connections
-  const vf = await ethers.getContractAt("OOOWEEEValidatorFund", deployed.validatorFund);
-  await (await vf.setStabilityContract(deployed.stability)).wait();
+  let tx;
+  tx = await validatorFund.setStabilityContract(deployed.stability);
+  await tx.wait();
   console.log("✅ ValidatorFund → Stability");
-  await (await vf.setRewardsContract(deployed.rewards)).wait();
+  tx = await validatorFund.setRewardsContract(deployed.rewards);
+  await tx.wait();
   console.log("✅ ValidatorFund → Rewards");
 
   // Token setup
-  const tk = await ethers.getContractAt("OOOWEEEToken", deployed.token);
-  await (await tk.setStabilityMechanism(deployed.stability)).wait();
+  tx = await token.setStabilityMechanism(deployed.stability);
+  await tx.wait();
   console.log("✅ Token → Stability mechanism");
 
   // Exemptions
-  await (await tk.setExemption(deployed.stability, true)).wait();
-  await (await tk.setExemption(deployed.savings, true)).wait();
-  await (await tk.setExemption(deployed.validatorFund, true)).wait();
-  await (await tk.setExemption(deployed.rewards, true)).wait();
-  await (await tk.setExemption(UNISWAP_ROUTER, true)).wait();
+  tx = await token.setExemption(deployed.stability, true);
+  await tx.wait();
+  tx = await token.setExemption(deployed.savings, true);
+  await tx.wait();
+  tx = await token.setExemption(deployed.validatorFund, true);
+  await tx.wait();
+  tx = await token.setExemption(deployed.rewards, true);
+  await tx.wait();
+  tx = await token.setExemption(UNISWAP_ROUTER, true);
+  await tx.wait();
   console.log("✅ Protocol exemptions set");
 
   // Savings setup
-  const sv = await ethers.getContractAt("OOOWEEESavings", deployed.savings);
-  await (await sv.setRewardsDistributor(deployed.rewards)).wait();
+  tx = await savings.setRewardsDistributor(deployed.rewards);
+  await tx.wait();
   console.log("✅ Savings → Rewards distributor");
-  await (await sv.setFeeCollector(OPERATIONS_WALLET)).wait();
+  tx = await savings.setFeeCollector(OPERATIONS_WALLET);
+  await tx.wait();
   console.log("✅ Savings → Fee collector");
 
   // Oracle setup
-  const or = await ethers.getContractAt("SavingsPriceOracle", deployed.oracle);
-  await (await or.setPriceFeed(0, CHAINLINK_ETH_USD)).wait();  // USD
-  await (await or.setPriceFeed(1, CHAINLINK_ETH_USD)).wait();  // EUR (using USD feed for testnet)
+  tx = await oracle.setPriceFeed(0, CHAINLINK_ETH_USD);  // USD
+  await tx.wait();
+  tx = await oracle.setPriceFeed(1, CHAINLINK_ETH_USD);  // EUR (using USD feed for testnet)
+  await tx.wait();
   console.log("✅ Oracle price feeds set");
 
   // Transfer stability reserve (89M tokens)
   console.log("\n💰 Transferring 89M tokens to Stability...");
-  await (await tk.transfer(deployed.stability, ethers.parseEther("89000000"))).wait();
+  tx = await token.transfer(deployed.stability, ethers.utils.parseEther("89000000"));
+  await tx.wait();
   console.log("✅ Stability reserve funded");
 
   // ============================================
