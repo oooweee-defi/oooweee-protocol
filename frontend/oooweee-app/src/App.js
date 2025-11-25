@@ -880,25 +880,19 @@ function App() {
     try {
       setLoading(true);
       
-      // Check minimum deposit (€10)
-      if (!checkMinimumDeposit(initialDeposit)) {
-        toast.error('Minimum deposit is €10');
-        setLoading(false);
-        return;
-      }
-      
+      // initialDeposit is already in OOOWEEE (converted from fiat in handleCreateAccount)
       if (parseFloat(balance) < parseFloat(initialDeposit)) {
         const needed = parseFloat(initialDeposit) - parseFloat(balance);
         
         // Open buy modal with exact amount needed
-        toast(`You need ${needed.toFixed(0)} more OOOWEEE`, { icon: '💡' });
+        toast(`You need ${Math.ceil(needed).toLocaleString()} more OOOWEEE`, { icon: '💡' });
         await openBuyModalWithAmount(needed);
         setLoading(false);
         return;
       }
       
       const unlockTime = Math.floor(new Date(unlockDate).getTime() / 1000);
-      const depositAmount = ethers.utils.parseUnits(initialDeposit.toString(), 18);
+      const depositAmount = ethers.utils.parseUnits(Math.floor(initialDeposit).toString(), 18);
       
       const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
       
@@ -917,7 +911,7 @@ function App() {
       
       await toast.promise(createTx.wait(), {
         loading: '🐷 Creating piggy bank...',
-        success: `🎉 Time account created with ${initialDeposit} $OOOWEEE!`,
+        success: `🎉 Time account created with ${Math.floor(initialDeposit).toLocaleString()} $OOOWEEE!`,
         error: '❌ Failed to create account'
       });
       
@@ -940,37 +934,21 @@ function App() {
     try {
       setLoading(true);
       
-      // Check minimum deposit (€10)
-      if (!checkMinimumDeposit(initialDeposit)) {
-        toast.error('Minimum deposit is €10');
-        setLoading(false);
-        return;
-      }
-      
-      // Calculate initial fiat value to validate
-      const currencyCode = currency.toLowerCase();
-      const ethPriceForCurrency = ethPrice?.[currencyCode] || ethPrice?.eur || 1850;
-      const initialDepositFiatValue = parseFloat(initialDeposit) * oooweeePrice * ethPriceForCurrency;
-      
-      // Contract requires target > initial value
-      if (initialDepositFiatValue >= parseFloat(targetAmount)) {
-        toast.error(`Initial deposit value (${formatCurrency(initialDepositFiatValue, currency)}) must be less than target (${formatCurrency(targetAmount, currency)}). Use a smaller deposit or higher target.`);
-        setLoading(false);
-        return;
-      }
+      // initialDeposit is already in OOOWEEE (converted from fiat in handleCreateAccount)
+      // Target validation is done in handleCreateAccount
       
       if (parseFloat(balance) < parseFloat(initialDeposit)) {
         const needed = parseFloat(initialDeposit) - parseFloat(balance);
         
         // Open buy modal with exact amount needed
-        toast(`You need ${needed.toFixed(0)} more OOOWEEE`, { icon: '💡' });
+        toast(`You need ${Math.ceil(needed).toLocaleString()} more OOOWEEE`, { icon: '💡' });
         await openBuyModalWithAmount(needed);
         setLoading(false);
         return;
       }
       
       const targetInSmallestUnit = Math.round(targetAmount * Math.pow(10, CURRENCIES[currency].decimals));
-      const depositAmount = ethers.utils.parseUnits(initialDeposit.toString(), 18);
+      const depositAmount = ethers.utils.parseUnits(Math.floor(initialDeposit).toString(), 18);
       
       const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
       
@@ -1013,25 +991,19 @@ function App() {
     try {
       setLoading(true);
       
-      // Check minimum deposit (€10)
-      if (!checkMinimumDeposit(initialDeposit)) {
-        toast.error('Minimum deposit is €10');
-        setLoading(false);
-        return;
-      }
-      
+      // initialDeposit is already in OOOWEEE (converted from fiat in handleCreateAccount)
       if (parseFloat(balance) < parseFloat(initialDeposit)) {
         const needed = parseFloat(initialDeposit) - parseFloat(balance);
         
         // Open buy modal with exact amount needed
-        toast(`You need ${needed.toFixed(0)} more OOOWEEE`, { icon: '💡' });
+        toast(`You need ${Math.ceil(needed).toLocaleString()} more OOOWEEE`, { icon: '💡' });
         await openBuyModalWithAmount(needed);
         setLoading(false);
         return;
       }
       
       const targetInSmallestUnit = Math.round(targetAmount * Math.pow(10, CURRENCIES[currency].decimals));
-      const depositAmount = ethers.utils.parseUnits(initialDeposit.toString(), 18);
+      const depositAmount = ethers.utils.parseUnits(Math.floor(initialDeposit).toString(), 18);
       
       const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
       
@@ -1071,15 +1043,33 @@ function App() {
 
   const handleCreateAccount = async () => {
     const goalName = document.getElementById('goalName').value;
-    const initialDeposit = document.getElementById('initialDeposit').value;
+    const initialDepositFiat = document.getElementById('initialDeposit').value;
     
     if (!goalName) {
       toast.error('Please enter a quest name');
       return;
     }
     
-    if (!initialDeposit || parseFloat(initialDeposit) <= 0) {
-      toast.error('Please enter an initial deposit amount (any amount > 0)');
+    if (!initialDepositFiat || parseFloat(initialDepositFiat) <= 0) {
+      toast.error('Please enter an initial deposit amount');
+      return;
+    }
+    
+    // Check minimum deposit in EUR equivalent
+    const depositInEur = accountCurrency === 'EUR' 
+      ? parseFloat(initialDepositFiat)
+      : parseFloat(initialDepositFiat) * (ethPrice?.eur || 1850) / (ethPrice?.[accountCurrency.toLowerCase()] || 1850);
+    
+    if (depositInEur < 10) {
+      toast.error('Minimum deposit is €10 equivalent');
+      return;
+    }
+    
+    // Convert fiat deposit to OOOWEEE
+    const initialDepositOooweee = convertFiatToOooweee(initialDepositFiat, accountCurrency.toLowerCase());
+    
+    if (initialDepositOooweee <= 0) {
+      toast.error('Deposit amount too small');
       return;
     }
     
@@ -1089,14 +1079,19 @@ function App() {
         toast.error('Please select an unlock date');
         return;
       }
-      createTimeAccount(unlockDate, goalName, initialDeposit, accountCurrency);
+      createTimeAccount(unlockDate, goalName, initialDepositOooweee, accountCurrency);
     } else if (accountType === 'growth') {
       const targetAmount = document.getElementById('targetAmount').value;
       if (!targetAmount || targetAmount <= 0) {
         toast.error('Please enter a valid target amount');
         return;
       }
-      createGrowthAccount(targetAmount, goalName, initialDeposit, accountCurrency);
+      // Validate target > deposit (both in fiat)
+      if (parseFloat(initialDepositFiat) >= parseFloat(targetAmount)) {
+        toast.error('Target must be higher than initial deposit');
+        return;
+      }
+      createGrowthAccount(targetAmount, goalName, initialDepositOooweee, accountCurrency);
     } else if (accountType === 'balance') {
       const targetAmount = document.getElementById('targetAmount').value;
       const recipientAddress = document.getElementById('recipientAddress').value;
@@ -1108,7 +1103,7 @@ function App() {
         toast.error('Please enter a recipient address');
         return;
       }
-      createBalanceAccount(targetAmount, recipientAddress, goalName, initialDeposit, accountCurrency);
+      createBalanceAccount(targetAmount, recipientAddress, goalName, initialDepositOooweee, accountCurrency);
     }
   };
 
@@ -1985,24 +1980,33 @@ function App() {
                   </div>
                   
                   <div className="form-group">
+                    <label>💰 Initial Deposit ({CURRENCIES[accountCurrency].symbol}):</label>
                     <input 
                       type="number" 
-                      placeholder="Initial deposit $OOOWEEE (any amount > 0)" 
+                      placeholder={`Deposit in ${CURRENCIES[accountCurrency].name}`}
                       id="initialDeposit"
-                      min="0.001"
-                      step="0.001"
+                      min="10"
+                      step="1"
                       value={initialDepositInput}
                       onChange={(e) => setInitialDepositInput(e.target.value)}
                       className="number-input"
                     />
+                    {initialDepositInput && (
+                      <p className="conversion-note">
+                        ≈ {convertFiatToOooweee(initialDepositInput, accountCurrency.toLowerCase()).toLocaleString()} $OOOWEEE at current rate
+                      </p>
+                    )}
                     <p className="fee-note">💡 1% creation fee from initial deposit</p>
                     <p className="fee-note">📋 Minimum deposit: €10 equivalent</p>
-                    {initialDepositInput && !checkMinimumDeposit(initialDepositInput) && (
+                    {initialDepositInput && parseFloat(initialDepositInput) < 10 && accountCurrency === 'EUR' && (
                       <p className="error-note">⚠️ Minimum deposit is €10</p>
                     )}
-                    {parseFloat(balance) < parseFloat(initialDepositInput) && initialDepositInput && (
-                      <p className="swap-notice">⚠️ Insufficient balance - will offer to buy with ETH</p>
-                    )}
+                    {(() => {
+                      const oooweeeNeeded = convertFiatToOooweee(initialDepositInput, accountCurrency.toLowerCase());
+                      return parseFloat(balance) < oooweeeNeeded && initialDepositInput ? (
+                        <p className="swap-notice">⚠️ Insufficient balance - will offer to buy with ETH</p>
+                      ) : null;
+                    })()}
                   </div>
                   
                   {accountType === 'time' && (
@@ -2037,11 +2041,9 @@ function App() {
                       )}
                       {accountType === 'growth' && initialDepositInput && targetAmountInput && (
                         (() => {
-                          const currencyCode = accountCurrency.toLowerCase();
-                          const ethPriceForCurrency = ethPrice?.[currencyCode] || ethPrice?.eur || 1850;
-                          const initialFiatValue = parseFloat(initialDepositInput) * oooweeePrice * ethPriceForCurrency;
-                          if (initialFiatValue >= parseFloat(targetAmountInput)) {
-                            return <p className="error-note">⚠️ Target must be higher than initial deposit value ({formatCurrency(initialFiatValue, accountCurrency)})</p>;
+                          // Both initialDepositInput and targetAmountInput are now in fiat
+                          if (parseFloat(initialDepositInput) >= parseFloat(targetAmountInput)) {
+                            return <p className="error-note">⚠️ Target must be higher than initial deposit ({CURRENCIES[accountCurrency].symbol}{initialDepositInput})</p>;
                           }
                           return null;
                         })()
