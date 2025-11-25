@@ -137,12 +137,13 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
      */
     function getOooweeePriceView(Currency currency) public view returns (uint256) {
         (bool success, uint256 primaryPrice) = _tryPriceSourceView(activePriceSource, currency);
+        uint256 fallbackPrice;
 
         if (success && _isPriceReasonable(primaryPrice, currency)) {
             return primaryPrice;
         }
 
-        (success, uint256 fallbackPrice) = _tryPriceSourceView(PriceSource.FIXED_RATE, currency);
+        (success, fallbackPrice) = _tryPriceSourceView(PriceSource.FIXED_RATE, currency);
 
         if (success && _isPriceReasonable(fallbackPrice, currency)) {
             return fallbackPrice;

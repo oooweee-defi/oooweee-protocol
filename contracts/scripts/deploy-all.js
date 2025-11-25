@@ -1,161 +1,172 @@
 // scripts/deploy-all.js
 const hre = require("hardhat");
-const fs = require('fs');
+const { ethers } = require("hardhat");
 
 async function main() {
-  console.log("🚀 OOOWEEE Protocol - Complete Redeployment\n");
-  
+  console.log("🚀 OOOWEEE Protocol - Sepolia Testnet Deployment");
+  console.log("=".repeat(50) + "\n");
+
   const [deployer] = await ethers.getSigners();
-  console.log("Deploying with:", deployer.address);
-  console.log("Balance:", ethers.utils.formatEther(await deployer.getBalance()), "ETH\n");
-  
-  // ============ CONFIGURATION ============
-  const CONFIG = {
-    FOUNDER_WALLET: "0x56384f1205659291ba5b949d641582af6ae7006b", // UPDATE THIS
-    OPERATIONS_WALLET: "0xb05f42b174e5152d34431ee4504210932ddfe715", // UPDATE THIS
-    UNISWAP_ROUTER: "0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008", // Sepolia Uniswap V2
-    
-    // For testnet, use dummy L1 addresses
-    L1_VALIDATOR_COLLECTOR: "0x0000000000000000000000000000000000000001",
-    L1_OPERATOR: "0x0000000000000000000000000000000000000001"
-  };
-  
-  console.log("Configuration:");
-  console.log("Founder:", CONFIG.FOUNDER_WALLET);
-  console.log("Operations:", CONFIG.OPERATIONS_WALLET);
-  console.log("Router:", CONFIG.UNISWAP_ROUTER);
-  console.log("-------------------\n");
-  
-  const contracts = {};
-  
-  // ============ 1. DEPLOY TOKEN ============
-  console.log("1/5 Deploying OOOWEEEToken...");
+  console.log("Deployer:", deployer.address);
+  console.log("Balance:", ethers.formatEther(await ethers.provider.getBalance(deployer.address)), "ETH\n");
+
+  // Sepolia Config
+  const UNISWAP_ROUTER = "0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008";
+  const FOUNDER_WALLET = "0x56384f1205659291ba5b949d641582af6ae7006b";
+  const OPERATIONS_WALLET = "0xb05f42b174e5152d34431ee4504210932ddfe715";
+  const CHAINLINK_ETH_USD = "0x694AA1769357215DE4FAC081bf1f309aDC325306";
+
+  const deployed = {};
+
+  // 1. OOOWEEEToken
+  console.log("1/6 Deploying OOOWEEEToken...");
   const Token = await ethers.getContractFactory("OOOWEEEToken");
-  contracts.token = await Token.deploy(
-    CONFIG.FOUNDER_WALLET,
-    CONFIG.OPERATIONS_WALLET
-  );
-  await contracts.token.deployed();
-  console.log("✅ Token:", contracts.token.address);
-  
-  // ============ 2. DEPLOY VALIDATOR FUND ============
-  console.log("\n2/5 Deploying OOOWEEEValidatorFund...");
+  const token = await Token.deploy(FOUNDER_WALLET, OPERATIONS_WALLET);
+  await token.waitForDeployment();
+  deployed.token = await token.getAddress();
+  console.log("    ✅", deployed.token);
+
+  // 2. SavingsPriceOracle
+  console.log("2/6 Deploying SavingsPriceOracle...");
+  const Oracle = await ethers.getContractFactory("SavingsPriceOracle");
+  const oracle = await Oracle.deploy(UNISWAP_ROUTER);
+  await oracle.waitForDeployment();
+  deployed.oracle = await oracle.getAddress();
+  console.log("    ✅", deployed.oracle);
+
+  // 3. OOOWEEEValidatorFund
+  console.log("3/6 Deploying OOOWEEEValidatorFund...");
   const ValidatorFund = await ethers.getContractFactory("OOOWEEEValidatorFund");
-  contracts.validatorFund = await ValidatorFund.deploy(
-    ethers.constants.AddressZero, // Stability - will set later
-    ethers.constants.AddressZero  // Rewards - will set later
+  const validatorFund = await ValidatorFund.deploy(
+    ethers.ZeroAddress,  // stability - set later
+    ethers.ZeroAddress   // rewards - set later
   );
-  await contracts.validatorFund.deployed();
-  console.log("✅ ValidatorFund:", contracts.validatorFund.address);
-  
-  // ============ 3. DEPLOY STABILITY ============
-  console.log("\n3/5 Deploying OOOWEEEStability...");
+  await validatorFund.waitForDeployment();
+  deployed.validatorFund = await validatorFund.getAddress();
+  console.log("    ✅", deployed.validatorFund);
+
+  // 4. OOOWEEEStability
+  console.log("4/6 Deploying OOOWEEEStability...");
   const Stability = await ethers.getContractFactory("OOOWEEEStability");
-  contracts.stability = await Stability.deploy(
-    contracts.token.address,
-    CONFIG.UNISWAP_ROUTER,
-    contracts.validatorFund.address
+  const stability = await Stability.deploy(
+    deployed.token,
+    UNISWAP_ROUTER,
+    deployed.validatorFund
   );
-  await contracts.stability.deployed();
-  console.log("✅ Stability:", contracts.stability.address);
-  
-  // ============ 4. DEPLOY SAVINGS ============
-  console.log("\n4/5 Deploying OOOWEEESavings...");
+  await stability.waitForDeployment();
+  deployed.stability = await stability.getAddress();
+  console.log("    ✅", deployed.stability);
+
+  // 5. OOOWEEESavings
+  console.log("5/6 Deploying OOOWEEESavings...");
   const Savings = await ethers.getContractFactory("OOOWEEESavings");
-  contracts.savings = await Savings.deploy(
-    contracts.token.address,
-    CONFIG.UNISWAP_ROUTER
+  const savings = await Savings.deploy(
+    deployed.token,
+    UNISWAP_ROUTER,
+    deployed.oracle
   );
-  await contracts.savings.deployed();
-  console.log("✅ Savings:", contracts.savings.address);
-  
-  // ============ 5. DEPLOY REWARDS DISTRIBUTION ============
-  console.log("\n5/5 Deploying OOOWEEERewardsDistribution...");
+  await savings.waitForDeployment();
+  deployed.savings = await savings.getAddress();
+  console.log("    ✅", deployed.savings);
+
+  // 6. OOOWEEERewardsDistribution
+  console.log("6/6 Deploying OOOWEEERewardsDistribution...");
   const Rewards = await ethers.getContractFactory("OOOWEEERewardsDistribution");
-  contracts.rewards = await Rewards.deploy(
-    contracts.savings.address,
-    contracts.token.address,
-    CONFIG.UNISWAP_ROUTER,
-    contracts.validatorFund.address,
-    CONFIG.OPERATIONS_WALLET,
-    CONFIG.L1_VALIDATOR_COLLECTOR
+  const rewards = await Rewards.deploy(
+    deployed.savings,
+    deployed.token,
+    UNISWAP_ROUTER,
+    deployed.validatorFund,
+    OPERATIONS_WALLET,
+    ethers.ZeroAddress  // L1 collector - not used on testnet
   );
-  await contracts.rewards.deployed();
-  console.log("✅ Rewards:", contracts.rewards.address);
-  
-  // Note: ValidatorCollector (6th contract) is L1 only - skip for testnet
-  console.log("\n📝 Note: ValidatorCollector is L1-only, not needed for testnet");
-  
-  // ============ CONFIGURE CONTRACTS ============
-  console.log("\n⚙️  Configuring contracts...");
-  
-  // 1. Set stability mechanism in token (89M tokens transfer)
-  console.log("Setting stability mechanism...");
-  const tx1 = await contracts.token.setStabilityMechanism(contracts.stability.address);
-  await tx1.wait();
-  console.log("✅ 89M tokens transferred to stability");
-  
-  // 2. Configure ValidatorFund
-  console.log("Configuring ValidatorFund...");
-  const tx2 = await contracts.validatorFund.setStabilityContract(contracts.stability.address);
-  await tx2.wait();
-  const tx3 = await contracts.validatorFund.setRewardsContract(contracts.rewards.address);
-  await tx3.wait();
-  const tx4 = await contracts.validatorFund.setOperatorL1Address(CONFIG.L1_OPERATOR);
-  await tx4.wait();
-  
-  // 3. Configure Savings
-  console.log("Configuring Savings...");
-  const tx5 = await contracts.savings.setRewardsDistributor(contracts.rewards.address);
-  await tx5.wait();
-  const tx6 = await contracts.savings.setFeeCollector(CONFIG.OPERATIONS_WALLET);
-  await tx6.wait();
-  
-  // 4. Set exemptions
-  console.log("Setting exemptions...");
-  const tx7 = await contracts.token.setExemption(contracts.stability.address, true);
-  await tx7.wait();
-  const tx8 = await contracts.token.setExemption(contracts.savings.address, true);
-  await tx8.wait();
-  const tx9 = await contracts.token.setExemption(contracts.rewards.address, true);
-  await tx9.wait();
-  const tx10 = await contracts.token.setExemption(contracts.validatorFund.address, true);
-  await tx10.wait();
-  
-  // ============ SAVE DEPLOYMENT ============
-  const deployment = {
-    network: "sepolia",
-    timestamp: new Date().toISOString(),
-    deployer: deployer.address,
-    contracts: {
-      token: contracts.token.address,
-      stability: contracts.stability.address,
-      validatorFund: contracts.validatorFund.address,
-      savings: contracts.savings.address,
-      rewards: contracts.rewards.address
-    },
-    configuration: CONFIG,
-    status: "awaiting_liquidity_pool"
-  };
-  
-  fs.writeFileSync('deployment-new.json', JSON.stringify(deployment, null, 2));
-  
-  console.log("\n✅ DEPLOYMENT COMPLETE!");
-  console.log("📄 Saved to: deployment-new.json");
-  console.log("\n📋 Contract Addresses:");
-  console.log("```");
-  console.log("Token:         ", contracts.token.address);
-  console.log("Stability:     ", contracts.stability.address);
-  console.log("ValidatorFund: ", contracts.validatorFund.address);
-  console.log("Savings:       ", contracts.savings.address);
-  console.log("Rewards:       ", contracts.rewards.address);
-  console.log("```");
-  
-  console.log("\n⚠️  NEXT STEPS:");
-  console.log("1. Create Uniswap pool at https://app.uniswap.org");
-  console.log("2. Add liquidity (use operations wallet)");
-  console.log("3. Run: npx hardhat run scripts/setup-pool.js --network sepolia");
-  console.log("4. Enable trading");
+  await rewards.waitForDeployment();
+  deployed.rewards = await rewards.getAddress();
+  console.log("    ✅", deployed.rewards);
+
+  // ============================================
+  // CONFIGURATION
+  // ============================================
+  console.log("\n🔧 Configuring contracts...\n");
+
+  // ValidatorFund connections
+  const vf = await ethers.getContractAt("OOOWEEEValidatorFund", deployed.validatorFund);
+  await (await vf.setStabilityContract(deployed.stability)).wait();
+  console.log("✅ ValidatorFund → Stability");
+  await (await vf.setRewardsContract(deployed.rewards)).wait();
+  console.log("✅ ValidatorFund → Rewards");
+
+  // Token setup
+  const tk = await ethers.getContractAt("OOOWEEEToken", deployed.token);
+  await (await tk.setStabilityMechanism(deployed.stability)).wait();
+  console.log("✅ Token → Stability mechanism");
+
+  // Exemptions
+  await (await tk.setExemption(deployed.stability, true)).wait();
+  await (await tk.setExemption(deployed.savings, true)).wait();
+  await (await tk.setExemption(deployed.validatorFund, true)).wait();
+  await (await tk.setExemption(deployed.rewards, true)).wait();
+  await (await tk.setExemption(UNISWAP_ROUTER, true)).wait();
+  console.log("✅ Protocol exemptions set");
+
+  // Savings setup
+  const sv = await ethers.getContractAt("OOOWEEESavings", deployed.savings);
+  await (await sv.setRewardsDistributor(deployed.rewards)).wait();
+  console.log("✅ Savings → Rewards distributor");
+  await (await sv.setFeeCollector(OPERATIONS_WALLET)).wait();
+  console.log("✅ Savings → Fee collector");
+
+  // Oracle setup
+  const or = await ethers.getContractAt("SavingsPriceOracle", deployed.oracle);
+  await (await or.setPriceFeed(0, CHAINLINK_ETH_USD)).wait();  // USD
+  await (await or.setPriceFeed(1, CHAINLINK_ETH_USD)).wait();  // EUR (using USD feed for testnet)
+  console.log("✅ Oracle price feeds set");
+
+  // Transfer stability reserve (89M tokens)
+  console.log("\n💰 Transferring 89M tokens to Stability...");
+  await (await tk.transfer(deployed.stability, ethers.parseEther("89000000"))).wait();
+  console.log("✅ Stability reserve funded");
+
+  // ============================================
+  // OUTPUT
+  // ============================================
+  console.log("\n" + "=".repeat(50));
+  console.log("📋 DEPLOYMENT COMPLETE - Copy to abis.js:");
+  console.log("=".repeat(50));
+  console.log(`
+export const CONTRACT_ADDRESSES = {
+  OOOWEEEToken: "${deployed.token}",
+  OOOWEEESavings: "${deployed.savings}",
+  OOOWEEEValidatorFund: "${deployed.validatorFund}",
+  OOOWEEEStability: "${deployed.stability}",
+  OOOWEEERewardsDistribution: "${deployed.rewards}",
+  SavingsPriceOracle: "${deployed.oracle}"
+};
+`);
+
+  console.log("=".repeat(50));
+  console.log("⚠️  AFTER CREATING UNISWAP LP:");
+  console.log("=".repeat(50));
+  console.log(`
+// Run these after adding liquidity:
+
+const LP_ADDRESS = "<YOUR_LP_ADDRESS>";
+
+// 1. Set LP on Stability
+const stability = await ethers.getContractAt("OOOWEEEStability", "${deployed.stability}");
+await stability.setLiquidityPair(LP_ADDRESS);
+
+// 2. Set LP on Token
+const token = await ethers.getContractAt("OOOWEEEToken", "${deployed.token}");
+await token.setLiquidityPair(LP_ADDRESS, true);
+
+// 3. Set pool on Oracle
+const oracle = await ethers.getContractAt("SavingsPriceOracle", "${deployed.oracle}");
+await oracle.setOooweeePool(LP_ADDRESS);
+
+// 4. Enable trading
+await token.enableTrading();
+`);
 }
 
 main()
