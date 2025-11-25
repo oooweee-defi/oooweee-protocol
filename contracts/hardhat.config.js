@@ -1,6 +1,7 @@
+const path = require("path");
 require("@nomiclabs/hardhat-waffle");
-require("@nomiclabs/hardhat-etherscan");  // ← Changed this line
-require("dotenv").config();
+require("@nomiclabs/hardhat-etherscan");
+require("dotenv").config({ path: path.resolve(__dirname, ".env") });
 
 // Ensure we have required environment variables
 if (!process.env.PRIVATE_KEY) {

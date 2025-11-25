@@ -19,7 +19,7 @@ const UNISWAP_ROUTER = "0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008";
 const WETH_ADDRESS = "0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9";
 
 // ADMIN WALLET - Update this to your operations wallet address
-const ADMIN_WALLET = "0x335bB9E071F10a414308170045A5Bc614BcC97B6"; // Updated to deployer address
+const ADMIN_WALLET = "0x335bB9E071F10a414308170045A5Bc614BcC97B6";
 
 // Currency configuration
 const CURRENCIES = {
@@ -49,15 +49,7 @@ const providerOptions = {
       bridge: "https://bridge.walletconnect.org",
       qrcode: true,
       qrcodeModalOptions: {
-        mobileLinks: [
-          "metamask",
-          "trust",
-          "rainbow",
-          "argent",
-          "imtoken",
-          "pillar",
-          "coinbase"
-        ]
+        mobileLinks: ["metamask", "trust", "rainbow", "argent", "imtoken", "pillar", "coinbase"]
       }
     }
   },
@@ -95,8 +87,9 @@ function App() {
   const [ethToBuy, setEthToBuy] = useState('0.01');
   const [estimatedOooweee, setEstimatedOooweee] = useState('0');
   const [accountCurrency, setAccountCurrency] = useState('EUR');
+  const [isConnecting, setIsConnecting] = useState(false);
   
-  // Validator stats - Updated for new contract
+  // Validator stats
   const [validatorStats, setValidatorStats] = useState({
     validators: 0,
     nextValidatorIn: '32',
@@ -113,15 +106,12 @@ function App() {
   
   // Admin Dashboard State
   const [adminStats, setAdminStats] = useState({
-    // Protocol Overview
     totalValueLocked: '0',
     totalAccountsCreated: 0,
     totalGoalsCompleted: 0,
     totalFeesCollected: '0',
     totalRewardsDistributed: '0',
     totalActiveBalance: '0',
-    
-    // Stability Mechanism
     currentPrice: '0',
     baselinePrice: '0',
     tokenBalance: '0',
@@ -134,25 +124,18 @@ function App() {
     circuitBreakerTripped: false,
     systemChecksEnabled: true,
     marketHighVolatility: false,
-    
-    // System Health
     blockNumber: 0,
     lastBlockTime: 0,
     isSequencerHealthy: true,
     isPriceOracleHealthy: true,
-    
-    // Savings Breakdown
-    timeAccounts: 0,
-    growthAccounts: 0,
-    balanceAccounts: 0,
-    topSavers: []
+    priceIncreasePercent: 0
   });
   
   // Admin refresh interval
   useEffect(() => {
     if (account?.toLowerCase() === ADMIN_WALLET.toLowerCase() && activeTab === 'admin') {
       loadAdminStats();
-      const interval = setInterval(loadAdminStats, 5000); // Refresh every 5 seconds
+      const interval = setInterval(loadAdminStats, 5000);
       return () => clearInterval(interval);
     }
   }, [account, activeTab, stabilityContract, savingsContract, provider]);
@@ -162,52 +145,41 @@ function App() {
     if (!stabilityContract || !savingsContract || !provider) return;
     
     try {
-      // Get stability info
-      const stabilityInfo = await stabilityContract.getStabilityInfo();
-      const marketConditions = await stabilityContract.getMarketConditions();
-      const circuitBreaker = await stabilityContract.getCircuitBreakerStatus();
+      const [stabilityInfo, marketConditions, circuitBreaker, statsView, blockNumber] = await Promise.all([
+        stabilityContract.getStabilityInfo(),
+        stabilityContract.getMarketConditions(),
+        stabilityContract.getCircuitBreakerStatus(),
+        savingsContract.getStatsView(),
+        provider.getBlockNumber()
+      ]);
       
-      // Get savings stats
-      const statsView = await savingsContract.getStatsView();
-      
-      // Get current block
-      const blockNumber = await provider.getBlockNumber();
       const block = await provider.getBlock(blockNumber);
       
       setAdminStats({
-        // Protocol Overview
         totalValueLocked: ethers.utils.formatUnits(statsView[0], 18),
         totalAccountsCreated: statsView[1].toNumber(),
         totalGoalsCompleted: statsView[2].toNumber(),
         totalActiveBalance: ethers.utils.formatUnits(statsView[3], 18),
         totalRewardsDistributed: ethers.utils.formatUnits(statsView[4], 18),
         totalFeesCollected: ethers.utils.formatUnits(statsView[5], 18),
-        
-        // Stability Mechanism
         currentPrice: ethers.utils.formatUnits(stabilityInfo[0], 18),
-        baselinePrice: ethers.utils.formatUnits(stabilityInfo[0], 18), // Simplified
+        baselinePrice: ethers.utils.formatUnits(stabilityInfo[6], 18),
         tokenBalance: ethers.utils.formatUnits(stabilityInfo[1], 18),
         totalInterventions: stabilityInfo[2].toNumber(),
         totalTokensUsed: ethers.utils.formatUnits(stabilityInfo[3], 18),
         totalETHCaptured: ethers.utils.formatUnits(stabilityInfo[4], 18),
         totalETHSentToValidators: ethers.utils.formatUnits(stabilityInfo[5], 18),
-        priceIncreaseFromBaseline: stabilityInfo[7].toString(),
-        
-        // Circuit Breaker
+        priceIncreasePercent: stabilityInfo[7].toNumber(),
         circuitBreakerTripped: circuitBreaker[0],
         interventionsToday: circuitBreaker[1].toNumber(),
         tokensUsedToday: ethers.utils.formatUnits(circuitBreaker[2], 18),
-        
-        // Market Conditions
         marketHighVolatility: marketConditions[0],
         currentCheckInterval: marketConditions[1].toNumber(),
         blocksSinceLastSpike: marketConditions[2].toNumber(),
         dailyInterventionCount: marketConditions[3].toNumber(),
-        
-        // System Health
         blockNumber: blockNumber,
         lastBlockTime: block.timestamp,
-        isSequencerHealthy: true, // Simplified
+        isSequencerHealthy: true,
         isPriceOracleHealthy: stabilityInfo[0].gt(0)
       });
     } catch (error) {
@@ -220,14 +192,11 @@ function App() {
     try {
       setLoading(true);
       const tx = await stabilityContract.resetCircuitBreaker();
-      await toast.promise(
-        tx.wait(),
-        {
-          loading: '🔧 Resetting circuit breaker...',
-          success: '✅ Circuit breaker reset!',
-          error: '❌ Failed to reset'
-        }
-      );
+      await toast.promise(tx.wait(), {
+        loading: '🔧 Resetting circuit breaker...',
+        success: '✅ Circuit breaker reset!',
+        error: '❌ Failed to reset'
+      });
       await loadAdminStats();
     } catch (error) {
       console.error(error);
@@ -241,14 +210,11 @@ function App() {
     try {
       setLoading(true);
       const tx = await stabilityContract.toggleSystemChecks();
-      await toast.promise(
-        tx.wait(),
-        {
-          loading: '🔧 Toggling system checks...',
-          success: '✅ System checks toggled!',
-          error: '❌ Failed to toggle'
-        }
-      );
+      await toast.promise(tx.wait(), {
+        loading: '🔧 Toggling system checks...',
+        success: '✅ System checks toggled!',
+        error: '❌ Failed to toggle'
+      });
       await loadAdminStats();
     } catch (error) {
       console.error(error);
@@ -264,18 +230,51 @@ function App() {
       const tx = await stabilityContract.manualStabilityCheck({
         value: ethers.utils.parseEther("0.01")
       });
-      await toast.promise(
-        tx.wait(),
-        {
-          loading: '🔍 Running stability check...',
-          success: '✅ Stability check complete!',
-          error: '❌ Check failed'
-        }
-      );
+      await toast.promise(tx.wait(), {
+        loading: '🔍 Running stability check...',
+        success: '✅ Stability check complete!',
+        error: '❌ Check failed'
+      });
       await loadAdminStats();
     } catch (error) {
       console.error(error);
-      toast.error('Failed to run stability check');
+      toast.error('Failed to run stability check: ' + (error.reason || error.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const updateBaselinePrice = async () => {
+    try {
+      setLoading(true);
+      const tx = await stabilityContract.updateBaselinePrice();
+      await toast.promise(tx.wait(), {
+        loading: '📊 Updating baseline price...',
+        success: '✅ Baseline price updated!',
+        error: '❌ Failed to update baseline'
+      });
+      await loadAdminStats();
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to update baseline: ' + (error.reason || error.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const triggerSystemCheck = async () => {
+    try {
+      setLoading(true);
+      const tx = await stabilityContract.systemStabilityCheck();
+      await toast.promise(tx.wait(), {
+        loading: '⚡ Triggering system stability check...',
+        success: '✅ System check triggered!',
+        error: '❌ Check failed'
+      });
+      await loadAdminStats();
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to trigger system check: ' + (error.reason || error.message));
     } finally {
       setLoading(false);
     }
@@ -286,7 +285,6 @@ function App() {
     const init = async () => {
       setIsAppLoading(true);
       
-      // Initialize Web3Modal
       const web3ModalInstance = new Web3Modal({
         cacheProvider: true,
         providerOptions
@@ -294,7 +292,6 @@ function App() {
       
       setWeb3Modal(web3ModalInstance);
       
-      // Fetch ETH prices
       try {
         const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd,eur,gbp,jpy,cny,cad,aud,chf,inr,krw');
         const data = await response.json();
@@ -304,26 +301,23 @@ function App() {
         setEthPrice({ usd: 2000, eur: 1850, gbp: 1600, jpy: 280000, cny: 14000, cad: 2600, aud: 3000, chf: 1800, inr: 165000, krw: 2600000 });
       }
       
-      setTimeout(() => setIsAppLoading(false), 2000);
+      setTimeout(() => setIsAppLoading(false), 1500);
     };
     
     init();
   }, []);
 
-  // Auto-reconnect wallet if cached
+  // Auto-reconnect wallet if cached - FIX: Prevent multiple connections
   useEffect(() => {
-    if (web3Modal && web3Modal.cachedProvider && !account) {
+    if (web3Modal && web3Modal.cachedProvider && !account && !isConnecting) {
       connectWallet();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [web3Modal, account]);
+  }, [web3Modal]);
   
   // Format currency
   const formatCurrency = (amount, currency = 'eur') => {
-    const curr = Object.entries(CURRENCIES).find(([_, info]) => info.code === currency) || ['EUR', CURRENCIES.EUR];
-    const locale = curr[1].locale;
-    
-    return new Intl.NumberFormat(locale, {
+    const curr = Object.entries(CURRENCIES).find(([key, _]) => key.toLowerCase() === currency.toLowerCase()) || ['EUR', CURRENCIES.EUR];
+    return new Intl.NumberFormat(curr[1].locale, {
       style: 'currency',
       currency: curr[0],
       minimumFractionDigits: curr[1].decimals,
@@ -376,22 +370,24 @@ function App() {
     estimateOooweee();
   }, [ethToBuy, routerContract]);
 
-  // Load validator stats - UPDATED for new contract
+  // Load validator stats - with error handling
   const loadValidatorStats = useCallback(async () => {
+    if (!validatorFundContract) return;
+    
     try {
-      const stats = await validatorFundContract.getStats();
-      const ethNeeded = await validatorFundContract.ethUntilNextValidator();
-      const [progress] = await validatorFundContract.progressToNextValidator();
+      const [stats, ethNeeded, progressData] = await Promise.all([
+        validatorFundContract.getStats(),
+        validatorFundContract.ethUntilNextValidator(),
+        validatorFundContract.progressToNextValidator()
+      ]);
       
-      // Fetch total rewards separately as it's not in getStats
       let totalRewards = ethers.BigNumber.from(0);
       try {
         totalRewards = await validatorFundContract.totalValidatorRewards();
       } catch (e) {
-        console.log("Could not fetch totalValidatorRewards", e);
+        // totalValidatorRewards might not be accessible
       }
 
-      // Calculate fromStability: totalETHReceived (index 3) - totalDonations (index 4)
       const totalETHReceived = stats[3];
       const totalDonations = stats[4];
       const fromStability = totalETHReceived.sub(totalDonations);
@@ -399,7 +395,7 @@ function App() {
       setValidatorStats({
         validators: stats[0].toString(),
         nextValidatorIn: ethers.utils.formatEther(ethNeeded),
-        progress: (parseFloat(ethers.utils.formatEther(progress)) / 32) * 100,
+        progress: (parseFloat(ethers.utils.formatEther(progressData[0])) / 32) * 100,
         pendingETH: ethers.utils.formatEther(stats[1]),
         totalDonations: ethers.utils.formatEther(totalDonations),
         donors: stats[5].toString(),
@@ -450,7 +446,6 @@ function App() {
       const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.OOOWEEEToken];
       const deadline = Math.floor(Date.now() / 1000) + 3600;
       
-      // Get minimum output (with 3% slippage to match contracts)
       const amounts = await routerContract.getAmountsOut(ethAmount, path);
       const minOutput = amounts[1].mul(97).div(100);
       
@@ -462,14 +457,11 @@ function App() {
         { value: ethAmount }
       );
       
-      await toast.promise(
-        tx.wait(),
-        {
-          loading: '🔄 Swapping ETH for OOOWEEE...',
-          success: `🎉 Bought ${parseFloat(estimatedOooweee).toFixed(2)} OOOWEEE!`,
-          error: '❌ Swap failed'
-        }
-      );
+      await toast.promise(tx.wait(), {
+        loading: '🔄 Swapping ETH for OOOWEEE...',
+        success: `🎉 Bought ${parseFloat(estimatedOooweee).toFixed(2)} OOOWEEE!`,
+        error: '❌ Swap failed'
+      });
       
       setShowBuyModal(false);
       await loadBalances(account, provider, tokenContract);
@@ -490,7 +482,7 @@ function App() {
 
   // Buy and create account
   const buyAndCreateAccount = async (requiredOooweee) => {
-    const requiredEth = requiredOooweee * oooweeePrice * 1.05; // Add 5% buffer
+    const requiredEth = requiredOooweee * oooweeePrice * 1.05;
     
     const result = await toast.promise(
       new Promise(async (resolve, reject) => {
@@ -502,7 +494,7 @@ function App() {
           const deadline = Math.floor(Date.now() / 1000) + 3600;
           
           const amounts = await routerContract.getAmountsOut(ethAmount, path);
-          const minOutput = amounts[1].mul(97).div(100); // 3% slippage
+          const minOutput = amounts[1].mul(97).div(100);
           
           const tx = await routerContract.swapExactETHForTokens(
             minOutput,
@@ -529,9 +521,12 @@ function App() {
     return result;
   };
 
-  // Connect wallet
+  // Connect wallet - FIX: Prevent duplicate connections
   const connectWallet = async () => {
+    if (isConnecting) return;
+    
     try {
+      setIsConnecting(true);
       setLoading(true);
       
       if (!web3Modal) {
@@ -544,15 +539,15 @@ function App() {
       const signer = web3Provider.getSigner();
       const address = await signer.getAddress();
       
-      // Check network
       const network = await web3Provider.getNetwork();
       if (network.chainId !== 11155111) {
         toast.error('Please switch to Sepolia network');
         setLoading(false);
+        setIsConnecting(false);
         return;
       }
       
-      // Initialize contracts - UPDATED
+      // Initialize contracts
       const token = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEToken, OOOWEEETokenABI, signer);
       const savings = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEESavings, OOOWEEESavingsABI, signer);
       const validatorFund = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEValidatorFund, OOOWEEEValidatorFundABI, signer);
@@ -567,9 +562,9 @@ function App() {
       setStabilityContract(stability);
       setRouterContract(router);
       
-      // Load user data
+      // Load user data (read-only operations)
       await loadBalances(address, web3Provider, token);
-      await loadSavingsAccounts(address, savings);
+      await loadSavingsAccounts(address, savings, web3Provider);
       
       // Subscribe to events
       if (instance.on) {
@@ -580,13 +575,15 @@ function App() {
       toast.success('Wallet connected!');
     } catch (error) {
       console.error(error);
-      toast.error('Failed to connect wallet');
+      if (error.message !== 'User closed modal') {
+        toast.error('Failed to connect wallet');
+      }
     } finally {
       setLoading(false);
+      setIsConnecting(false);
     }
   };
 
-  // Handle account change
   const handleAccountsChanged = async (accounts) => {
     if (accounts.length === 0) {
       disconnectWallet();
@@ -595,12 +592,10 @@ function App() {
     }
   };
 
-  // Handle chain change
   const handleChainChanged = (chainId) => {
     window.location.reload();
   };
 
-  // Donate to validators
   const donateToValidators = async () => {
     const amount = prompt('Enter ETH amount to donate:');
     if (amount && parseFloat(amount) > 0) {
@@ -610,14 +605,11 @@ function App() {
           value: ethers.utils.parseEther(amount) 
         });
         
-        await toast.promise(
-          tx.wait(),
-          {
-            loading: '💰 Sending donation...',
-            success: `🎉 Donated ${amount} ETH to validator fund!`,
-            error: '❌ Donation failed'
-          }
-        );
+        await toast.promise(tx.wait(), {
+          loading: '💰 Sending donation...',
+          success: `🎉 Donated ${amount} ETH to validator fund!`,
+          error: '❌ Donation failed'
+        });
         
         await loadValidatorStats();
       } catch (error) {
@@ -633,7 +625,6 @@ function App() {
     }
   };
 
-  // Disconnect wallet
   const disconnectWallet = async () => {
     if (web3Modal) {
       web3Modal.clearCachedProvider();
@@ -658,61 +649,92 @@ function App() {
 
   const loadBalances = async (account, provider, tokenContract) => {
     try {
-      const tokenBal = await tokenContract.balanceOf(account);
-      setBalance(ethers.utils.formatUnits(tokenBal, 18));
+      const [tokenBal, ethBal] = await Promise.all([
+        tokenContract.balanceOf(account),
+        provider.getBalance(account)
+      ]);
       
-      const ethBal = await provider.getBalance(account);
+      setBalance(ethers.utils.formatUnits(tokenBal, 18));
       setEthBalance(ethers.utils.formatEther(ethBal));
     } catch (error) {
       console.error('Error loading balances:', error);
     }
   };
 
-  const loadSavingsAccounts = async (account, savingsContract) => {
+  // FIX: Calculate progress locally instead of calling state-changing function
+  const calculateProgress = (acc, oooweeePrice, ethPrice) => {
+    if (acc.type === 'Time') {
+      // Time accounts: progress based on time
+      const now = Math.floor(Date.now() / 1000);
+      const created = acc.createdAt || now;
+      const unlock = acc.unlockTime;
+      if (unlock <= now) return 100;
+      const total = unlock - created;
+      const elapsed = now - created;
+      return Math.min(100, Math.floor((elapsed / total) * 100));
+    }
+    
+    if (acc.isFiatTarget && acc.targetFiat > 0) {
+      // Calculate current fiat value from token balance
+      const currencyCode = getCurrencyFromCode(acc.targetCurrency);
+      const ethPriceForCurrency = ethPrice?.[currencyCode.toLowerCase()] || ethPrice?.eur || 1850;
+      const tokenValueInEth = parseFloat(acc.balance) * oooweeePrice;
+      const currentFiatValue = tokenValueInEth * ethPriceForCurrency;
+      
+      // targetFiat is in smallest units (cents)
+      const targetFiatValue = acc.targetFiat / 100;
+      
+      if (targetFiatValue <= 0) return 0;
+      return Math.min(100, Math.floor((currentFiatValue / targetFiatValue) * 100));
+    }
+    
+    if (parseFloat(acc.target) > 0) {
+      return Math.min(100, Math.floor((parseFloat(acc.balance) / parseFloat(acc.target)) * 100));
+    }
+    
+    return 0;
+  };
+
+  const loadSavingsAccounts = async (account, savingsContract, provider) => {
     try {
       const accountIds = await savingsContract.getUserAccounts(account);
       const accountDetails = [];
       
       for (let id of accountIds) {
         try {
-          // Use new getAccountDetails function
           const info = await savingsContract.getAccountDetails(account, id);
           
-          // Get progress if it's a fiat target
-          let progress = '0';
-          let currentFiatValue = 0;
-          
-          // info[4] is targetFiat (uint256)
-          if (info[4].gt(0)) {
-             try {
-               const progressInfo = await savingsContract.getAccountFiatProgress(account, id);
-               currentFiatValue = progressInfo[0].toNumber(); // currentValue
-               progress = progressInfo[2].toString(); // percentComplete
-             } catch (e) {
-               console.log("Error fetching progress", e);
-             }
-          }
-
           const ACCOUNT_TYPES = ['Time', 'Balance', 'Growth'];
 
-          accountDetails.push({
+          const accData = {
             id: id.toString(),
-            type: ACCOUNT_TYPES[info[0]], // accountType mapped to string
-            isActive: info[1], // isActive
-            balance: ethers.utils.formatUnits(info[2], 18), // balance (includes pending rewards)
-            target: ethers.utils.formatUnits(info[3], 18), // targetAmount
-            targetFiat: info[4].toNumber(), // targetFiat
-            targetCurrency: info[5], // targetCurrency
-            unlockTime: info[6].toNumber(), // unlockTime
-            recipient: info[7], // recipient
-            goalName: info[8], // goalName
-            
-            // Derived/Extra fields
-            currentFiatValue: currentFiatValue,
-            progress: progress,
-            pendingRewards: '0', // Included in balance now
+            type: ACCOUNT_TYPES[info[0]],
+            isActive: info[1],
+            balance: ethers.utils.formatUnits(info[2], 18),
+            target: ethers.utils.formatUnits(info[3], 18),
+            targetFiat: info[4].toNumber(),
+            targetCurrency: info[5],
+            unlockTime: info[6].toNumber(),
+            recipient: info[7],
+            goalName: info[8],
+            pendingRewards: '0',
             isFiatTarget: info[4].gt(0)
-          });
+          };
+          
+          // Calculate progress locally
+          accData.progress = calculateProgress(accData, oooweeePrice, ethPrice);
+          
+          // Calculate current fiat value for display
+          if (accData.isFiatTarget) {
+            const currencyCode = getCurrencyFromCode(accData.targetCurrency);
+            const ethPriceForCurrency = ethPrice?.[currencyCode.toLowerCase()] || ethPrice?.eur || 1850;
+            const tokenValueInEth = parseFloat(accData.balance) * oooweeePrice;
+            accData.currentFiatValue = Math.floor(tokenValueInEth * ethPriceForCurrency * 100); // In cents
+          } else {
+            accData.currentFiatValue = 0;
+          }
+          
+          accountDetails.push(accData);
         } catch (error) {
           console.error(`Error loading account ${id}:`, error);
         }
@@ -724,23 +746,18 @@ function App() {
     }
   };
 
-  // Claim rewards for an account - NEW
   const claimRewards = async (accountId) => {
     try {
       setLoading(true);
-      
       const tx = await savingsContract.claimRewards(accountId);
       
-      await toast.promise(
-        tx.wait(),
-        {
-          loading: '🎁 Claiming rewards...',
-          success: '✅ Rewards claimed!',
-          error: '❌ Failed to claim rewards'
-        }
-      );
+      await toast.promise(tx.wait(), {
+        loading: '🎁 Claiming rewards...',
+        success: '✅ Rewards claimed!',
+        error: '❌ Failed to claim rewards'
+      });
       
-      await loadSavingsAccounts(account, savingsContract);
+      await loadSavingsAccounts(account, savingsContract, provider);
       
     } catch (error) {
       console.error(error);
@@ -750,23 +767,18 @@ function App() {
     }
   };
 
-  // Claim all rewards - NEW
   const claimAllRewards = async () => {
     try {
       setLoading(true);
-      
       const tx = await savingsContract.claimAllRewards();
       
-      await toast.promise(
-        tx.wait(),
-        {
-          loading: '🎁 Claiming all rewards (max 20 accounts)...',
-          success: '✅ All rewards claimed!',
-          error: '❌ Failed to claim rewards'
-        }
-      );
+      await toast.promise(tx.wait(), {
+        loading: '🎁 Claiming all rewards...',
+        success: '✅ All rewards claimed!',
+        error: '❌ Failed to claim rewards'
+      });
       
-      await loadSavingsAccounts(account, savingsContract);
+      await loadSavingsAccounts(account, savingsContract, provider);
       
     } catch (error) {
       console.error(error);
@@ -780,7 +792,6 @@ function App() {
     try {
       setLoading(true);
       
-      // Check if user has enough OOOWEEE
       if (parseFloat(balance) < parseFloat(initialDeposit)) {
         const needed = parseFloat(initialDeposit) - parseFloat(balance);
         
@@ -797,14 +808,11 @@ function App() {
       
       const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
       
-      await toast.promise(
-        approveTx.wait(),
-        {
-          loading: '🔓 Approving tokens...',
-          success: '✅ Tokens approved!',
-          error: '❌ Failed to approve'
-        }
-      );
+      await toast.promise(approveTx.wait(), {
+        loading: '🔓 Approving tokens...',
+        success: '✅ Tokens approved!',
+        error: '❌ Failed to approve'
+      });
       
       const createTx = await savingsContract.createTimeAccountFiat(
         unlockTime,
@@ -813,34 +821,43 @@ function App() {
         CURRENCIES[currency].code
       );
       
-      await toast.promise(
-        createTx.wait(),
-        {
-          loading: '🐷 Creating piggy bank...',
-          success: `🎉 Time account created with ${initialDeposit} $OOOWEEE! (1% fee applied)`,
-          error: '❌ Failed to create account'
-        }
-      );
+      await toast.promise(createTx.wait(), {
+        loading: '🐷 Creating piggy bank...',
+        success: `🎉 Time account created with ${initialDeposit} $OOOWEEE!`,
+        error: '❌ Failed to create account'
+      });
       
-      await loadSavingsAccounts(account, savingsContract);
+      await loadSavingsAccounts(account, savingsContract, provider);
       await loadBalances(account, provider, tokenContract);
     } catch (error) {
       console.error(error);
       if (error.code === 'ACTION_REJECTED') {
         toast.error('Transaction cancelled');
       } else {
-        toast.error('Failed to create account');
+        toast.error('Failed to create account: ' + (error.reason || error.message));
       }
     } finally {
       setLoading(false);
     }
   };
 
+  // FIX: Better validation for Growth account creation
   const createGrowthAccount = async (targetAmount, goalName, initialDeposit, currency) => {
     try {
       setLoading(true);
       
-      // Check if user has enough OOOWEEE
+      // Calculate initial fiat value to validate
+      const currencyCode = currency.toLowerCase();
+      const ethPriceForCurrency = ethPrice?.[currencyCode] || ethPrice?.eur || 1850;
+      const initialDepositFiatValue = parseFloat(initialDeposit) * oooweeePrice * ethPriceForCurrency;
+      
+      // Contract requires target > initial value
+      if (initialDepositFiatValue >= parseFloat(targetAmount)) {
+        toast.error(`Initial deposit value (${formatCurrency(initialDepositFiatValue, currency)}) must be less than target (${formatCurrency(targetAmount, currency)}). Use a smaller deposit or higher target.`);
+        setLoading(false);
+        return;
+      }
+      
       if (parseFloat(balance) < parseFloat(initialDeposit)) {
         const needed = parseFloat(initialDeposit) - parseFloat(balance);
         
@@ -852,20 +869,16 @@ function App() {
         }
       }
       
-      // Convert target to smallest unit (cents, pence, etc)
       const targetInSmallestUnit = Math.round(targetAmount * Math.pow(10, CURRENCIES[currency].decimals));
       const depositAmount = ethers.utils.parseUnits(initialDeposit.toString(), 18);
       
       const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
       
-      await toast.promise(
-        approveTx.wait(),
-        {
-          loading: '🔓 Approving tokens...',
-          success: '✅ Tokens approved!',
-          error: '❌ Failed to approve'
-        }
-      );
+      await toast.promise(approveTx.wait(), {
+        loading: '🔓 Approving tokens...',
+        success: '✅ Tokens approved!',
+        error: '❌ Failed to approve'
+      });
       
       const createTx = await savingsContract.createGrowthAccountFiat(
         targetInSmallestUnit,
@@ -874,23 +887,22 @@ function App() {
         depositAmount
       );
       
-      await toast.promise(
-        createTx.wait(),
-        {
-          loading: '🌱 Planting money tree...',
-          success: `🎉 Growth account created! Target: ${CURRENCIES[currency].symbol}${targetAmount}`,
-          error: '❌ Failed to create account'
-        }
-      );
+      await toast.promise(createTx.wait(), {
+        loading: '🌱 Planting money tree...',
+        success: `🎉 Growth account created! Target: ${CURRENCIES[currency].symbol}${targetAmount}`,
+        error: '❌ Failed to create account'
+      });
       
-      await loadSavingsAccounts(account, savingsContract);
+      await loadSavingsAccounts(account, savingsContract, provider);
       await loadBalances(account, provider, tokenContract);
     } catch (error) {
       console.error(error);
       if (error.code === 'ACTION_REJECTED') {
         toast.error('Transaction cancelled');
+      } else if (error.reason?.includes('Target must be higher')) {
+        toast.error('Target must be higher than initial deposit value');
       } else {
-        toast.error('Failed to create account');
+        toast.error('Failed to create account: ' + (error.reason || error.message));
       }
     } finally {
       setLoading(false);
@@ -901,7 +913,6 @@ function App() {
     try {
       setLoading(true);
       
-      // Check if user has enough OOOWEEE
       if (parseFloat(balance) < parseFloat(initialDeposit)) {
         const needed = parseFloat(initialDeposit) - parseFloat(balance);
         
@@ -913,20 +924,16 @@ function App() {
         }
       }
       
-      // Convert target to smallest unit
       const targetInSmallestUnit = Math.round(targetAmount * Math.pow(10, CURRENCIES[currency].decimals));
       const depositAmount = ethers.utils.parseUnits(initialDeposit.toString(), 18);
       
       const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
       
-      await toast.promise(
-        approveTx.wait(),
-        {
-          loading: '🔓 Approving tokens...',
-          success: '✅ Tokens approved!',
-          error: '❌ Failed to approve'
-        }
-      );
+      await toast.promise(approveTx.wait(), {
+        loading: '🔓 Approving tokens...',
+        success: '✅ Tokens approved!',
+        error: '❌ Failed to approve'
+      });
       
       const createTx = await savingsContract.createBalanceAccountFiat(
         targetInSmallestUnit,
@@ -936,23 +943,20 @@ function App() {
         depositAmount
       );
       
-      await toast.promise(
-        createTx.wait(),
-        {
-          loading: '⚖️ Setting up balance account...',
-          success: `🎉 Balance account created! Will send to ${recipientAddress.slice(0,6)}...`,
-          error: '❌ Failed to create account'
-        }
-      );
+      await toast.promise(createTx.wait(), {
+        loading: '⚖️ Setting up balance account...',
+        success: `🎉 Balance account created! Will send to ${recipientAddress.slice(0,6)}...`,
+        error: '❌ Failed to create account'
+      });
       
-      await loadSavingsAccounts(account, savingsContract);
+      await loadSavingsAccounts(account, savingsContract, provider);
       await loadBalances(account, provider, tokenContract);
     } catch (error) {
       console.error(error);
       if (error.code === 'ACTION_REJECTED') {
         toast.error('Transaction cancelled');
       } else {
-        toast.error('Failed to create account');
+        toast.error('Failed to create account: ' + (error.reason || error.message));
       }
     } finally {
       setLoading(false);
@@ -1009,14 +1013,12 @@ function App() {
       const depositAmountNumber = parseFloat(amount);
       const currentBalance = parseFloat(balance);
       
-      // Check if user has enough OOOWEEE
       if (currentBalance < depositAmountNumber) {
         const needed = depositAmountNumber - currentBalance;
         
         if (window.confirm(`You need ${needed.toFixed(2)} more OOOWEEE. Buy with ETH now?`)) {
-          const requiredEth = needed * oooweeePrice * 1.05; // 5% buffer for slippage
+          const requiredEth = needed * oooweeePrice * 1.05;
           
-          // Check ETH balance
           if (parseFloat(ethBalance) < requiredEth) {
             toast.error(`Insufficient ETH. Need ${requiredEth.toFixed(4)} ETH`);
             setLoading(false);
@@ -1027,7 +1029,6 @@ function App() {
           const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.OOOWEEEToken];
           const deadline = Math.floor(Date.now() / 1000) + 3600;
           
-          // Get expected output with slippage
           const minOutput = ethers.utils.parseUnits(needed.toFixed(0), 18).mul(97).div(100);
           
           const buyTx = await routerContract.swapExactETHForTokens(
@@ -1038,16 +1039,12 @@ function App() {
             { value: ethAmount }
           );
           
-          await toast.promise(
-            buyTx.wait(),
-            {
-              loading: `🔄 Buying ${needed.toFixed(0)} OOOWEEE...`,
-              success: '✅ OOOWEEE purchased!',
-              error: '❌ Failed to buy OOOWEEE'
-            }
-          );
+          await toast.promise(buyTx.wait(), {
+            loading: `🔄 Buying ${needed.toFixed(0)} OOOWEEE...`,
+            success: '✅ OOOWEEE purchased!',
+            error: '❌ Failed to buy OOOWEEE'
+          });
           
-          // Reload balance after purchase
           await loadBalances(account, provider, tokenContract);
         } else {
           setLoading(false);
@@ -1055,32 +1052,25 @@ function App() {
         }
       }
       
-      // Now deposit the originally requested amount
       const depositAmount = ethers.utils.parseUnits(depositAmountNumber.toString(), 18);
       
       const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
       
-      await toast.promise(
-        approveTx.wait(),
-        {
-          loading: '🔓 Approving tokens...',
-          success: '✅ Tokens approved!',
-          error: '❌ Failed to approve'
-        }
-      );
+      await toast.promise(approveTx.wait(), {
+        loading: '🔓 Approving tokens...',
+        success: '✅ Tokens approved!',
+        error: '❌ Failed to approve'
+      });
       
       const depositTx = await savingsContract.deposit(accountId, depositAmount);
       
-      await toast.promise(
-        depositTx.wait(),
-        {
-          loading: `💰 Depositing ${depositAmountNumber} OOOWEEE...`,
-          success: `🎉 Deposited ${depositAmountNumber} $OOOWEEE!`,
-          error: '❌ Failed to deposit'
-        }
-      );
+      await toast.promise(depositTx.wait(), {
+        loading: `💰 Depositing ${depositAmountNumber} OOOWEEE...`,
+        success: `🎉 Deposited ${depositAmountNumber} $OOOWEEE!`,
+        error: '❌ Failed to deposit'
+      });
       
-      await loadSavingsAccounts(account, savingsContract);
+      await loadSavingsAccounts(account, savingsContract, provider);
       await loadBalances(account, provider, tokenContract);
 
     } catch (error) {
@@ -1101,25 +1091,18 @@ function App() {
     return Math.max(0, Math.floor(remaining / 86400));
   };
 
-  // Get currency code from number
   const getCurrencyFromCode = (code) => {
     const currencies = Object.keys(CURRENCIES);
     return currencies[code] || 'EUR';
   };
 
-  // Filter accounts
   const activeAccounts = accounts.filter(acc => acc.isActive);
   const completedAccounts = accounts.filter(acc => !acc.isActive);
 
-  // Show loading screen
   if (isAppLoading) {
     return (
       <div className="loading-screen">
-        <img 
-          src={oooweeLogo} 
-          alt="Loading..." 
-          className="loading-logo pixel-art"
-        />
+        <img src={oooweeLogo} alt="Loading..." className="loading-logo pixel-art" />
         <div className="loading-bar">
           <div className="loading-progress"></div>
         </div>
@@ -1128,7 +1111,6 @@ function App() {
     );
   }
 
-  // Buy Modal
   const BuyModal = () => (
     <div className="modal-overlay" onClick={() => setShowBuyModal(false)}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -1157,9 +1139,7 @@ function App() {
             <p>You will receive approximately:</p>
             <h3>{parseFloat(estimatedOooweee).toLocaleString()} $OOOWEEE</h3>
             {ethPrice && (
-              <p className="fiat-value">
-                ≈ {getOooweeeInFiat(estimatedOooweee, 'eur')}
-              </p>
+              <p className="fiat-value">≈ {getOooweeeInFiat(estimatedOooweee, 'eur')}</p>
             )}
           </div>
           
@@ -1182,7 +1162,6 @@ function App() {
     </div>
   );
 
-  // About page content
   const renderAboutPage = () => (
     <div className="about-page">
       <div className="about-header">
@@ -1255,17 +1234,14 @@ function App() {
       <div className="cta-section">
         <h2>🚀 Join the Revolution</h2>
         <p>Take control of your financial future. Start saving with OOOWEEE today.</p>
-        <button 
-          onClick={() => setActiveTab('dashboard')} 
-          className="cta-button rainbow-btn"
-        >
+        <button onClick={() => setActiveTab('dashboard')} className="cta-button rainbow-btn">
           Start Saving Now
         </button>
       </div>
     </div>
   );
   
-  // Admin Dashboard
+  // Improved Admin Dashboard
   const renderAdminDashboard = () => (
     <div className="admin-dashboard">
       <div className="admin-header">
@@ -1274,33 +1250,33 @@ function App() {
       </div>
       
       {/* System Health Overview */}
-      <div className="admin-section system-health">
+      <div className="admin-section">
         <h2>🟢 System Health</h2>
-        <div className="health-grid">
-          <div className="health-card">
-            <span className="health-icon">{adminStats.isSequencerHealthy ? '✅' : '🔴'}</span>
-            <div>
+        <div className="admin-grid-4">
+          <div className="admin-card">
+            <div className="admin-card-icon">{adminStats.isSequencerHealthy ? '✅' : '🔴'}</div>
+            <div className="admin-card-content">
               <h4>L2 Chain</h4>
               <p>Block #{adminStats.blockNumber}</p>
             </div>
           </div>
-          <div className="health-card">
-            <span className="health-icon">{adminStats.isPriceOracleHealthy ? '✅' : '🔴'}</span>
-            <div>
+          <div className="admin-card">
+            <div className="admin-card-icon">{adminStats.isPriceOracleHealthy ? '✅' : '🔴'}</div>
+            <div className="admin-card-content">
               <h4>Price Oracle</h4>
-              <p>${parseFloat(oooweeePrice).toFixed(6)}</p>
+              <p>${parseFloat(oooweeePrice).toFixed(8)}</p>
             </div>
           </div>
-          <div className="health-card">
-            <span className="health-icon">{!adminStats.circuitBreakerTripped ? '✅' : '🔴'}</span>
-            <div>
+          <div className="admin-card">
+            <div className="admin-card-icon">{!adminStats.circuitBreakerTripped ? '✅' : '🔴'}</div>
+            <div className="admin-card-content">
               <h4>Circuit Breaker</h4>
               <p>{adminStats.circuitBreakerTripped ? 'TRIPPED' : 'Active'}</p>
             </div>
           </div>
-          <div className="health-card">
-            <span className="health-icon">{adminStats.marketHighVolatility ? '⚠️' : '✅'}</span>
-            <div>
+          <div className="admin-card">
+            <div className="admin-card-icon">{adminStats.marketHighVolatility ? '⚠️' : '✅'}</div>
+            <div className="admin-card-content">
               <h4>Market Status</h4>
               <p>{adminStats.marketHighVolatility ? 'High Volatility' : 'Normal'}</p>
             </div>
@@ -1309,25 +1285,26 @@ function App() {
       </div>
       
       {/* Protocol Metrics */}
-      <div className="admin-section protocol-metrics">
+      <div className="admin-section">
         <h2>📊 Protocol Metrics</h2>
-        <div className="metrics-grid">
-          <div className="metric-card">
+        <div className="admin-grid-4">
+          <div className="admin-card metric">
             <h4>Total Value Locked</h4>
-            <p className="metric-value">{parseFloat(adminStats.totalValueLocked).toLocaleString()} OOOWEEE</p>
+            <p className="metric-value">{parseFloat(adminStats.totalValueLocked).toLocaleString()}</p>
+            <span className="metric-label">OOOWEEE</span>
             <span className="metric-usd">≈ {getOooweeeInFiat(adminStats.totalValueLocked, 'eur')}</span>
           </div>
-          <div className="metric-card">
+          <div className="admin-card metric">
             <h4>Total Accounts</h4>
             <p className="metric-value">{adminStats.totalAccountsCreated}</p>
             <span className="metric-label">({adminStats.totalGoalsCompleted} completed)</span>
           </div>
-          <div className="metric-card">
+          <div className="admin-card metric">
             <h4>Active Balance</h4>
             <p className="metric-value">{parseFloat(adminStats.totalActiveBalance).toLocaleString()}</p>
             <span className="metric-label">OOOWEEE</span>
           </div>
-          <div className="metric-card">
+          <div className="admin-card metric">
             <h4>Fees Collected</h4>
             <p className="metric-value">{parseFloat(adminStats.totalFeesCollected).toFixed(2)}</p>
             <span className="metric-label">OOOWEEE</span>
@@ -1336,127 +1313,167 @@ function App() {
       </div>
       
       {/* Stability Mechanism */}
-      <div className="admin-section stability-section">
+      <div className="admin-section">
         <h2>🛡️ Stability Mechanism (SSA)</h2>
-        <div className="stability-grid">
-          <div className="stability-stat">
-            <label>Reserve Balance</label>
-            <p>{parseFloat(adminStats.tokenBalance).toLocaleString()} OOOWEEE</p>
+        
+        <div className="stability-info-banner">
+          <div className="stability-price-info">
+            <div className="price-item">
+              <label>Current Price</label>
+              <span>{parseFloat(adminStats.currentPrice).toFixed(12)} ETH</span>
+            </div>
+            <div className="price-item">
+              <label>Baseline Price</label>
+              <span>{parseFloat(adminStats.baselinePrice).toFixed(12)} ETH</span>
+            </div>
+            <div className="price-item highlight">
+              <label>Price Increase</label>
+              <span className={adminStats.priceIncreasePercent > 20 ? 'warning' : ''}>
+                {adminStats.priceIncreasePercent}%
+              </span>
+            </div>
           </div>
-          <div className="stability-stat">
-            <label>Interventions Today</label>
-            <p>{adminStats.interventionsToday} / 10</p>
+        </div>
+        
+        <div className="admin-grid-3">
+          <div className="admin-card">
+            <h4>Reserve Balance</h4>
+            <p className="metric-value">{parseFloat(adminStats.tokenBalance).toLocaleString()}</p>
+            <span className="metric-label">OOOWEEE</span>
           </div>
-          <div className="stability-stat">
-            <label>Tokens Used Today</label>
-            <p>{parseFloat(adminStats.tokensUsedToday).toFixed(0)} / 1,000,000</p>
+          <div className="admin-card">
+            <h4>Interventions Today</h4>
+            <p className="metric-value">{adminStats.interventionsToday} / 10</p>
+            <div className="mini-progress">
+              <div style={{width: `${(adminStats.interventionsToday / 10) * 100}%`}}></div>
+            </div>
           </div>
-          <div className="stability-stat">
-            <label>Total ETH Captured</label>
-            <p>{parseFloat(adminStats.totalETHCaptured).toFixed(4)} ETH</p>
+          <div className="admin-card">
+            <h4>Tokens Used Today</h4>
+            <p className="metric-value">{parseFloat(adminStats.tokensUsedToday).toFixed(0)}</p>
+            <span className="metric-label">/ 1,000,000</span>
           </div>
-          <div className="stability-stat">
-            <label>ETH to Validators</label>
-            <p>{parseFloat(adminStats.totalETHSentToValidators).toFixed(4)} ETH</p>
+        </div>
+        
+        <div className="admin-grid-3">
+          <div className="admin-card">
+            <h4>Total ETH Captured</h4>
+            <p className="metric-value">{parseFloat(adminStats.totalETHCaptured).toFixed(4)}</p>
+            <span className="metric-label">ETH</span>
           </div>
-          <div className="stability-stat">
-            <label>Total Interventions</label>
-            <p>{adminStats.totalInterventions}</p>
+          <div className="admin-card">
+            <h4>ETH to Validators</h4>
+            <p className="metric-value">{parseFloat(adminStats.totalETHSentToValidators).toFixed(4)}</p>
+            <span className="metric-label">ETH</span>
+          </div>
+          <div className="admin-card">
+            <h4>Total Interventions</h4>
+            <p className="metric-value">{adminStats.totalInterventions}</p>
+            <span className="metric-label">all time</span>
           </div>
         </div>
         
         {/* Emergency Controls */}
-        <div className="emergency-controls">
-          <h3>⚠️ Emergency Controls</h3>
-          <div className="control-buttons">
+        <div className="emergency-controls-section">
+          <h3>⚠️ Admin Controls</h3>
+          <div className="control-buttons-grid">
             <button 
-              className="admin-btn reset-btn"
+              className="admin-btn primary"
+              onClick={updateBaselinePrice}
+              disabled={loading}
+            >
+              📊 Update Baseline Price
+            </button>
+            <button 
+              className="admin-btn primary"
+              onClick={triggerSystemCheck}
+              disabled={loading}
+            >
+              ⚡ Trigger System Check
+            </button>
+            <button 
+              className="admin-btn secondary"
+              onClick={manualStabilityCheck}
+              disabled={loading}
+            >
+              🔍 Manual Check (0.01 ETH)
+            </button>
+            <button 
+              className="admin-btn warning"
               onClick={resetCircuitBreaker}
               disabled={loading || !adminStats.circuitBreakerTripped}
             >
               🔧 Reset Circuit Breaker
             </button>
             <button 
-              className="admin-btn toggle-btn"
+              className="admin-btn secondary"
               onClick={toggleSystemChecks}
               disabled={loading}
             >
-              {adminStats.systemChecksEnabled ? '⏸️ Pause' : '▶️ Resume'} System Checks
-            </button>
-            <button 
-              className="admin-btn manual-btn"
-              onClick={manualStabilityCheck}
-              disabled={loading}
-            >
-              🔍 Manual Check Now!
+              {adminStats.systemChecksEnabled ? '⏸️ Pause' : '▶️ Resume'} Checks
             </button>
           </div>
         </div>
       </div>
       
       {/* Validator Network */}
-      <div className="admin-section validator-section">
+      <div className="admin-section">
         <h2>🔐 Validator Network</h2>
-        <div className="validator-admin-stats">
-          <div className="validator-stat">
-            <label>Active Validators</label>
-            <p>{validatorStats.validators}</p>
+        <div className="admin-grid-4">
+          <div className="admin-card">
+            <h4>Active Validators</h4>
+            <p className="metric-value">{validatorStats.validators}</p>
           </div>
-          <div className="validator-stat">
-            <label>Next Validator Progress</label>
-            <p>{parseFloat(validatorStats.pendingETH).toFixed(4)} / 32 ETH</p>
-            <div className="progress-bar">
-              <div 
-                className="progress-fill validator-progress"
-                style={{ width: `${validatorStats.progress}%` }}
-              />
-            </div>
+          <div className="admin-card">
+            <h4>From Stability</h4>
+            <p className="metric-value">{parseFloat(validatorStats.fromStability).toFixed(4)}</p>
+            <span className="metric-label">ETH</span>
           </div>
-          <div className="validator-stat">
-            <label>From Stability</label>
-            <p>{parseFloat(validatorStats.fromStability).toFixed(4)} ETH</p>
+          <div className="admin-card">
+            <h4>From Rewards</h4>
+            <p className="metric-value">{parseFloat(validatorStats.fromRewards).toFixed(4)}</p>
+            <span className="metric-label">ETH</span>
           </div>
-          <div className="validator-stat">
-            <label>From Rewards Loop</label>
-            <p>{parseFloat(validatorStats.fromRewards).toFixed(4)} ETH</p>
+          <div className="admin-card">
+            <h4>Total Donations</h4>
+            <p className="metric-value">{parseFloat(validatorStats.totalDonations).toFixed(4)}</p>
+            <span className="metric-label">ETH ({validatorStats.donors} donors)</span>
           </div>
+        </div>
+        
+        <div className="validator-progress-section">
+          <h4>Progress to Next Validator</h4>
+          <div className="validator-progress-bar">
+            <div className="progress-fill" style={{ width: `${validatorStats.progress}%` }}></div>
+          </div>
+          <p className="progress-text">{parseFloat(validatorStats.pendingETH).toFixed(4)} / 32 ETH ({validatorStats.progress.toFixed(1)}%)</p>
         </div>
       </div>
       
       {/* Quick Actions */}
-      <div className="admin-section quick-actions">
+      <div className="admin-section">
         <h2>⚡ Quick Actions</h2>
-        <div className="action-grid">
-          <button 
-            className="action-btn"
-            onClick={() => window.location.reload()}
-          >
+        <div className="action-buttons-grid">
+          <button className="action-btn" onClick={() => window.location.reload()}>
             🔄 Refresh Dashboard
           </button>
-          <button 
-            className="action-btn"
-            onClick={() => console.log(adminStats)}
-          >
-            📋 Log Stats to Console
+          <button className="action-btn" onClick={() => console.log(adminStats)}>
+            📋 Log Stats
           </button>
-          <button 
-            className="action-btn"
-            onClick={() => {
-              const data = JSON.stringify(adminStats, null, 2);
-              const blob = new Blob([data], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `oooweee-stats-${Date.now()}.json`;
-              a.click();
-            }}
-          >
+          <button className="action-btn" onClick={() => {
+            const data = JSON.stringify(adminStats, null, 2);
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `oooweee-stats-${Date.now()}.json`;
+            a.click();
+          }}>
             💾 Export Stats
           </button>
         </div>
       </div>
       
-      {/* Auto-refresh indicator */}
       <div className="refresh-indicator">
         <span className="refresh-dot"></span>
         Auto-refreshing every 5 seconds
@@ -1468,10 +1485,8 @@ function App() {
     <div className="App">
       <Toaster position="top-right" />
       
-      {/* Buy Modal */}
       {showBuyModal && <BuyModal />}
       
-      {/* Floating coins background */}
       <div className="floating-coins">
         {[...Array(10)].map((_, i) => (
           <div
@@ -1489,7 +1504,6 @@ function App() {
       </div>
       
       <header className="App-header">
-        {/* Tab Navigation */}
         <div className="tab-navigation">
           <button 
             className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
@@ -1503,7 +1517,6 @@ function App() {
           >
             📖 About
           </button>
-          {/* Admin tab only visible to operations wallet */}
           {account?.toLowerCase() === ADMIN_WALLET.toLowerCase() && (
             <button 
               className={`tab-btn admin-tab ${activeTab === 'admin' ? 'active' : ''}`}
@@ -1521,11 +1534,7 @@ function App() {
         ) : (
           <>
             <div className="hero-section">
-              <img 
-                src={oooweeLogo} 
-                alt="OOOWEEE" 
-                className="main-logo pixel-art"
-              />
+              <img src={oooweeLogo} alt="OOOWEEE" className="main-logo pixel-art" />
               <p className="tagline">OOOWEEE! Make your $aving goals non-negotiable!</p>
             </div>
 
@@ -1551,23 +1560,20 @@ function App() {
                     </div>
                   </div>
                 </div>
-                <button onClick={connectWallet} className="connect-btn rainbow-btn">
-                  <span>🔗</span> Connect Wallet
+                <button onClick={connectWallet} className="connect-btn rainbow-btn" disabled={isConnecting}>
+                  <span>🔗</span> {isConnecting ? 'Connecting...' : 'Connect Wallet'}
                 </button>
                 <p className="info-text">Works with MetaMask, Trust Wallet, and more!</p>
                 <p className="disclaimer">💡 Values shown in your selected currency are estimates based on current market rates</p>
               </div>
             ) : (
               <div className="dashboard">
-                {/* Rest of the existing dashboard code remains the same */}
                 <div className="wallet-info">
                   <div className="wallet-card">
                     <div className="wallet-header">
                       <h3>💰 Wallet Status</h3>
                       <span className="address">{account.slice(0, 6)}...{account.slice(-4)}</span>
-                      <button onClick={disconnectWallet} className="disconnect-btn">
-                        Disconnect
-                      </button>
+                      <button onClick={disconnectWallet} className="disconnect-btn">Disconnect</button>
                     </div>
                     
                     <div className="currency-toggle">
@@ -1600,9 +1606,7 @@ function App() {
                       </span>
                     </div>
                     {displayCurrency === 'fiat' && (
-                      <p className="conversion-note">
-                        ≈ {parseFloat(balance).toLocaleString()} $OOOWEEE
-                      </p>
+                      <p className="conversion-note">≈ {parseFloat(balance).toLocaleString()} $OOOWEEE</p>
                     )}
                     
                     {parseFloat(balance) === 0 && (
@@ -1619,7 +1623,6 @@ function App() {
                     </button>
                   </div>
 
-                  {/* Validator Card - UPDATED */}
                   <div className="validator-card">
                     <div className="validator-header">
                       <h3>🔐 Validator Network</h3>
@@ -1630,17 +1633,14 @@ function App() {
                         <span className="label">Active Validators</span>
                         <span className="value">{validatorStats.validators}</span>
                       </div>
-                      
                       <div className="stat">
                         <span className="label">Next Validator In</span>
                         <span className="value">{parseFloat(validatorStats.nextValidatorIn).toFixed(4)} ETH</span>
                       </div>
-                      
                       <div className="stat">
                         <span className="label">From Stability</span>
                         <span className="value">{parseFloat(validatorStats.fromStability).toFixed(4)} ETH</span>
                       </div>
-                      
                       <div className="stat">
                         <span className="label">From Rewards</span>
                         <span className="value">{parseFloat(validatorStats.fromRewards).toFixed(4)} ETH</span>
@@ -1653,37 +1653,26 @@ function App() {
                         style={{ width: `${validatorStats.progress}%` }}
                       />
                     </div>
-                    <p className="progress-label">
-                      {parseFloat(validatorStats.pendingETH).toFixed(4)} / 32 ETH
-                    </p>
+                    <p className="progress-label">{parseFloat(validatorStats.pendingETH).toFixed(4)} / 32 ETH</p>
                     
                     <div className="donation-stats">
                       <p>💝 Total Donations: {parseFloat(validatorStats.totalDonations).toFixed(4)} ETH</p>
                       <p>👥 Donors: {validatorStats.donors}</p>
                     </div>
                     
-                    <button 
-                      className="donate-btn"
-                      onClick={donateToValidators}
-                      disabled={loading}
-                    >
+                    <button className="donate-btn" onClick={donateToValidators} disabled={loading}>
                       💰 Donate ETH
                     </button>
                   </div>
                 </div>
 
-                {/* Rest of the existing savings sections, create account forms, etc. remain unchanged */}
                 <div className="savings-section">
                   {activeAccounts.length > 0 && (
                     <>
                       <div className="section-header">
                         <h2>🎮 Your Active Quests</h2>
                         {activeAccounts.some(acc => parseFloat(acc.pendingRewards) > 0) && (
-                          <button 
-                            className="claim-all-btn"
-                            onClick={claimAllRewards}
-                            disabled={loading}
-                          >
+                          <button className="claim-all-btn" onClick={claimAllRewards} disabled={loading}>
                             🎁 Claim All Rewards
                           </button>
                         )}
@@ -1697,72 +1686,53 @@ function App() {
                             <div key={acc.id} className="account-card">
                               <div className="account-header">
                                 <h3>{acc.goalName}</h3>
-                                <span className={`account-type ${acc.type.toLowerCase()}`}>
-                                  {acc.type}
-                                </span>
+                                <span className={`account-type ${acc.type.toLowerCase()}`}>{acc.type}</span>
                               </div>
                               
                               <div className="account-details">
                                 {acc.isFiatTarget ? (
-                                  <>
-                                    <div className="fiat-target-display">
-                                      {(acc.type === 'Growth' || acc.type === 'Balance') && (
-                                        <div className="detail-row">
-                                          <span>Target:</span>
-                                          <span className="primary-amount">
-                                            {currencyInfo.symbol}
-                                            {(acc.targetFiat / Math.pow(10, currencyInfo.decimals)).toFixed(currencyInfo.decimals)}
-                                          </span>
-                                        </div>
-                                      )}
-                                      
+                                  <div className="fiat-target-display">
+                                    {(acc.type === 'Growth' || acc.type === 'Balance') && (
                                       <div className="detail-row">
-                                        <span>Current Value:</span>
+                                        <span>Target:</span>
                                         <span className="primary-amount">
                                           {currencyInfo.symbol}
-                                          {(acc.currentFiatValue / Math.pow(10, currencyInfo.decimals)).toFixed(currencyInfo.decimals)}
+                                          {(acc.targetFiat / Math.pow(10, currencyInfo.decimals)).toFixed(currencyInfo.decimals)}
                                         </span>
                                       </div>
-                                      
-                                      <div className="balance-in-tokens">
-                                        <span className="secondary-amount">
-                                          {parseFloat(acc.balance).toLocaleString()} $OOOWEEE
-                                        </span>
-                                      </div>
+                                    )}
+                                    
+                                    <div className="detail-row">
+                                      <span>Current Value:</span>
+                                      <span className="primary-amount">
+                                        {currencyInfo.symbol}
+                                        {(acc.currentFiatValue / Math.pow(10, currencyInfo.decimals)).toFixed(currencyInfo.decimals)}
+                                      </span>
                                     </div>
-                                  </>
+                                    
+                                    <div className="balance-in-tokens">
+                                      <span className="secondary-amount">
+                                        {parseFloat(acc.balance).toLocaleString()} $OOOWEEE
+                                      </span>
+                                    </div>
+                                  </div>
                                 ) : (
-                                  <>
-                                    <div className="balance-display">
-                                      <div className="detail-row">
-                                        <span>Balance:</span>
-                                        <span className="primary-amount">
-                                          {displayCurrency === 'crypto'
-                                            ? `${parseFloat(acc.balance).toLocaleString()} $OOOWEEE`
-                                            : getOooweeeInFiat(acc.balance, 'eur')
-                                          }
-                                        </span>
-                                      </div>
-                                      {parseFloat(acc.pendingRewards) > 0 && (
-                                        <div className="detail-row rewards">
-                                          <span>Pending Rewards:</span>
-                                          <span className="value">+{parseFloat(acc.pendingRewards).toFixed(2)} $OOOWEEE</span>
-                                          <button 
-                                            className="claim-btn"
-                                            onClick={() => claimRewards(acc.id)}
-                                            disabled={loading}
-                                          >
-                                            Claim
-                                          </button>
-                                        </div>
-                                      )}
-                                      {displayCurrency === 'fiat' && (
-                                        <span className="secondary-amount">
-                                          ≈ {parseFloat(acc.balance).toLocaleString()} $OOOWEEE
-                                        </span>
-                                      )}
+                                  <div className="balance-display">
+                                    <div className="detail-row">
+                                      <span>Balance:</span>
+                                      <span className="primary-amount">
+                                        {displayCurrency === 'crypto'
+                                          ? `${parseFloat(acc.balance).toLocaleString()} $OOOWEEE`
+                                          : getOooweeeInFiat(acc.balance, 'eur')
+                                        }
+                                      </span>
                                     </div>
-                                  </>
+                                    {displayCurrency === 'fiat' && (
+                                      <span className="secondary-amount">
+                                        ≈ {parseFloat(acc.balance).toLocaleString()} $OOOWEEE
+                                      </span>
+                                    )}
+                                  </div>
                                 )}
                                 
                                 {acc.type === 'Time' && (
@@ -1853,9 +1823,7 @@ function App() {
                               <div key={acc.id} className="account-card completed">
                                 <div className="account-header">
                                   <h3>{acc.goalName} ✅</h3>
-                                  <span className={`account-type ${acc.type.toLowerCase()}`}>
-                                    {acc.type}
-                                  </span>
+                                  <span className={`account-type ${acc.type.toLowerCase()}`}>{acc.type}</span>
                                 </div>
                                 <div className="account-details">
                                   <p className="completed-text">🏆 Quest Complete!</p>
@@ -1889,7 +1857,6 @@ function App() {
                     </select>
                   </div>
                   
-                  {/* Currency selector for all account types */}
                   <div className="form-group">
                     <label>💱 Display Currency:</label>
                     <select 
@@ -1898,9 +1865,7 @@ function App() {
                       className="select-input"
                     >
                       {Object.entries(CURRENCIES).map(([code, info]) => (
-                        <option key={code} value={code}>
-                          {info.symbol} {info.name}
-                        </option>
+                        <option key={code} value={code}>{info.symbol} {info.name}</option>
                       ))}
                     </select>
                   </div>
@@ -1925,13 +1890,9 @@ function App() {
                       onChange={(e) => setInitialDepositInput(e.target.value)}
                       className="number-input"
                     />
-                    <p className="fee-note">
-                      💡 1% creation fee from initial deposit
-                    </p>
+                    <p className="fee-note">💡 1% creation fee from initial deposit</p>
                     {parseFloat(balance) < parseFloat(initialDepositInput) && initialDepositInput && (
-                      <p className="swap-notice">
-                        ⚠️ Insufficient balance - will offer to buy with ETH
-                      </p>
+                      <p className="swap-notice">⚠️ Insufficient balance - will offer to buy with ETH</p>
                     )}
                   </div>
                   
@@ -1965,6 +1926,17 @@ function App() {
                           ≈ {convertFiatToOooweee(targetAmountInput, accountCurrency.toLowerCase()).toLocaleString()} $OOOWEEE at current rate
                         </p>
                       )}
+                      {accountType === 'growth' && initialDepositInput && targetAmountInput && (
+                        (() => {
+                          const currencyCode = accountCurrency.toLowerCase();
+                          const ethPriceForCurrency = ethPrice?.[currencyCode] || ethPrice?.eur || 1850;
+                          const initialFiatValue = parseFloat(initialDepositInput) * oooweeePrice * ethPriceForCurrency;
+                          if (initialFiatValue >= parseFloat(targetAmountInput)) {
+                            return <p className="error-note">⚠️ Target must be higher than initial deposit value ({formatCurrency(initialFiatValue, accountCurrency)})</p>;
+                          }
+                          return null;
+                        })()
+                      )}
                     </div>
                   )}
                   
@@ -1992,10 +1964,7 @@ function App() {
                 
                 {completedAccounts.length > 0 && (
                   <div className="toggle-completed">
-                    <button 
-                      onClick={() => setShowCompleted(!showCompleted)}
-                      className="toggle-btn"
-                    >
+                    <button onClick={() => setShowCompleted(!showCompleted)} className="toggle-btn">
                       {showCompleted ? '📦 Hide' : '👁️ Show'} Completed ({completedAccounts.length})
                     </button>
                   </div>

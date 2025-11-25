@@ -1490,6 +1490,464 @@ select:focus {
   font-family: 'VT323', monospace;
 }
 
+/* ==========================================
+   ADMIN DASHBOARD STYLES
+   ========================================== */
+
+.admin-dashboard {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.admin-dashboard h2 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 1.2rem;
+  color: #fff;
+  text-shadow: 2px 2px 0px #000;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.admin-dashboard h2 .refresh-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: 'VT323', monospace;
+  font-size: 1rem;
+  color: rgba(255,255,255,0.7);
+  font-weight: normal;
+}
+
+.admin-dashboard h2 .refresh-indicator::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background: #4CAF50;
+  border-radius: 50%;
+  animation: pulse-dot 2s infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+/* Stability Info Banner */
+.stability-info-banner {
+  background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(240,240,255,0.95) 100%);
+  border: 4px solid #000;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  box-shadow: 6px 6px 0px #000;
+}
+
+.stability-info-banner h3 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.8rem;
+  margin-bottom: 1rem;
+  color: #000;
+}
+
+.stability-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.stability-metric {
+  background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
+  border: 2px solid #000;
+  padding: 1rem;
+  text-align: center;
+  border-radius: 4px;
+}
+
+.stability-metric .label {
+  font-family: 'VT323', monospace;
+  font-size: 1rem;
+  color: #666;
+  display: block;
+  margin-bottom: 0.3rem;
+}
+
+.stability-metric .value {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.9rem;
+  color: #000;
+}
+
+.stability-metric.warning .value {
+  color: #ff6b35;
+}
+
+.stability-metric.danger .value {
+  color: #ff4444;
+}
+
+.stability-metric.success .value {
+  color: #4CAF50;
+}
+
+/* Admin Grid Layouts */
+.admin-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.admin-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.admin-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+/* Admin Cards */
+.admin-card {
+  background: rgba(255, 255, 255, 0.95);
+  border: 3px solid #000;
+  padding: 1rem;
+  box-shadow: 4px 4px 0px #000;
+  transition: all 0.2s;
+}
+
+.admin-card:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0px #000;
+}
+
+.admin-card h4 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.6rem;
+  color: #666;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+}
+
+.admin-card .value {
+  font-family: 'VT323', monospace;
+  font-size: 1.8rem;
+  color: #000;
+  font-weight: bold;
+}
+
+.admin-card .sub-value {
+  font-family: 'VT323', monospace;
+  font-size: 1rem;
+  color: #666;
+}
+
+.admin-card.highlight {
+  background: linear-gradient(135deg, #FFF9C4 0%, #FFE082 100%);
+  border-color: #FFA000;
+}
+
+.admin-card.success {
+  background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%);
+  border-color: #4CAF50;
+}
+
+.admin-card.warning {
+  background: linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%);
+  border-color: #FF9800;
+}
+
+.admin-card.danger {
+  background: linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%);
+  border-color: #f44336;
+}
+
+/* Admin Section Panels */
+.admin-section {
+  background: rgba(255, 255, 255, 0.95);
+  border: 4px solid #000;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 6px 6px 0px #000;
+}
+
+.admin-section h3 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.8rem;
+  color: #000;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px dashed #ccc;
+}
+
+/* Admin Buttons */
+.admin-btn {
+  padding: 0.7rem 1.2rem;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.55rem;
+  border: 3px solid #000;
+  cursor: pointer;
+  transition: all 0.1s;
+  box-shadow: 3px 3px 0px #000;
+}
+
+.admin-btn:hover:not(:disabled) {
+  transform: translate(1px, 1px);
+  box-shadow: 2px 2px 0px #000;
+}
+
+.admin-btn:active:not(:disabled) {
+  transform: translate(3px, 3px);
+  box-shadow: none;
+}
+
+.admin-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.admin-btn.primary {
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+  color: white;
+  text-shadow: 1px 1px 0px rgba(0,0,0,0.3);
+}
+
+.admin-btn.secondary {
+  background: transparent;
+  color: #000;
+  border-color: #666;
+}
+
+.admin-btn.secondary:hover:not(:disabled) {
+  background: rgba(0,0,0,0.05);
+}
+
+.admin-btn.warning {
+  background: linear-gradient(135deg, #ff6b35 0%, #f44336 100%);
+  color: white;
+  text-shadow: 1px 1px 0px rgba(0,0,0,0.3);
+}
+
+.admin-btn.info {
+  background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+  color: white;
+  text-shadow: 1px 1px 0px rgba(0,0,0,0.3);
+}
+
+/* Admin Button Groups */
+.admin-btn-group {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+/* Admin Stats Row */
+.admin-stats-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #eee;
+  font-family: 'VT323', monospace;
+  font-size: 1.2rem;
+}
+
+.admin-stats-row:last-child {
+  border-bottom: none;
+}
+
+.admin-stats-row .label {
+  color: #666;
+}
+
+.admin-stats-row .value {
+  font-weight: bold;
+  color: #000;
+}
+
+/* Mini Progress Bars for Admin */
+.admin-mini-progress {
+  height: 8px;
+  background: #e0e0e0;
+  border: 1px solid #000;
+  margin-top: 0.5rem;
+  overflow: hidden;
+}
+
+.admin-mini-progress .fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--oooweee-green), var(--oooweee-teal));
+  transition: width 0.5s ease;
+}
+
+/* Validator Progress Section */
+.validator-progress-section {
+  background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%);
+  border: 3px solid #4CAF50;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  border-radius: 4px;
+}
+
+.validator-progress-section h3 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.7rem;
+  color: #2E7D32;
+  margin-bottom: 1rem;
+}
+
+.validator-progress-bar {
+  height: 30px;
+  background: #fff;
+  border: 3px solid #000;
+  position: relative;
+  overflow: hidden;
+  margin: 1rem 0;
+}
+
+.validator-progress-bar .fill {
+  height: 100%;
+  background: linear-gradient(90deg, 
+    var(--oooweee-yellow),
+    var(--oooweee-lime),
+    var(--oooweee-green));
+  background-size: 200% 100%;
+  animation: gradient-shift 3s ease infinite;
+  transition: width 0.5s ease;
+}
+
+.validator-progress-bar .progress-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.6rem;
+  color: #000;
+  text-shadow: 1px 1px 0px #fff;
+  z-index: 1;
+}
+
+.validator-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.validator-stat {
+  text-align: center;
+  padding: 0.5rem;
+  background: rgba(255,255,255,0.7);
+  border: 2px solid #4CAF50;
+  border-radius: 4px;
+}
+
+.validator-stat .label {
+  font-family: 'VT323', monospace;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.validator-stat .value {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.7rem;
+  color: #2E7D32;
+}
+
+/* Admin Status Badges */
+.admin-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.5rem;
+  border: 2px solid;
+  border-radius: 4px;
+}
+
+.admin-status.active {
+  background: #E8F5E9;
+  border-color: #4CAF50;
+  color: #2E7D32;
+}
+
+.admin-status.inactive {
+  background: #FFEBEE;
+  border-color: #f44336;
+  color: #c62828;
+}
+
+.admin-status.paused {
+  background: #FFF3E0;
+  border-color: #FF9800;
+  color: #E65100;
+}
+
+.admin-status::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.admin-status.active::before {
+  background: #4CAF50;
+}
+
+.admin-status.inactive::before {
+  background: #f44336;
+}
+
+.admin-status.paused::before {
+  background: #FF9800;
+}
+
+/* Emergency Controls Section */
+.emergency-controls {
+  background: linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%);
+  border: 3px solid #f44336;
+  padding: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.emergency-controls h3 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.7rem;
+  color: #c62828;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.emergency-controls h3::before {
+  content: '⚠️';
+}
+
+/* Tablet Responsive - Admin */
+@media (max-width: 1024px) {
+  .admin-grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .admin-grid-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .validator-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 /* Mobile Responsive */
 @media (max-width: 768px) {
   .tab-navigation {
@@ -1575,5 +2033,41 @@ select:focus {
   
   .deposit-btn {
     width: 100%;
+  }
+  
+  /* Admin Dashboard Responsive */
+  .admin-grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .admin-grid-3 {
+    grid-template-columns: 1fr;
+  }
+  
+  .admin-grid-2 {
+    grid-template-columns: 1fr;
+  }
+  
+  .stability-metrics {
+    grid-template-columns: 1fr;
+  }
+  
+  .validator-stats {
+    grid-template-columns: 1fr;
+  }
+  
+  .admin-btn-group {
+    flex-direction: column;
+  }
+  
+  .admin-btn {
+    width: 100%;
+    text-align: center;
+  }
+  
+  .admin-dashboard h2 {
+    font-size: 0.9rem;
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
