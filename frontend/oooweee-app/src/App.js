@@ -7,10 +7,12 @@ import { OOOWEEETokenABI, OOOWEEESavingsABI, OOOWEEEValidatorFundABI, OOOWEEESta
 import Web3Modal from "web3modal";
 import WalletConnectProvider from "@walletconnect/web3-provider";
 
-// Uniswap Router ABI (minimal)
+// Uniswap Router ABI (minimal) - added getAmountsIn and swapETHForExactTokens
 const UNISWAP_ROUTER_ABI = [
   "function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)",
+  "function swapETHForExactTokens(uint amountOut, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)",
   "function getAmountsOut(uint amountIn, address[] calldata path) public view returns (uint[] memory amounts)",
+  "function getAmountsIn(uint amountOut, address[] calldata path) public view returns (uint[] memory amounts)",
   "function WETH() external pure returns (address)"
 ];
 
@@ -20,6 +22,9 @@ const WETH_ADDRESS = "0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9";
 
 // ADMIN WALLET - Update this to your operations wallet address
 const ADMIN_WALLET = "0x335bB9E071F10a414308170045A5Bc614BcC97B6";
+
+// Minimum deposit in EUR (cents) - matches contract default
+const MINIMUM_DEPOSIT_EUR_CENTS = 1000; // €10
 
 // Currency configuration
 const CURRENCIES = {
@@ -88,6 +93,8 @@ function App() {
   const [estimatedOooweee, setEstimatedOooweee] = useState('0');
   const [accountCurrency, setAccountCurrency] = useState('EUR');
   const [isConnecting, setIsConnecting] = useState(false);
+  const [requiredOooweeeForPurchase, setRequiredOooweeeForPurchase] = useState(null);
+  const [buyMode, setBuyMode] = useState('eth'); // 'eth' or 'exact'
   
   // Validator stats
   const [validatorStats, setValidatorStats] = useState({
@@ -349,7 +356,7 @@ function App() {
     }
   }, [routerContract, updateOooweeePrice]);
 
-  // Estimate OOOWEEE output
+  // Estimate OOOWEEE output for ETH input
   useEffect(() => {
     const estimateOooweee = async () => {
       if (!routerContract || !ethToBuy || parseFloat(ethToBuy) <= 0) {
@@ -369,6 +376,25 @@ function App() {
     
     estimateOooweee();
   }, [ethToBuy, routerContract]);
+
+  // Calculate ETH needed for exact OOOWEEE amount
+  const calculateEthForExactOooweee = useCallback(async (oooweeeAmount) => {
+    if (!routerContract || !oooweeeAmount || parseFloat(oooweeeAmount) <= 0) {
+      return null;
+    }
+    
+    try {
+      const tokensNeeded = ethers.utils.parseUnits(Math.ceil(oooweeeAmount).toString(), 18);
+      const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.OOOWEEEToken];
+      const amountsIn = await routerContract.getAmountsIn(tokensNeeded, path);
+      // Add 3% buffer for price movement
+      const ethNeeded = amountsIn[0].mul(103).div(100);
+      return ethers.utils.formatEther(ethNeeded);
+    } catch (error) {
+      console.error('Error calculating ETH needed:', error);
+      return null;
+    }
+  }, [routerContract]);
 
   // Load validator stats - with error handling
   const loadValidatorStats = useCallback(async () => {
@@ -432,7 +458,29 @@ function App() {
     return Math.floor(oooweeeAmount);
   };
 
-  // Buy OOOWEEE with ETH
+  // Convert OOOWEEE to fiat
+  const convertOooweeeToFiat = (oooweeeAmount, currency = 'eur') => {
+    if (!ethPrice || !oooweeeAmount) return 0;
+    const ethValue = parseFloat(oooweeeAmount) * oooweeePrice;
+    return ethValue * (ethPrice[currency.toLowerCase()] || ethPrice.eur);
+  };
+
+  // Get minimum deposit in current currency
+  const getMinimumDepositInCurrency = (currency = 'eur') => {
+    if (!ethPrice) return 10; // Default €10
+    const eurPrice = ethPrice.eur || 1850;
+    const targetPrice = ethPrice[currency.toLowerCase()] || eurPrice;
+    // Convert €10 to target currency
+    return (10 * targetPrice) / eurPrice;
+  };
+
+  // Check if deposit meets minimum
+  const checkMinimumDeposit = (oooweeeAmount) => {
+    const fiatValue = convertOooweeeToFiat(oooweeeAmount, 'eur');
+    return fiatValue >= 10; // €10 minimum
+  };
+
+  // Buy OOOWEEE with ETH (standard mode - specify ETH amount)
   const buyOooweee = async () => {
     if (!ethToBuy || parseFloat(ethToBuy) <= 0) {
       toast.error('Enter a valid ETH amount');
@@ -464,6 +512,8 @@ function App() {
       });
       
       setShowBuyModal(false);
+      setRequiredOooweeeForPurchase(null);
+      setBuyMode('eth');
       await loadBalances(account, provider, tokenContract);
       
     } catch (error) {
@@ -480,45 +530,71 @@ function App() {
     }
   };
 
-  // Buy and create account
-  const buyAndCreateAccount = async (requiredOooweee) => {
-    const requiredEth = requiredOooweee * oooweeePrice * 1.05;
+  // Buy EXACT amount of OOOWEEE (for when user needs specific amount)
+  const buyExactOooweee = async () => {
+    if (!requiredOooweeeForPurchase || requiredOooweeeForPurchase <= 0) {
+      toast.error('Invalid amount');
+      return;
+    }
     
-    const result = await toast.promise(
-      new Promise(async (resolve, reject) => {
-        try {
-          setLoading(true);
-          
-          const ethAmount = ethers.utils.parseEther(requiredEth.toFixed(6));
-          const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.OOOWEEEToken];
-          const deadline = Math.floor(Date.now() / 1000) + 3600;
-          
-          const amounts = await routerContract.getAmountsOut(ethAmount, path);
-          const minOutput = amounts[1].mul(97).div(100);
-          
-          const tx = await routerContract.swapExactETHForTokens(
-            minOutput,
-            path,
-            account,
-            deadline,
-            { value: ethAmount }
-          );
-          
-          await tx.wait();
-          await loadBalances(account, provider, tokenContract);
-          resolve(true);
-        } catch (error) {
-          reject(error);
-        }
-      }),
-      {
-        loading: `🔄 Buying ${requiredOooweee.toFixed(0)} OOOWEEE...`,
-        success: '✅ OOOWEEE purchased! Creating account...',
-        error: '❌ Failed to buy OOOWEEE'
+    try {
+      setLoading(true);
+      
+      const tokensNeeded = ethers.utils.parseUnits(Math.ceil(requiredOooweeeForPurchase).toString(), 18);
+      const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.OOOWEEEToken];
+      const deadline = Math.floor(Date.now() / 1000) + 3600;
+      
+      // Get ETH needed for exact token amount
+      const amountsIn = await routerContract.getAmountsIn(tokensNeeded, path);
+      // Add 5% buffer for price movement
+      const ethWithBuffer = amountsIn[0].mul(105).div(100);
+      
+      // Use swapETHForExactTokens to get EXACTLY the tokens we need
+      const tx = await routerContract.swapETHForExactTokens(
+        tokensNeeded,
+        path,
+        account,
+        deadline,
+        { value: ethWithBuffer }
+      );
+      
+      await toast.promise(tx.wait(), {
+        loading: `🔄 Buying exactly ${Math.ceil(requiredOooweeeForPurchase).toLocaleString()} OOOWEEE...`,
+        success: `🎉 Bought ${Math.ceil(requiredOooweeeForPurchase).toLocaleString()} OOOWEEE!`,
+        error: '❌ Swap failed'
+      });
+      
+      setShowBuyModal(false);
+      setRequiredOooweeeForPurchase(null);
+      setBuyMode('eth');
+      await loadBalances(account, provider, tokenContract);
+      
+    } catch (error) {
+      console.error(error);
+      if (error.code === 'ACTION_REJECTED') {
+        toast.error('Transaction cancelled');
+      } else if (error.message.includes('insufficient')) {
+        toast.error('Insufficient ETH balance');
+      } else {
+        toast.error('Swap failed: ' + (error.reason || error.message));
       }
-    );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Open buy modal with specific amount needed
+  const openBuyModalWithAmount = async (neededOooweee) => {
+    setRequiredOooweeeForPurchase(neededOooweee);
+    setBuyMode('exact');
     
-    return result;
+    // Calculate and set the ETH needed for display
+    const ethNeeded = await calculateEthForExactOooweee(neededOooweee);
+    if (ethNeeded) {
+      setEthToBuy(ethNeeded);
+    }
+    
+    setShowBuyModal(true);
   };
 
   // Connect wallet - FIX: Prevent duplicate connections
@@ -792,15 +868,22 @@ function App() {
     try {
       setLoading(true);
       
+      // Check minimum deposit
+      if (!checkMinimumDeposit(initialDeposit)) {
+        const minRequired = getMinimumDepositInCurrency(currency);
+        toast.error(`Minimum deposit is ${formatCurrency(minRequired, currency)} (≈ €10)`);
+        setLoading(false);
+        return;
+      }
+      
       if (parseFloat(balance) < parseFloat(initialDeposit)) {
         const needed = parseFloat(initialDeposit) - parseFloat(balance);
         
-        if (window.confirm(`You need ${needed.toFixed(2)} more OOOWEEE. Buy with ETH now?`)) {
-          await buyAndCreateAccount(needed);
-        } else {
-          setLoading(false);
-          return;
-        }
+        // Open buy modal with exact amount needed
+        toast(`You need ${needed.toFixed(0)} more OOOWEEE`, { icon: '💡' });
+        await openBuyModalWithAmount(needed);
+        setLoading(false);
+        return;
       }
       
       const unlockTime = Math.floor(new Date(unlockDate).getTime() / 1000);
@@ -833,6 +916,8 @@ function App() {
       console.error(error);
       if (error.code === 'ACTION_REJECTED') {
         toast.error('Transaction cancelled');
+      } else if (error.reason?.includes('Deposit below minimum')) {
+        toast.error('Deposit below minimum (€10)');
       } else {
         toast.error('Failed to create account: ' + (error.reason || error.message));
       }
@@ -845,6 +930,14 @@ function App() {
   const createGrowthAccount = async (targetAmount, goalName, initialDeposit, currency) => {
     try {
       setLoading(true);
+      
+      // Check minimum deposit
+      if (!checkMinimumDeposit(initialDeposit)) {
+        const minRequired = getMinimumDepositInCurrency(currency);
+        toast.error(`Minimum deposit is ${formatCurrency(minRequired, currency)} (≈ €10)`);
+        setLoading(false);
+        return;
+      }
       
       // Calculate initial fiat value to validate
       const currencyCode = currency.toLowerCase();
@@ -861,12 +954,11 @@ function App() {
       if (parseFloat(balance) < parseFloat(initialDeposit)) {
         const needed = parseFloat(initialDeposit) - parseFloat(balance);
         
-        if (window.confirm(`You need ${needed.toFixed(2)} more OOOWEEE. Buy with ETH now?`)) {
-          await buyAndCreateAccount(needed);
-        } else {
-          setLoading(false);
-          return;
-        }
+        // Open buy modal with exact amount needed
+        toast(`You need ${needed.toFixed(0)} more OOOWEEE`, { icon: '💡' });
+        await openBuyModalWithAmount(needed);
+        setLoading(false);
+        return;
       }
       
       const targetInSmallestUnit = Math.round(targetAmount * Math.pow(10, CURRENCIES[currency].decimals));
@@ -901,6 +993,8 @@ function App() {
         toast.error('Transaction cancelled');
       } else if (error.reason?.includes('Target must be higher')) {
         toast.error('Target must be higher than initial deposit value');
+      } else if (error.reason?.includes('Deposit below minimum')) {
+        toast.error('Deposit below minimum (€10)');
       } else {
         toast.error('Failed to create account: ' + (error.reason || error.message));
       }
@@ -913,15 +1007,22 @@ function App() {
     try {
       setLoading(true);
       
+      // Check minimum deposit
+      if (!checkMinimumDeposit(initialDeposit)) {
+        const minRequired = getMinimumDepositInCurrency(currency);
+        toast.error(`Minimum deposit is ${formatCurrency(minRequired, currency)} (≈ €10)`);
+        setLoading(false);
+        return;
+      }
+      
       if (parseFloat(balance) < parseFloat(initialDeposit)) {
         const needed = parseFloat(initialDeposit) - parseFloat(balance);
         
-        if (window.confirm(`You need ${needed.toFixed(2)} more OOOWEEE. Buy with ETH now?`)) {
-          await buyAndCreateAccount(needed);
-        } else {
-          setLoading(false);
-          return;
-        }
+        // Open buy modal with exact amount needed
+        toast(`You need ${needed.toFixed(0)} more OOOWEEE`, { icon: '💡' });
+        await openBuyModalWithAmount(needed);
+        setLoading(false);
+        return;
       }
       
       const targetInSmallestUnit = Math.round(targetAmount * Math.pow(10, CURRENCIES[currency].decimals));
@@ -955,6 +1056,8 @@ function App() {
       console.error(error);
       if (error.code === 'ACTION_REJECTED') {
         toast.error('Transaction cancelled');
+      } else if (error.reason?.includes('Deposit below minimum')) {
+        toast.error('Deposit below minimum (€10)');
       } else {
         toast.error('Failed to create account: ' + (error.reason || error.message));
       }
@@ -1016,40 +1119,11 @@ function App() {
       if (currentBalance < depositAmountNumber) {
         const needed = depositAmountNumber - currentBalance;
         
-        if (window.confirm(`You need ${needed.toFixed(2)} more OOOWEEE. Buy with ETH now?`)) {
-          const requiredEth = needed * oooweeePrice * 1.05;
-          
-          if (parseFloat(ethBalance) < requiredEth) {
-            toast.error(`Insufficient ETH. Need ${requiredEth.toFixed(4)} ETH`);
-            setLoading(false);
-            return;
-          }
-          
-          const ethAmount = ethers.utils.parseEther(requiredEth.toFixed(6));
-          const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.OOOWEEEToken];
-          const deadline = Math.floor(Date.now() / 1000) + 3600;
-          
-          const minOutput = ethers.utils.parseUnits(needed.toFixed(0), 18).mul(97).div(100);
-          
-          const buyTx = await routerContract.swapExactETHForTokens(
-            minOutput,
-            path,
-            account,
-            deadline,
-            { value: ethAmount }
-          );
-          
-          await toast.promise(buyTx.wait(), {
-            loading: `🔄 Buying ${needed.toFixed(0)} OOOWEEE...`,
-            success: '✅ OOOWEEE purchased!',
-            error: '❌ Failed to buy OOOWEEE'
-          });
-          
-          await loadBalances(account, provider, tokenContract);
-        } else {
-          setLoading(false);
-          return;
-        }
+        // Open buy modal with exact amount needed
+        toast(`You need ${needed.toFixed(0)} more OOOWEEE`, { icon: '💡' });
+        await openBuyModalWithAmount(needed);
+        setLoading(false);
+        return;
       }
       
       const depositAmount = ethers.utils.parseUnits(depositAmountNumber.toString(), 18);
@@ -1111,56 +1185,115 @@ function App() {
     );
   }
 
-  const BuyModal = () => (
-    <div className="modal-overlay" onClick={() => setShowBuyModal(false)}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <h2>🛒 Buy $OOOWEEE</h2>
-        <button className="close-modal" onClick={() => setShowBuyModal(false)}>✕</button>
-        
-        <div className="buy-form">
-          <div className="balance-info">
-            <p>ETH Balance: {parseFloat(ethBalance).toFixed(4)} ETH</p>
-            <p>Current Rate: 1 ETH = {(1/oooweeePrice).toFixed(0)} OOOWEEE</p>
-          </div>
+  // Enhanced Buy Modal with exact amount mode
+  const BuyModal = () => {
+    const [estimatedEthForExact, setEstimatedEthForExact] = useState('0');
+    
+    useEffect(() => {
+      const fetchEthEstimate = async () => {
+        if (buyMode === 'exact' && requiredOooweeeForPurchase) {
+          const eth = await calculateEthForExactOooweee(requiredOooweeeForPurchase);
+          if (eth) setEstimatedEthForExact(eth);
+        }
+      };
+      fetchEthEstimate();
+    }, [requiredOooweeeForPurchase, buyMode]);
+    
+    return (
+      <div className="modal-overlay" onClick={() => {
+        setShowBuyModal(false);
+        setRequiredOooweeeForPurchase(null);
+        setBuyMode('eth');
+      }}>
+        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          <h2>🛒 Buy $OOOWEEE</h2>
+          <button className="close-modal" onClick={() => {
+            setShowBuyModal(false);
+            setRequiredOooweeeForPurchase(null);
+            setBuyMode('eth');
+          }}>✕</button>
           
-          <div className="input-group">
-            <label>ETH Amount:</label>
-            <input
-              type="number"
-              value={ethToBuy}
-              onChange={(e) => setEthToBuy(e.target.value)}
-              min="0.001"
-              step="0.001"
-              max={ethBalance}
-            />
-          </div>
-          
-          <div className="output-estimate">
-            <p>You will receive approximately:</p>
-            <h3>{parseFloat(estimatedOooweee).toLocaleString()} $OOOWEEE</h3>
-            {ethPrice && (
-              <p className="fiat-value">≈ {getOooweeeInFiat(estimatedOooweee, 'eur')}</p>
+          <div className="buy-form">
+            <div className="balance-info">
+              <p>ETH Balance: {parseFloat(ethBalance).toFixed(4)} ETH</p>
+              <p>Current Rate: 1 ETH ≈ {(1/oooweeePrice).toFixed(0)} OOOWEEE</p>
+            </div>
+            
+            {buyMode === 'exact' && requiredOooweeeForPurchase ? (
+              <>
+                <div className="exact-amount-notice">
+                  <p>💡 You need exactly:</p>
+                  <h3>{Math.ceil(requiredOooweeeForPurchase).toLocaleString()} $OOOWEEE</h3>
+                  <p className="eth-estimate">≈ {parseFloat(estimatedEthForExact).toFixed(6)} ETH (incl. 5% buffer)</p>
+                </div>
+                
+                <button 
+                  className="buy-btn rainbow-btn"
+                  onClick={buyExactOooweee}
+                  disabled={loading || parseFloat(estimatedEthForExact) > parseFloat(ethBalance)}
+                >
+                  {loading ? '⏳ Processing...' : `🚀 Buy Exactly ${Math.ceil(requiredOooweeeForPurchase).toLocaleString()} OOOWEEE`}
+                </button>
+                
+                {parseFloat(estimatedEthForExact) > parseFloat(ethBalance) && (
+                  <p className="error-text">⚠️ Insufficient ETH balance</p>
+                )}
+                
+                <div className="mode-switch">
+                  <button 
+                    className="switch-mode-btn"
+                    onClick={() => {
+                      setBuyMode('eth');
+                      setRequiredOooweeeForPurchase(null);
+                    }}
+                  >
+                    Or buy a custom amount →
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="input-group">
+                  <label>ETH Amount:</label>
+                  <input
+                    type="number"
+                    value={ethToBuy}
+                    onChange={(e) => setEthToBuy(e.target.value)}
+                    min="0.001"
+                    step="0.001"
+                    max={ethBalance}
+                  />
+                </div>
+                
+                <div className="output-estimate">
+                  <p>You will receive approximately:</p>
+                  <h3>{parseFloat(estimatedOooweee).toLocaleString()} $OOOWEEE</h3>
+                  {ethPrice && (
+                    <p className="fiat-value">≈ {getOooweeeInFiat(estimatedOooweee, 'eur')}</p>
+                  )}
+                </div>
+                
+                <div className="quick-amounts">
+                  <button onClick={() => setEthToBuy('0.01')}>0.01 ETH</button>
+                  <button onClick={() => setEthToBuy('0.05')}>0.05 ETH</button>
+                  <button onClick={() => setEthToBuy('0.1')}>0.1 ETH</button>
+                  <button onClick={() => setEthToBuy('0.5')}>0.5 ETH</button>
+                </div>
+                
+                <button 
+                  className="buy-btn rainbow-btn"
+                  onClick={buyOooweee}
+                  disabled={loading || parseFloat(ethToBuy) <= 0}
+                >
+                  {loading ? '⏳ Processing...' : '🚀 Swap for OOOWEEE'}
+                </button>
+              </>
             )}
           </div>
-          
-          <div className="quick-amounts">
-            <button onClick={() => setEthToBuy('0.01')}>0.01 ETH</button>
-            <button onClick={() => setEthToBuy('0.05')}>0.05 ETH</button>
-            <button onClick={() => setEthToBuy('0.1')}>0.1 ETH</button>
-            <button onClick={() => setEthToBuy('0.5')}>0.5 ETH</button>
-          </div>
-          
-          <button 
-            className="buy-btn rainbow-btn"
-            onClick={buyOooweee}
-            disabled={loading || parseFloat(ethToBuy) <= 0}
-          >
-            {loading ? '⏳ Processing...' : '🚀 Swap for OOOWEEE'}
-          </button>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderAboutPage = () => (
     <div className="about-page">
@@ -1403,387 +1536,257 @@ function App() {
               onClick={resetCircuitBreaker}
               disabled={loading || !adminStats.circuitBreakerTripped}
             >
-              🔧 Reset Circuit Breaker
-            </button>
-            <button 
-              className="admin-btn secondary"
-              onClick={toggleSystemChecks}
-              disabled={loading}
-            >
-              {adminStats.systemChecksEnabled ? '⏸️ Pause' : '▶️ Resume'} Checks
+              🔄 Reset Circuit Breaker
             </button>
           </div>
         </div>
-      </div>
-      
-      {/* Validator Network */}
-      <div className="admin-section">
-        <h2>🔐 Validator Network</h2>
-        <div className="admin-grid-4">
-          <div className="admin-card">
-            <h4>Active Validators</h4>
-            <p className="metric-value">{validatorStats.validators}</p>
-          </div>
-          <div className="admin-card">
-            <h4>From Stability</h4>
-            <p className="metric-value">{parseFloat(validatorStats.fromStability).toFixed(4)}</p>
-            <span className="metric-label">ETH</span>
-          </div>
-          <div className="admin-card">
-            <h4>From Rewards</h4>
-            <p className="metric-value">{parseFloat(validatorStats.fromRewards).toFixed(4)}</p>
-            <span className="metric-label">ETH</span>
-          </div>
-          <div className="admin-card">
-            <h4>Total Donations</h4>
-            <p className="metric-value">{parseFloat(validatorStats.totalDonations).toFixed(4)}</p>
-            <span className="metric-label">ETH ({validatorStats.donors} donors)</span>
-          </div>
-        </div>
-        
-        <div className="validator-progress-section">
-          <h4>Progress to Next Validator</h4>
-          <div className="validator-progress-bar">
-            <div className="progress-fill" style={{ width: `${validatorStats.progress}%` }}></div>
-          </div>
-          <p className="progress-text">{parseFloat(validatorStats.pendingETH).toFixed(4)} / 32 ETH ({validatorStats.progress.toFixed(1)}%)</p>
-        </div>
-      </div>
-      
-      {/* Quick Actions */}
-      <div className="admin-section">
-        <h2>⚡ Quick Actions</h2>
-        <div className="action-buttons-grid">
-          <button className="action-btn" onClick={() => window.location.reload()}>
-            🔄 Refresh Dashboard
-          </button>
-          <button className="action-btn" onClick={() => console.log(adminStats)}>
-            📋 Log Stats
-          </button>
-          <button className="action-btn" onClick={() => {
-            const data = JSON.stringify(adminStats, null, 2);
-            const blob = new Blob([data], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `oooweee-stats-${Date.now()}.json`;
-            a.click();
-          }}>
-            💾 Export Stats
-          </button>
-        </div>
-      </div>
-      
-      <div className="refresh-indicator">
-        <span className="refresh-dot"></span>
-        Auto-refreshing every 5 seconds
       </div>
     </div>
   );
 
+  // Calculate fiat value for initial deposit display
+  const getInitialDepositFiatValue = () => {
+    if (!initialDepositInput || parseFloat(initialDepositInput) <= 0) return null;
+    const fiatValue = convertOooweeeToFiat(initialDepositInput, accountCurrency.toLowerCase());
+    return fiatValue;
+  };
+
+  // Get minimum deposit in OOOWEEE for current currency
+  const getMinimumOooweeeDeposit = () => {
+    const minFiat = getMinimumDepositInCurrency(accountCurrency);
+    return convertFiatToOooweee(minFiat, accountCurrency.toLowerCase());
+  };
+
   return (
     <div className="App">
-      <Toaster position="top-right" />
-      
+      <Toaster position="top-center" />
       {showBuyModal && <BuyModal />}
       
-      <div className="floating-coins">
-        {[...Array(10)].map((_, i) => (
-          <div
-            key={i}
-            className="coin"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 3}s`
-            }}
-          >
-            🪙
-          </div>
-        ))}
-      </div>
-      
       <header className="App-header">
-        <div className="tab-navigation">
-          <button 
-            className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
-            onClick={() => setActiveTab('dashboard')}
-          >
-            🎮 Dashboard
-          </button>
+        {/* Tab Navigation */}
+        <nav className="tab-navigation">
           <button 
             className={`tab-btn ${activeTab === 'about' ? 'active' : ''}`}
             onClick={() => setActiveTab('about')}
           >
             📖 About
           </button>
+          <button 
+            className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
+            onClick={() => setActiveTab('dashboard')}
+          >
+            🏠 Dashboard
+          </button>
           {account?.toLowerCase() === ADMIN_WALLET.toLowerCase() && (
             <button 
-              className={`tab-btn admin-tab ${activeTab === 'admin' ? 'active' : ''}`}
+              className={`tab-btn ${activeTab === 'admin' ? 'active' : ''}`}
               onClick={() => setActiveTab('admin')}
             >
-              🔧 Admin
+              ⚙️ Admin
             </button>
           )}
-        </div>
-
-        {activeTab === 'about' ? (
-          renderAboutPage()
-        ) : activeTab === 'admin' && account?.toLowerCase() === ADMIN_WALLET.toLowerCase() ? (
-          renderAdminDashboard()
-        ) : (
+        </nav>
+        
+        {activeTab === 'about' && renderAboutPage()}
+        
+        {activeTab === 'admin' && account?.toLowerCase() === ADMIN_WALLET.toLowerCase() && renderAdminDashboard()}
+        
+        {activeTab === 'dashboard' && (
           <>
             <div className="hero-section">
               <img src={oooweeLogo} alt="OOOWEEE" className="main-logo pixel-art" />
-              <p className="tagline">OOOWEEE! Make your $aving goals non-negotiable!</p>
+              <h1 className="hero-title">OOOWEEE SAVINGS</h1>
+              <p className="hero-subtitle">Lock It. Grow It. Keep It.</p>
             </div>
-
+            
             {!account ? (
               <div className="connect-section">
-                <div className="welcome-card">
-                  <h3>🎮 Welcome to Digital Savings!</h3>
-                  <div className="feature-grid">
-                    <div className="feature">
-                      <span className="icon">🏦</span>
-                      <h4>Like a Bank Account</h4>
-                      <p>Save money for your goals</p>
-                    </div>
-                    <div className="feature">
-                      <span className="icon">🔒</span>
-                      <h4>But More Secure</h4>
-                      <p>Protected by blockchain</p>
-                    </div>
-                    <div className="feature">
-                      <span className="icon">🌍</span>
-                      <h4>Works Globally</h4>
-                      <p>Send anywhere instantly</p>
-                    </div>
-                  </div>
-                </div>
-                <button onClick={connectWallet} className="connect-btn rainbow-btn" disabled={isConnecting}>
-                  <span>🔗</span> {isConnecting ? 'Connecting...' : 'Connect Wallet'}
+                <p className="connect-text">Connect your wallet to start saving!</p>
+                <button 
+                  onClick={connectWallet} 
+                  disabled={loading}
+                  className="connect-btn rainbow-btn"
+                >
+                  {loading ? '⏳ Connecting...' : '🔗 Connect Wallet'}
                 </button>
-                <p className="info-text">Works with MetaMask, Trust Wallet, and more!</p>
-                <p className="disclaimer">💡 Values shown in your selected currency are estimates based on current market rates</p>
               </div>
             ) : (
               <div className="dashboard">
-                <div className="wallet-info">
-                  <div className="wallet-card">
-                    <div className="wallet-header">
-                      <h3>💰 Wallet Status</h3>
-                      <span className="address">{account.slice(0, 6)}...{account.slice(-4)}</span>
-                      <button onClick={disconnectWallet} className="disconnect-btn">Disconnect</button>
-                    </div>
-                    
-                    <div className="currency-toggle">
-                      <button 
-                        className={`toggle-btn ${displayCurrency === 'crypto' ? 'active' : ''}`}
-                        onClick={() => setDisplayCurrency('crypto')}
-                      >
-                        🪙 Crypto
-                      </button>
-                      <button 
-                        className={`toggle-btn ${displayCurrency === 'fiat' ? 'active' : ''}`}
-                        onClick={() => setDisplayCurrency('fiat')}
-                      >
-                        💶 EUR
-                      </button>
-                    </div>
-                    
-                    <div className="balance-row">
-                      <span>ETH:</span>
-                      <span>{parseFloat(ethBalance).toFixed(4)} ETH</span>
-                    </div>
-                    
-                    <div className="balance-row highlight">
-                      <span>$OOOWEEE:</span>
-                      <span>
-                        {displayCurrency === 'crypto' 
-                          ? `${parseFloat(balance).toLocaleString()} $OOOWEEE`
-                          : getOooweeeInFiat(balance, 'eur')
-                        }
-                      </span>
-                    </div>
-                    {displayCurrency === 'fiat' && (
-                      <p className="conversion-note">≈ {parseFloat(balance).toLocaleString()} $OOOWEEE</p>
-                    )}
-                    
-                    {parseFloat(balance) === 0 && (
-                      <div className="zero-balance-notice">
-                        <p>👋 No OOOWEEE yet? Get started!</p>
-                      </div>
-                    )}
-                    
-                    <button 
-                      className="add-oooweee-btn rainbow-btn"
-                      onClick={() => setShowBuyModal(true)}
-                    >
-                      🛒 Buy $OOOWEEE
+                {/* Wallet Info Card */}
+                <div className="wallet-card">
+                  <div className="wallet-header">
+                    <h2>👛 Your Wallet</h2>
+                    <button onClick={disconnectWallet} className="disconnect-btn">
+                      Disconnect
                     </button>
                   </div>
-
-                  <div className="validator-card">
-                    <div className="validator-header">
-                      <h3>🔐 Validator Network</h3>
+                  
+                  <div className="wallet-info">
+                    <div className="info-item">
+                      <span className="label">Address:</span>
+                      <span className="value">{account.slice(0, 6)}...{account.slice(-4)}</span>
                     </div>
-                    
-                    <div className="stats-grid">
-                      <div className="stat">
-                        <span className="label">Active Validators</span>
-                        <span className="value">{validatorStats.validators}</span>
-                      </div>
-                      <div className="stat">
-                        <span className="label">Next Validator In</span>
-                        <span className="value">{parseFloat(validatorStats.nextValidatorIn).toFixed(4)} ETH</span>
-                      </div>
-                      <div className="stat">
-                        <span className="label">From Stability</span>
-                        <span className="value">{parseFloat(validatorStats.fromStability).toFixed(4)} ETH</span>
-                      </div>
-                      <div className="stat">
-                        <span className="label">From Rewards</span>
-                        <span className="value">{parseFloat(validatorStats.fromRewards).toFixed(4)} ETH</span>
-                      </div>
+                    <div className="info-item">
+                      <span className="label">$OOOWEEE:</span>
+                      <span className="value highlight">{parseFloat(balance).toLocaleString()}</span>
+                      <span className="fiat-equiv">≈ {getOooweeeInFiat(balance, 'eur')}</span>
                     </div>
-                    
-                    <div className="progress-bar">
+                    <div className="info-item">
+                      <span className="label">ETH:</span>
+                      <span className="value">{parseFloat(ethBalance).toFixed(4)}</span>
+                    </div>
+                  </div>
+                  
+                  <button 
+                    onClick={() => {
+                      setBuyMode('eth');
+                      setRequiredOooweeeForPurchase(null);
+                      setShowBuyModal(true);
+                    }} 
+                    className="buy-oooweee-btn"
+                  >
+                    🛒 Buy $OOOWEEE
+                  </button>
+                </div>
+                
+                {/* Validator Fund Card */}
+                <div className="validator-card">
+                  <div className="validator-header">
+                    <h3>⛓️ Validator Fund</h3>
+                  </div>
+                  
+                  <div className="validator-progress">
+                    <div className="progress-bar large">
                       <div 
-                        className="progress-fill validator-progress"
+                        className="progress-fill"
                         style={{ width: `${validatorStats.progress}%` }}
                       />
+                      <span className="progress-text">
+                        {validatorStats.progress.toFixed(1)}% to next validator
+                      </span>
                     </div>
-                    <p className="progress-label">{parseFloat(validatorStats.pendingETH).toFixed(4)} / 32 ETH</p>
-                    
-                    <div className="donation-stats">
-                      <p>💝 Total Donations: {parseFloat(validatorStats.totalDonations).toFixed(4)} ETH</p>
-                      <p>👥 Donors: {validatorStats.donors}</p>
-                    </div>
-                    
-                    <button className="donate-btn" onClick={donateToValidators} disabled={loading}>
-                      💰 Donate ETH
-                    </button>
                   </div>
+                  
+                  <div className="stats-grid">
+                    <div className="stat">
+                      <span className="label">Active Validators</span>
+                      <span className="value">{validatorStats.validators}</span>
+                    </div>
+                    <div className="stat">
+                      <span className="label">ETH Needed</span>
+                      <span className="value">{parseFloat(validatorStats.nextValidatorIn).toFixed(2)}</span>
+                    </div>
+                    <div className="stat">
+                      <span className="label">Pending ETH</span>
+                      <span className="value">{parseFloat(validatorStats.pendingETH).toFixed(4)}</span>
+                    </div>
+                    <div className="stat">
+                      <span className="label">Donors</span>
+                      <span className="value">{validatorStats.donors}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="donation-info">
+                    <p>💜 Total Donated: {parseFloat(validatorStats.totalDonations).toFixed(4)} ETH</p>
+                    <p>🛡️ From Stability: {parseFloat(validatorStats.fromStability).toFixed(4)} ETH</p>
+                  </div>
+                  
+                  <button onClick={donateToValidators} disabled={loading} className="donate-btn">
+                    💰 Donate ETH to Validators
+                  </button>
                 </div>
-
-                <div className="savings-section">
-                  {activeAccounts.length > 0 && (
+                
+                {/* Active Accounts Section */}
+                <div className="accounts-section">
+                  <div className="section-header">
+                    <h2>🎮 Your Savings Quests</h2>
+                    {activeAccounts.length > 0 && (
+                      <button onClick={claimAllRewards} disabled={loading} className="claim-all-btn">
+                        🎁 Claim All Rewards
+                      </button>
+                    )}
+                  </div>
+                  
+                  {activeAccounts.length === 0 ? (
+                    <div className="no-accounts">
+                      <p>No active savings quests yet!</p>
+                      <p>Create your first one below 👇</p>
+                    </div>
+                  ) : (
                     <>
-                      <div className="section-header">
-                        <h2>🎮 Your Active Quests</h2>
-                        {activeAccounts.some(acc => parseFloat(acc.pendingRewards) > 0) && (
-                          <button className="claim-all-btn" onClick={claimAllRewards} disabled={loading}>
-                            🎁 Claim All Rewards
-                          </button>
-                        )}
+                      <div className="currency-toggle">
+                        <button 
+                          className={displayCurrency === 'fiat' ? 'active' : ''}
+                          onClick={() => setDisplayCurrency('fiat')}
+                        >
+                          💶 Fiat
+                        </button>
+                        <button 
+                          className={displayCurrency === 'crypto' ? 'active' : ''}
+                          onClick={() => setDisplayCurrency('crypto')}
+                        >
+                          🪙 Crypto
+                        </button>
                       </div>
+                      
                       <div className="accounts-grid">
                         {activeAccounts.map(acc => {
-                          const currency = getCurrencyFromCode(acc.targetCurrency);
-                          const currencyInfo = CURRENCIES[currency];
-                          
+                          const currencyCode = getCurrencyFromCode(acc.targetCurrency);
                           return (
-                            <div key={acc.id} className="account-card">
+                            <div key={acc.id} className={`account-card ${acc.type.toLowerCase()}`}>
                               <div className="account-header">
                                 <h3>{acc.goalName}</h3>
                                 <span className={`account-type ${acc.type.toLowerCase()}`}>{acc.type}</span>
                               </div>
                               
+                              <div className="progress-bar">
+                                <div 
+                                  className="progress-fill"
+                                  style={{ width: `${acc.progress}%` }}
+                                />
+                                <span className="progress-text">{acc.progress}%</span>
+                              </div>
+                              
                               <div className="account-details">
-                                {acc.isFiatTarget ? (
-                                  <div className="fiat-target-display">
-                                    {(acc.type === 'Growth' || acc.type === 'Balance') && (
-                                      <div className="detail-row">
-                                        <span>Target:</span>
-                                        <span className="primary-amount">
-                                          {currencyInfo.symbol}
-                                          {(acc.targetFiat / Math.pow(10, currencyInfo.decimals)).toFixed(currencyInfo.decimals)}
-                                        </span>
-                                      </div>
-                                    )}
-                                    
-                                    <div className="detail-row">
-                                      <span>Current Value:</span>
-                                      <span className="primary-amount">
-                                        {currencyInfo.symbol}
-                                        {(acc.currentFiatValue / Math.pow(10, currencyInfo.decimals)).toFixed(currencyInfo.decimals)}
-                                      </span>
-                                    </div>
-                                    
-                                    <div className="balance-in-tokens">
-                                      <span className="secondary-amount">
-                                        {parseFloat(acc.balance).toLocaleString()} $OOOWEEE
-                                      </span>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="balance-display">
-                                    <div className="detail-row">
-                                      <span>Balance:</span>
-                                      <span className="primary-amount">
-                                        {displayCurrency === 'crypto'
-                                          ? `${parseFloat(acc.balance).toLocaleString()} $OOOWEEE`
-                                          : getOooweeeInFiat(acc.balance, 'eur')
-                                        }
-                                      </span>
-                                    </div>
-                                    {displayCurrency === 'fiat' && (
-                                      <span className="secondary-amount">
-                                        ≈ {parseFloat(acc.balance).toLocaleString()} $OOOWEEE
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
+                                <p>
+                                  <strong>Balance:</strong> {displayCurrency === 'crypto'
+                                    ? `${parseFloat(acc.balance).toLocaleString()} $OOOWEEE`
+                                    : getOooweeeInFiat(acc.balance, currencyCode.toLowerCase())
+                                  }
+                                </p>
                                 
                                 {acc.type === 'Time' && (
-                                  <div className="detail-row">
-                                    <span>Days Remaining:</span>
-                                    <span className="value">{getDaysRemaining(acc.unlockTime)}</span>
-                                  </div>
+                                  <p>
+                                    <strong>Unlocks:</strong> {getDaysRemaining(acc.unlockTime) > 0 
+                                      ? `${getDaysRemaining(acc.unlockTime)} days`
+                                      : '🔓 Ready!'}
+                                  </p>
                                 )}
                                 
-                                {acc.type === 'Growth' && !acc.isFiatTarget && (
-                                  <div className="detail-row">
-                                    <span>Target:</span>
-                                    <span className="value">
-                                      {displayCurrency === 'crypto'
-                                        ? `${parseFloat(acc.target).toLocaleString()} $OOOWEEE`
-                                        : getOooweeeInFiat(acc.target, 'eur')
-                                      }
-                                    </span>
-                                  </div>
+                                {(acc.type === 'Growth' || acc.type === 'Balance') && acc.isFiatTarget && (
+                                  <p>
+                                    <strong>Target:</strong> {displayCurrency === 'crypto'
+                                      ? `${convertFiatToOooweee(acc.targetFiat / 100, currencyCode.toLowerCase()).toLocaleString()} $OOOWEEE`
+                                      : formatCurrency(acc.targetFiat / 100, currencyCode)
+                                    }
+                                  </p>
                                 )}
                                 
-                                {acc.type === 'Balance' && (
-                                  <>
-                                    {!acc.isFiatTarget && (
-                                      <div className="detail-row">
-                                        <span>Target:</span>
-                                        <span className="value">
-                                          {displayCurrency === 'crypto'
-                                            ? `${parseFloat(acc.target).toLocaleString()} $OOOWEEE`
-                                            : getOooweeeInFiat(acc.target, 'eur')
-                                          }
-                                        </span>
-                                      </div>
-                                    )}
-                                    <div className="detail-row">
-                                      <span>To:</span>
-                                      <span className="value address">{acc.recipient.slice(0, 6)}...{acc.recipient.slice(-4)}</span>
-                                    </div>
-                                    <p className="info-note">📝 Need 101% for auto-transfer</p>
-                                  </>
+                                {acc.type === 'Balance' && acc.recipient && (
+                                  <p>
+                                    <strong>To:</strong> {acc.recipient.slice(0, 6)}...{acc.recipient.slice(-4)}
+                                  </p>
                                 )}
-                                
-                                <div className="progress-section">
-                                  <div className="progress-bar">
-                                    <div 
-                                      className="progress-fill rainbow-fill"
-                                      style={{ width: `${Math.min(acc.progress, 100)}%` }}
-                                    />
-                                  </div>
-                                  <span className="progress-text">{acc.progress}% Complete</span>
-                                </div>
+                              </div>
+                              
+                              <div className="account-actions">
+                                <button 
+                                  onClick={() => claimRewards(acc.id)} 
+                                  disabled={loading}
+                                  className="claim-btn"
+                                >
+                                  🎁 Claim
+                                </button>
                               </div>
                               
                               <div className="deposit-section">
@@ -1791,14 +1794,14 @@ function App() {
                                   type="number" 
                                   placeholder="Amount to deposit"
                                   id={`deposit-${acc.id}`}
-                                  min="0.001"
-                                  step="0.001"
+                                  min="1"
                                   className="deposit-input"
                                 />
                                 <button 
                                   onClick={() => {
-                                    const amount = document.getElementById(`deposit-${acc.id}`).value;
-                                    if (amount && amount > 0) {
+                                    const input = document.getElementById(`deposit-${acc.id}`);
+                                    const amount = input?.value;
+                                    if (amount && parseFloat(amount) > 0) {
                                       depositToAccount(acc.id, amount);
                                     } else {
                                       toast.error('Enter an amount');
@@ -1880,9 +1883,10 @@ function App() {
                   </div>
                   
                   <div className="form-group">
+                    <label>💰 Initial Deposit ({CURRENCIES[accountCurrency].symbol}):</label>
                     <input 
                       type="number" 
-                      placeholder="Initial deposit $OOOWEEE (any amount > 0)" 
+                      placeholder={`Min ${formatCurrency(getMinimumDepositInCurrency(accountCurrency), accountCurrency)} (≈ €10)`}
                       id="initialDeposit"
                       min="0.001"
                       step="0.001"
@@ -1890,10 +1894,20 @@ function App() {
                       onChange={(e) => setInitialDepositInput(e.target.value)}
                       className="number-input"
                     />
-                    <p className="fee-note">💡 1% creation fee from initial deposit</p>
-                    {parseFloat(balance) < parseFloat(initialDepositInput) && initialDepositInput && (
-                      <p className="swap-notice">⚠️ Insufficient balance - will offer to buy with ETH</p>
+                    {initialDepositInput && (
+                      <div className="deposit-conversion">
+                        <p className="conversion-note">
+                          ≈ {convertFiatToOooweee(initialDepositInput, accountCurrency.toLowerCase()).toLocaleString()} $OOOWEEE
+                        </p>
+                        {parseFloat(balance) < convertFiatToOooweee(initialDepositInput, accountCurrency.toLowerCase()) && (
+                          <p className="swap-notice">⚠️ Insufficient balance - will offer to buy with ETH</p>
+                        )}
+                        {convertOooweeeToFiat(convertFiatToOooweee(initialDepositInput, accountCurrency.toLowerCase()), 'eur') < 10 && (
+                          <p className="error-note">⚠️ Minimum deposit is €10</p>
+                        )}
+                      </div>
                     )}
+                    <p className="fee-note">💡 1% creation fee from initial deposit</p>
                   </div>
                   
                   {accountType === 'time' && (
@@ -1928,9 +1942,7 @@ function App() {
                       )}
                       {accountType === 'growth' && initialDepositInput && targetAmountInput && (
                         (() => {
-                          const currencyCode = accountCurrency.toLowerCase();
-                          const ethPriceForCurrency = ethPrice?.[currencyCode] || ethPrice?.eur || 1850;
-                          const initialFiatValue = parseFloat(initialDepositInput) * oooweeePrice * ethPriceForCurrency;
+                          const initialFiatValue = parseFloat(initialDepositInput);
                           if (initialFiatValue >= parseFloat(targetAmountInput)) {
                             return <p className="error-note">⚠️ Target must be higher than initial deposit value ({formatCurrency(initialFiatValue, accountCurrency)})</p>;
                           }
@@ -1954,7 +1966,15 @@ function App() {
                   )}
                   
                   <button 
-                    onClick={handleCreateAccount} 
+                    onClick={() => {
+                      // Convert fiat input to OOOWEEE before creating
+                      const fiatAmount = parseFloat(initialDepositInput);
+                      if (fiatAmount > 0) {
+                        const oooweeeAmount = convertFiatToOooweee(fiatAmount, accountCurrency.toLowerCase());
+                        document.getElementById('initialDeposit').value = oooweeeAmount;
+                      }
+                      handleCreateAccount();
+                    }}
                     disabled={loading}
                     className="create-btn rainbow-btn"
                   >
