@@ -1503,8 +1503,8 @@ select:focus {
 .admin-dashboard h2 {
   font-family: 'Press Start 2P', cursive;
   font-size: 1.2rem;
-  color: #fff;
-  text-shadow: 2px 2px 0px #000;
+  color: #222;  /* Was #fff */
+  text-shadow: none;  /* Was 2px 2px 0px #000 */
   margin-bottom: 1.5rem;
   display: flex;
   align-items: center;
