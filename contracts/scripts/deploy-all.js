@@ -79,7 +79,7 @@ async function main() {
     UNISWAP_ROUTER,
     deployed.validatorFund,
     OPERATIONS_WALLET,
-    ethers.constants.AddressZero  // L1 collector - not used on testnet
+    OPERATIONS_WALLET  // L1 collector - not used on testnet
   );
   await rewards.deployed();
   deployed.rewards = rewards.address;
