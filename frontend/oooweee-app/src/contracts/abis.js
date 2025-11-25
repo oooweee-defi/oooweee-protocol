@@ -296,24 +296,17 @@ export const OOOWEEETokenABI = [
     "stateMutability": "nonpayable",
     "type": "function"
   },
-  // Custom Functions
-  {
-    "inputs": [{ "internalType": "address", "name": "_mechanism", "type": "address" }],
-    "name": "setStabilityMechanism",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "_newMechanism", "type": "address" }],
-    "name": "updateStabilityMechanism",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
+  // Admin Functions
   {
     "inputs": [],
     "name": "enableTrading",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "_mechanism", "type": "address" }],
+    "name": "setStabilityMechanism",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -341,7 +334,7 @@ export const OOOWEEETokenABI = [
 ];
 
 // ============================================
-// OOOWEEESavings ABI - COMPLETELY UPDATED
+// OOOWEEESavings ABI - UPDATED WITH VIEW FUNCTIONS
 // ============================================
 export const OOOWEEESavingsABI = [
   // Constructor
@@ -463,6 +456,14 @@ export const OOOWEEESavingsABI = [
       { "indexed": false, "internalType": "uint256", "name": "withdrawalFee", "type": "uint256" }
     ],
     "name": "FeesUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "address", "name": "newOracle", "type": "address" }
+    ],
+    "name": "PriceOracleUpdated",
     "type": "event"
   },
   {
@@ -663,7 +664,14 @@ export const OOOWEEESavingsABI = [
     "stateMutability": "nonpayable",
     "type": "function"
   },
-  // Price Helper Functions
+  {
+    "inputs": [{ "internalType": "address", "name": "_priceOracle", "type": "address" }],
+    "name": "setPriceOracle",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  // Price Functions (state-changing)
   {
     "inputs": [
       { "internalType": "uint256", "name": "oooweeeBalance", "type": "uint256" },
@@ -682,6 +690,27 @@ export const OOOWEEESavingsABI = [
     "name": "getFiatToTokens",
     "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  // NEW: Price Functions (view - for frontend)
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "oooweeeBalance", "type": "uint256" },
+      { "internalType": "enum SavingsPriceOracle.Currency", "name": "currency", "type": "uint8" }
+    ],
+    "name": "getBalanceInFiatView",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "fiatAmount", "type": "uint256" },
+      { "internalType": "enum SavingsPriceOracle.Currency", "name": "currency", "type": "uint8" }
+    ],
+    "name": "getFiatToTokensView",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
     "type": "function"
   },
   // Account Creation Functions
@@ -771,6 +800,17 @@ export const OOOWEEESavingsABI = [
     "stateMutability": "view",
     "type": "function"
   },
+  // NEW: Get user account count
+  {
+    "inputs": [{ "internalType": "address", "name": "user", "type": "address" }],
+    "name": "getUserAccountCount",
+    "outputs": [
+      { "internalType": "uint256", "name": "total", "type": "uint256" },
+      { "internalType": "uint256", "name": "active", "type": "uint256" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
   {
     "inputs": [
       { "internalType": "address", "name": "owner", "type": "address" },
@@ -804,6 +844,22 @@ export const OOOWEEESavingsABI = [
       { "internalType": "bool", "name": "canWithdraw", "type": "bool" }
     ],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  // NEW: View version of getAccountFiatProgress
+  {
+    "inputs": [
+      { "internalType": "address", "name": "owner", "type": "address" },
+      { "internalType": "uint256", "name": "accountId", "type": "uint256" }
+    ],
+    "name": "getAccountFiatProgressView",
+    "outputs": [
+      { "internalType": "uint256", "name": "currentValue", "type": "uint256" },
+      { "internalType": "uint256", "name": "targetValue", "type": "uint256" },
+      { "internalType": "uint256", "name": "percentComplete", "type": "uint256" },
+      { "internalType": "bool", "name": "canWithdraw", "type": "bool" }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -851,7 +907,7 @@ export const OOOWEEESavingsABI = [
 ];
 
 // ============================================
-// OOOWEEEValidatorFund ABI - COMPLETELY UPDATED
+// OOOWEEEValidatorFund ABI
 // ============================================
 export const OOOWEEEValidatorFundABI = [
   // Constructor
@@ -1172,7 +1228,7 @@ export const OOOWEEEValidatorFundABI = [
 ];
 
 // ============================================
-// OOOWEEEStability ABI
+// OOOWEEEStability ABI - UPDATED WITH NEW FUNCTIONS
 // ============================================
 export const OOOWEEEStabilityABI = [
   // Constructor
@@ -1279,6 +1335,16 @@ export const OOOWEEEStabilityABI = [
     "name": "EmergencyRecovery",
     "type": "event"
   },
+  // NEW: Force Daily Reset Event
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": false, "internalType": "uint256", "name": "timestamp", "type": "uint256" },
+      { "indexed": false, "internalType": "address", "name": "triggeredBy", "type": "address" }
+    ],
+    "name": "ForceDailyReset",
+    "type": "event"
+  },
   {
     "anonymous": false,
     "inputs": [
@@ -1355,6 +1421,14 @@ export const OOOWEEEStabilityABI = [
   {
     "inputs": [],
     "name": "MAX_DAILY_TOKEN_USE",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  // NEW: History constants
+  {
+    "inputs": [],
+    "name": "MAX_HISTORY",
     "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
@@ -1533,6 +1607,21 @@ export const OOOWEEEStabilityABI = [
     "stateMutability": "view",
     "type": "function"
   },
+  // NEW: Intervention History Array
+  {
+    "inputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "name": "interventionHistory",
+    "outputs": [
+      { "internalType": "uint64", "name": "timestamp", "type": "uint64" },
+      { "internalType": "uint256", "name": "priceBefore", "type": "uint256" },
+      { "internalType": "uint256", "name": "priceAfter", "type": "uint256" },
+      { "internalType": "uint256", "name": "tokensInjected", "type": "uint256" },
+      { "internalType": "uint256", "name": "ethCaptured", "type": "uint256" },
+      { "internalType": "bool", "name": "systemTriggered", "type": "bool" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
   // Ownable
   {
     "inputs": [],
@@ -1634,6 +1723,67 @@ export const OOOWEEEStabilityABI = [
     "stateMutability": "view",
     "type": "function"
   },
+  // NEW: Daily Reset Functions
+  {
+    "inputs": [],
+    "name": "needsDailyReset",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "timeUntilDailyReset",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  // NEW: Intervention History Functions
+  {
+    "inputs": [],
+    "name": "getInterventionHistory",
+    "outputs": [{
+      "components": [
+        { "internalType": "uint64", "name": "timestamp", "type": "uint64" },
+        { "internalType": "uint256", "name": "priceBefore", "type": "uint256" },
+        { "internalType": "uint256", "name": "priceAfter", "type": "uint256" },
+        { "internalType": "uint256", "name": "tokensInjected", "type": "uint256" },
+        { "internalType": "uint256", "name": "ethCaptured", "type": "uint256" },
+        { "internalType": "bool", "name": "systemTriggered", "type": "bool" }
+      ],
+      "internalType": "struct OOOWEEEStability.InterventionRecord[]",
+      "name": "",
+      "type": "tuple[]"
+    }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "count", "type": "uint256" }],
+    "name": "getRecentInterventions",
+    "outputs": [{
+      "components": [
+        { "internalType": "uint64", "name": "timestamp", "type": "uint64" },
+        { "internalType": "uint256", "name": "priceBefore", "type": "uint256" },
+        { "internalType": "uint256", "name": "priceAfter", "type": "uint256" },
+        { "internalType": "uint256", "name": "tokensInjected", "type": "uint256" },
+        { "internalType": "uint256", "name": "ethCaptured", "type": "uint256" },
+        { "internalType": "bool", "name": "systemTriggered", "type": "bool" }
+      ],
+      "internalType": "struct OOOWEEEStability.InterventionRecord[]",
+      "name": "",
+      "type": "tuple[]"
+    }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getInterventionHistoryCount",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
   // Admin Functions
   {
     "inputs": [{ "internalType": "address", "name": "_pair", "type": "address" }],
@@ -1673,6 +1823,14 @@ export const OOOWEEEStabilityABI = [
   {
     "inputs": [],
     "name": "updateBaselinePrice",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  // NEW: Force Daily Reset
+  {
+    "inputs": [],
+    "name": "forceDailyReset",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1922,14 +2080,14 @@ export const OOOWEEERewardsDistributionABI = [
   },
   {
     "inputs": [],
-    "name": "distributionThreshold",
+    "name": "lastDistribution",
     "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [],
-    "name": "lastDistribution",
+    "name": "distributionThreshold",
     "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
@@ -1959,7 +2117,7 @@ export const OOOWEEERewardsDistributionABI = [
   // Main Functions
   {
     "inputs": [],
-    "name": "receiveFromL1Bridge",
+    "name": "receiveRewardsFromL1",
     "outputs": [],
     "stateMutability": "payable",
     "type": "function"
@@ -1971,29 +2129,22 @@ export const OOOWEEERewardsDistributionABI = [
     "stateMutability": "nonpayable",
     "type": "function"
   },
-  {
-    "inputs": [{ "internalType": "uint256", "name": "amount", "type": "uint256" }],
-    "name": "fundValidators",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
   // Admin Functions
   {
-    "inputs": [{ "internalType": "address", "name": "_l1Collector", "type": "address" }],
-    "name": "setL1ValidatorCollector",
+    "inputs": [
+      { "internalType": "address", "name": "_savings", "type": "address" },
+      { "internalType": "address", "name": "_token", "type": "address" },
+      { "internalType": "address", "name": "_validatorFund", "type": "address" },
+      { "internalType": "address", "name": "_operations", "type": "address" }
+    ],
+    "name": "updateContracts",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
-    "inputs": [
-      { "internalType": "address", "name": "_savingsContract", "type": "address" },
-      { "internalType": "address", "name": "_oooweeeToken", "type": "address" },
-      { "internalType": "address", "name": "_validatorFund", "type": "address" },
-      { "internalType": "address", "name": "_operationsWallet", "type": "address" }
-    ],
-    "name": "updateContracts",
+    "inputs": [{ "internalType": "address", "name": "_collector", "type": "address" }],
+    "name": "setL1ValidatorCollector",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -2054,7 +2205,7 @@ export const OOOWEEERewardsDistributionABI = [
 ];
 
 // ============================================
-// SavingsPriceOracle ABI
+// SavingsPriceOracle ABI - UPDATED WITH VIEW FUNCTIONS
 // ============================================
 export const SavingsPriceOracleABI = [
   // Constructor
@@ -2140,6 +2291,14 @@ export const SavingsPriceOracleABI = [
   {
     "inputs": [],
     "name": "PRICE_STALENESS_THRESHOLD",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  // NEW: Chainlink decimals constant
+  {
+    "inputs": [],
+    "name": "CHAINLINK_DECIMALS",
     "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
@@ -2250,6 +2409,29 @@ export const SavingsPriceOracleABI = [
     "stateMutability": "nonpayable",
     "type": "function"
   },
+  // NEW: View version of getOooweeePrice for frontend
+  {
+    "inputs": [{ "internalType": "enum SavingsPriceOracle.Currency", "name": "currency", "type": "uint8" }],
+    "name": "getOooweeePriceView",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  // NEW: Helper view functions
+  {
+    "inputs": [],
+    "name": "getLiquidityPoolCount",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "enum SavingsPriceOracle.Currency", "name": "currency", "type": "uint8" }],
+    "name": "getCurrencyDecimals",
+    "outputs": [{ "internalType": "uint8", "name": "", "type": "uint8" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
   // Admin Functions
   {
     "inputs": [{ "internalType": "address", "name": "_pool", "type": "address" }],
@@ -2321,6 +2503,14 @@ export const SavingsPriceOracleABI = [
       { "internalType": "uint256", "name": "weight", "type": "uint256" }
     ],
     "name": "addLiquidityPool",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  // NEW: Remove liquidity pool
+  {
+    "inputs": [{ "internalType": "uint256", "name": "index", "type": "uint256" }],
+    "name": "removeLiquidityPool",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
