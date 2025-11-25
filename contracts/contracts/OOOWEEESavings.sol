@@ -116,6 +116,7 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
     event FeeCollectorSet(address indexed collector);
     event RewardsDistributorSet(address indexed distributor);
     event FeesUpdated(uint256 creationFee, uint256 withdrawalFee);
+    event PriceOracleUpdated(address indexed newOracle);
 
     constructor(
         address _tokenAddress,
@@ -150,7 +151,18 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
         emit FeesUpdated(_creationFeeRate, _withdrawalFeeRate);
     }
     
+    function setPriceOracle(address _priceOracle) external onlyOwner {
+        require(_priceOracle != address(0), "Invalid address");
+        priceOracle = SavingsPriceOracle(_priceOracle);
+        emit PriceOracleUpdated(_priceOracle);
+    }
     
+    // ============ Price Functions ============
+    
+    /**
+     * @notice Get balance value in fiat (state-changing version)
+     * @dev Use this for contract logic - updates price cache
+     */
     function getBalanceInFiat(
         uint256 oooweeeBalance,
         SavingsPriceOracle.Currency currency
@@ -159,11 +171,40 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
         return (oooweeeBalance * pricePerToken) / 1e18;
     }
     
+    /**
+     * @notice Get balance value in fiat (view version)
+     * @dev Use this for frontend/read-only calls - does NOT update price cache
+     */
+    function getBalanceInFiatView(
+        uint256 oooweeeBalance,
+        SavingsPriceOracle.Currency currency
+    ) public view returns (uint256) {
+        uint256 pricePerToken = priceOracle.getOooweeePriceView(currency);
+        return (oooweeeBalance * pricePerToken) / 1e18;
+    }
+    
+    /**
+     * @notice Convert fiat to tokens (state-changing version)
+     * @dev Use this for contract logic
+     */
     function getFiatToTokens(
         uint256 fiatAmount,
         SavingsPriceOracle.Currency currency
     ) public returns (uint256) {
         uint256 pricePerToken = priceOracle.getOooweeePrice(currency);
+        if (pricePerToken == 0) return 0;
+        return (fiatAmount * 1e18) / pricePerToken;
+    }
+    
+    /**
+     * @notice Convert fiat to tokens (view version)
+     * @dev Use this for frontend/read-only calls
+     */
+    function getFiatToTokensView(
+        uint256 fiatAmount,
+        SavingsPriceOracle.Currency currency
+    ) public view returns (uint256) {
+        uint256 pricePerToken = priceOracle.getOooweeePriceView(currency);
         if (pricePerToken == 0) return 0;
         return (fiatAmount * 1e18) / pricePerToken;
     }
@@ -595,6 +636,13 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
         }
     }
     
+    function getUserAccountCount(address user) external view returns (uint256 total, uint256 active) {
+        total = userAccounts[user].length;
+        for (uint256 i = 0; i < total; i++) {
+            if (userAccounts[user][i].isActive) active++;
+        }
+    }
+    
     function getAccountDetails(address owner, uint256 accountId) 
         external view returns (
             AccountType accountType,
@@ -624,6 +672,10 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
         );
     }
     
+    /**
+     * @notice Get account fiat progress (state-changing version)
+     * @dev Updates price cache - use for contract logic
+     */
     function getAccountFiatProgress(address owner, uint256 accountId) 
         external returns (
             uint256 currentValue,
@@ -641,6 +693,43 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
         
         uint256 totalBalance = account.balance + _calculatePendingRewards(owner, accountId);
         currentValue = getBalanceInFiat(totalBalance, account.targetCurrency);
+        targetValue = account.targetFiat;
+        
+        if (targetValue > 0) {
+            percentComplete = (currentValue * 100) / targetValue;
+            if (percentComplete > 100) percentComplete = 100;
+        }
+        
+        canWithdraw = false;
+        if (account.accountType == AccountType.Growth) {
+            canWithdraw = currentValue >= targetValue;
+        } else if (account.accountType == AccountType.Balance) {
+            uint256 requiredValue = targetValue + (targetValue / 100);
+            canWithdraw = currentValue >= requiredValue;
+        }
+    }
+    
+    /**
+     * @notice Get account fiat progress (view version)
+     * @dev Does NOT update price cache - safe for frontend/read-only calls
+     */
+    function getAccountFiatProgressView(address owner, uint256 accountId) 
+        external view returns (
+            uint256 currentValue,
+            uint256 targetValue,
+            uint256 percentComplete,
+            bool canWithdraw
+        ) 
+    {
+        require(accountId < userAccounts[owner].length, "Invalid account");
+        SavingsAccount memory account = userAccounts[owner][accountId];
+        
+        if (!account.isFiatTarget) {
+            return (0, 0, 0, false);
+        }
+        
+        uint256 totalBalance = account.balance + _calculatePendingRewards(owner, accountId);
+        currentValue = getBalanceInFiatView(totalBalance, account.targetCurrency);
         targetValue = account.targetFiat;
         
         if (targetValue > 0) {

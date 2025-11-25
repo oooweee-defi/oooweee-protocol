@@ -29,6 +29,7 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
     }
 
     uint256 public constant PRICE_STALENESS_THRESHOLD = 1 hours;
+    uint256 public constant CHAINLINK_DECIMALS = 8; // Chainlink uses 8 decimals
 
     IUniswapV2Router02 public immutable uniswapRouter;
     address public oooweeePool;
@@ -53,10 +54,28 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
 
     constructor(address _uniswapRouter) Ownable() {
         uniswapRouter = IUniswapV2Router02(_uniswapRouter);
+        
+        // Initialize currency decimals (smallest unit representation)
+        // 2 decimals = cents/pence, 0 decimals = whole units (yen/won)
+        currencyDecimals[Currency.USD] = 2;
+        currencyDecimals[Currency.EUR] = 2;
+        currencyDecimals[Currency.GBP] = 2;
+        currencyDecimals[Currency.JPY] = 0; // Yen has no decimal subdivision
+        currencyDecimals[Currency.CNY] = 2;
+        currencyDecimals[Currency.CAD] = 2;
+        currencyDecimals[Currency.AUD] = 2;
+        currencyDecimals[Currency.CHF] = 2;
+        currencyDecimals[Currency.INR] = 2;
+        currencyDecimals[Currency.KRW] = 0; // Won has no decimal subdivision
     }
 
     // ===== Core price accessors =====
 
+    /**
+     * @notice Get ETH price in fiat from Chainlink (8 decimals)
+     * @param currency The target currency
+     * @return Price with 8 decimals (e.g., 185000000000 = $1850.00)
+     */
     function getETHPrice(Currency currency) public view returns (uint256) {
         address feedAddress = priceFeeds[currency];
         if (feedAddress == address(0)) {
@@ -83,6 +102,12 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
         }
     }
 
+    /**
+     * @notice Get OOOWEEE price in fiat (state-changing version)
+     * @dev Updates lastValidPrice cache - use for contract logic
+     * @param currency The target currency
+     * @return Price in smallest currency unit (e.g., cents for USD/EUR)
+     */
     function getOooweeePrice(Currency currency) public returns (uint256) {
         (bool success, uint256 primaryPrice) = _tryPriceSource(activePriceSource, currency);
         uint256 fallbackPrice;
@@ -104,6 +129,30 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
         return _getEmergencyPrice(currency);
     }
 
+    /**
+     * @notice Get OOOWEEE price in fiat (view version for frontend)
+     * @dev Does NOT update lastValidPrice cache - safe for read-only calls
+     * @param currency The target currency
+     * @return Price in smallest currency unit (e.g., cents for USD/EUR)
+     */
+    function getOooweeePriceView(Currency currency) public view returns (uint256) {
+        (bool success, uint256 primaryPrice) = _tryPriceSourceView(activePriceSource, currency);
+
+        if (success && _isPriceReasonable(primaryPrice, currency)) {
+            return primaryPrice;
+        }
+
+        (success, uint256 fallbackPrice) = _tryPriceSourceView(PriceSource.FIXED_RATE, currency);
+
+        if (success && _isPriceReasonable(fallbackPrice, currency)) {
+            return fallbackPrice;
+        }
+
+        return _getEmergencyPrice(currency);
+    }
+
+    // ===== Internal price source handlers =====
+
     function _tryPriceSource(PriceSource source, Currency currency)
         internal view returns (bool success, uint256 price)
     {
@@ -121,10 +170,24 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
         return (false, 0);
     }
 
+    function _tryPriceSourceView(PriceSource source, Currency currency)
+        internal view returns (bool success, uint256 price)
+    {
+        // Same as _tryPriceSource - all internal functions are already view
+        return _tryPriceSource(source, currency);
+    }
+
+    /**
+     * @notice Calculate OOOWEEE price using Chainlink ETH price and Uniswap reserves
+     * @dev FIXED: Properly handles decimal conversion between Chainlink (8) and currency decimals
+     * @param currency The target currency
+     * @return success Whether price was successfully retrieved
+     * @return price Price in smallest currency unit (e.g., cents)
+     */
     function _getChainlinkUniswapPrice(Currency currency)
         internal view returns (bool success, uint256 price)
     {
-        uint256 ethPrice = getETHPrice(currency);
+        uint256 ethPrice = getETHPrice(currency); // 8 decimals from Chainlink
         if (ethPrice == 0) return (false, 0);
         if (oooweeePool == address(0)) return (false, 0);
 
@@ -139,13 +202,39 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
             if (reserve0 == 0 || reserve1 == 0) return (false, 0);
 
             address token0 = IUniswapV2Pair(oooweeePool).token0();
+            uint256 priceInEth; // 18 decimals
+            
             if (token0 == uniswapRouter.WETH()) {
-                uint256 priceInEth = (uint256(reserve0) * 1e18) / uint256(reserve1);
-                return (true, (priceInEth * ethPrice) / 1e18);
+                // WETH is token0, OOOWEEE is token1
+                // priceInEth = ETH per OOOWEEE = reserve0 / reserve1
+                priceInEth = (uint256(reserve0) * 1e18) / uint256(reserve1);
             } else {
-                uint256 priceInEth = (uint256(reserve1) * 1e18) / uint256(reserve0);
-                return (true, (priceInEth * ethPrice) / 1e18);
+                // OOOWEEE is token0, WETH is token1
+                // priceInEth = ETH per OOOWEEE = reserve1 / reserve0
+                priceInEth = (uint256(reserve1) * 1e18) / uint256(reserve0);
             }
+            
+            // Calculate final price in currency's smallest unit
+            // priceInEth: 18 decimals (ETH per token)
+            // ethPrice: 8 decimals (fiat per ETH from Chainlink)
+            // Target: currencyDecimals (e.g., 2 for cents)
+            //
+            // Formula: (priceInEth * ethPrice) / 10^(18 + 8 - targetDecimals)
+            // Example for EUR (2 decimals):
+            //   priceInEth = 6.88e12 (0.00000688 ETH with 18 decimals)
+            //   ethPrice = 1.85e11 (€1850 with 8 decimals)
+            //   result = (6.88e12 * 1.85e11) / 10^(18+8-2) = 1.27e24 / 1e24 = 1.27 cents
+            
+            uint8 targetDecimals = currencyDecimals[currency];
+            if (targetDecimals == 0 && currency != Currency.JPY && currency != Currency.KRW) {
+                targetDecimals = 2; // Default fallback for uninitialized
+            }
+            
+            // divisor = 10^(18 + 8 - targetDecimals) = 10^(26 - targetDecimals)
+            uint256 divisor = 10 ** (18 + CHAINLINK_DECIMALS - targetDecimals);
+            uint256 calculatedPrice = (priceInEth * ethPrice) / divisor;
+            
+            return (true, calculatedPrice);
         } catch {
             return (false, 0);
         }
@@ -154,6 +243,7 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
     function _getUniswapTWAP(Currency /*currency*/)
         internal view returns (bool, uint256)
     {
+        // TWAP implementation placeholder
         return (false, 0);
     }
 
@@ -212,7 +302,14 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
                 uint256 ethPrice = getETHPrice(currency);
                 if (ethPrice == 0) continue;
 
-                uint256 poolPrice = (priceInEth * ethPrice) / 1e18;
+                // Apply same decimal fix as _getChainlinkUniswapPrice
+                uint8 targetDecimals = currencyDecimals[currency];
+                if (targetDecimals == 0 && currency != Currency.JPY && currency != Currency.KRW) {
+                    targetDecimals = 2;
+                }
+                uint256 divisor = 10 ** (18 + CHAINLINK_DECIMALS - targetDecimals);
+                uint256 poolPrice = (priceInEth * ethPrice) / divisor;
+
                 totalWeightedPrice += poolPrice * poolInfo.weight;
                 totalWeight += poolInfo.weight;
             } catch {
@@ -228,14 +325,28 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
         internal view returns (bool)
     {
         if (price == 0) return false;
-        if (currencyDecimals[currency] < 2) return true;
-
-        uint256 minPrice = 10 ** (currencyDecimals[currency] - 4);
-        uint256 maxPrice = 10 * (10 ** currencyDecimals[currency]);
+        
+        uint8 decimals = currencyDecimals[currency];
+        if (decimals == 0 && currency != Currency.JPY && currency != Currency.KRW) {
+            decimals = 2; // Default
+        }
+        
+        // For currencies with 0 decimals (JPY, KRW), allow broader range
+        if (decimals == 0) {
+            // Price should be between 0.0001 and 1000 units
+            return price >= 1 && price <= 1000000;
+        }
+        
+        // For currencies with 2 decimals
+        // Price should be between 0.0001 cents and 1000 dollars worth
+        uint256 minPrice = 1; // 0.01 cents minimum
+        uint256 maxPrice = 100000 * (10 ** decimals); // $1000 maximum per token
+        
         return price >= minPrice && price <= maxPrice;
     }
 
     function _getEmergencyPrice(Currency currency) internal view returns (uint256) {
+        // Try cached price first
         if (liquidityPools.length > 0) {
             uint256 lastGood = liquidityPools[0].lastValidPrice;
             if (
@@ -246,13 +357,21 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
             }
         }
 
+        // Try fixed emergency rate
         uint256 fixedRate = emergencyFixedRates[currency];
         if (fixedRate > 0) return fixedRate;
 
-        return 10 ** (currencyDecimals[currency] - 2);
+        // Last resort: return a very small default price
+        uint8 decimals = currencyDecimals[currency];
+        if (decimals == 0 && currency != Currency.JPY && currency != Currency.KRW) {
+            decimals = 2;
+        }
+        
+        // Return ~$0.01 equivalent in smallest units
+        return 10 ** decimals / 100;
     }
 
-    // ===== Admin setters (kept minimal for now) =====
+    // ===== Admin setters =====
 
     function setOooweeePool(address _pool) external onlyOwner {
         oooweeePool = _pool;
@@ -300,5 +419,27 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
             })
         );
         emit PoolAdded(pool, weight);
+    }
+
+    function removeLiquidityPool(uint256 index) external onlyOwner {
+        require(index < liquidityPools.length, "Invalid index");
+        
+        address pool = liquidityPools[index].pool;
+        
+        // Move last element to deleted position and pop
+        liquidityPools[index] = liquidityPools[liquidityPools.length - 1];
+        liquidityPools.pop();
+        
+        emit PoolDeactivated(pool, "Removed by admin");
+    }
+
+    // ===== View helpers =====
+
+    function getLiquidityPoolCount() external view returns (uint256) {
+        return liquidityPools.length;
+    }
+
+    function getCurrencyDecimals(Currency currency) external view returns (uint8) {
+        return currencyDecimals[currency];
     }
 }

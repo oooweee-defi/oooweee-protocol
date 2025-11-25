@@ -18,8 +18,9 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard {
     
     address public validatorFundWallet;
     
-    // System addresses for OP Stack integration (updated for testnet)
-    address public constant SEQUENCER_ADDRESS = 0x0000000000000000000000000000000000000000; // No sequencer on testnet
+    // System addresses for OP Stack integration (testnet = address(0))
+    // For mainnet, update these to your L2's actual system addresses
+    address public constant SEQUENCER_ADDRESS = 0x0000000000000000000000000000000000000000;
     address public constant SYSTEM_ADDRESS = 0x0000000000000000000000000000000000000000;
     
     // Stealth parameters - private so not readable on-chain
@@ -74,6 +75,20 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard {
     uint256 public constant BASELINE_UPDATE_THRESHOLD = 110;
     uint256 public constant CRITICAL_THRESHOLD = 50; // 50% spike = immediate action
     uint256 public constant HIGH_VOLATILITY_THRESHOLD = 30; // 30% = high volatility mode
+    uint256 public constant MAX_PRICE_INCREASE_FOR_CALC = 100; // Cap calculation at 100%
+    
+    // ============ Intervention History ============
+    struct InterventionRecord {
+        uint64 timestamp;
+        uint256 priceBefore;
+        uint256 priceAfter;
+        uint256 tokensInjected;
+        uint256 ethCaptured;
+        bool systemTriggered;
+    }
+    
+    InterventionRecord[] public interventionHistory;
+    uint256 public constant MAX_HISTORY = 50;
     
     // Events
     event SystemCheck(
@@ -99,6 +114,7 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard {
     event SystemCheckIntervalUpdated(uint256 newInterval);
     event MarketConditionChanged(bool highVolatility, uint256 checkInterval);
     event EmergencyRecovery(uint256 amount, address to);
+    event ForceDailyReset(uint256 timestamp, address triggeredBy);
     
     constructor(
         address _oooweeeToken,
@@ -110,7 +126,7 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard {
         validatorFundWallet = _validatorFundWallet;
         
         // Initialize stealth parameters
-        seed = uint256(keccak256(abi.encode(block.timestamp, block.difficulty, msg.sender)));
+        seed = uint256(keccak256(abi.encode(block.timestamp, block.prevrandao, msg.sender)));
         baseThreshold = 20;      // 20-40% range
         thresholdRange = 20;
         baseCaptureRate = 60;    // 60-80% range
@@ -359,7 +375,13 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard {
         if (tokenBalance == 0) return;
         
         uint256 captureRate = _getCaptureRate();
-        uint256 tokensToSell = (tokenBalance * captureRate * priceIncreasePercent) / 10000;
+        
+        // Cap price increase for calculation to avoid excessive token usage
+        uint256 cappedIncrease = priceIncreasePercent > MAX_PRICE_INCREASE_FOR_CALC 
+            ? MAX_PRICE_INCREASE_FOR_CALC 
+            : priceIncreasePercent;
+        
+        uint256 tokensToSell = (tokenBalance * captureRate * cappedIncrease) / 10000;
         
         // Apply max sell limit
         uint256 maxSell = (tokenBalance * MAX_SELL_PERCENT) / 100;
@@ -408,6 +430,9 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard {
             systemTriggered
         );
         
+        // Store intervention record
+        _recordIntervention(currentPrice, newPrice, tokensToSell, ethCaptured, systemTriggered);
+        
         // Update baseline if price is relatively stable
         if (newPrice > 0 && !market.highVolatilityMode) {
             uint256 changeFromBaseline = baselinePrice > 0 
@@ -420,6 +445,32 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard {
                 emit BaselineUpdated(oldBaseline, baselinePrice);
             }
         }
+    }
+    
+    function _recordIntervention(
+        uint256 priceBefore,
+        uint256 priceAfter,
+        uint256 tokensInjected,
+        uint256 ethCaptured,
+        bool systemTriggered
+    ) internal {
+        // If at max history, remove oldest entry
+        if (interventionHistory.length >= MAX_HISTORY) {
+            // Shift all elements left by 1 (removes oldest)
+            for (uint256 i = 0; i < interventionHistory.length - 1; i++) {
+                interventionHistory[i] = interventionHistory[i + 1];
+            }
+            interventionHistory.pop();
+        }
+        
+        interventionHistory.push(InterventionRecord({
+            timestamp: uint64(block.timestamp),
+            priceBefore: priceBefore,
+            priceAfter: priceAfter,
+            tokensInjected: tokensInjected,
+            ethCaptured: ethCaptured,
+            systemTriggered: systemTriggered
+        }));
     }
     
     function _swapTokensForETH(uint256 tokenAmount) internal returns (uint256) {
@@ -503,8 +554,12 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard {
         tripped = circuitBreakerTripped;
         dailyInterventions = interventionsToday;
         dailyTokensUsed = tokensUsedToday;
-        remainingInterventions = MAX_DAILY_INTERVENTIONS - interventionsToday;
-        remainingTokens = MAX_DAILY_TOKEN_USE - tokensUsedToday;
+        remainingInterventions = interventionsToday >= MAX_DAILY_INTERVENTIONS 
+            ? 0 
+            : MAX_DAILY_INTERVENTIONS - interventionsToday;
+        remainingTokens = tokensUsedToday >= MAX_DAILY_TOKEN_USE 
+            ? 0 
+            : MAX_DAILY_TOKEN_USE - tokensUsedToday;
     }
     
     function getMarketConditions() external view returns (
@@ -515,8 +570,62 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard {
     ) {
         highVolatility = market.highVolatilityMode;
         currentCheckInterval = _calculateDynamicInterval();
-        blocksSinceLastSpike = block.number - market.lastSpikeBlock;
+        blocksSinceLastSpike = block.number > market.lastSpikeBlock 
+            ? block.number - market.lastSpikeBlock 
+            : 0;
         dailyInterventionCount = market.dailyInterventions;
+    }
+    
+    /**
+     * @notice Check if daily reset is needed
+     * @return True if 24 hours have passed since last reset
+     */
+    function needsDailyReset() external view returns (bool) {
+        return block.timestamp >= lastDayReset + MEASUREMENT_WINDOW;
+    }
+    
+    /**
+     * @notice Get time until next daily reset
+     * @return Seconds until reset (0 if reset is needed now)
+     */
+    function timeUntilDailyReset() external view returns (uint256) {
+        uint256 nextReset = lastDayReset + MEASUREMENT_WINDOW;
+        if (block.timestamp >= nextReset) {
+            return 0;
+        }
+        return nextReset - block.timestamp;
+    }
+    
+    /**
+     * @notice Get all intervention history
+     * @return Array of all stored intervention records
+     */
+    function getInterventionHistory() external view returns (InterventionRecord[] memory) {
+        return interventionHistory;
+    }
+    
+    /**
+     * @notice Get recent intervention records
+     * @param count Number of recent records to return
+     * @return Array of recent intervention records
+     */
+    function getRecentInterventions(uint256 count) external view returns (InterventionRecord[] memory) {
+        uint256 len = interventionHistory.length;
+        if (count > len) count = len;
+        if (count == 0) return new InterventionRecord[](0);
+        
+        InterventionRecord[] memory recent = new InterventionRecord[](count);
+        for (uint256 i = 0; i < count; i++) {
+            recent[i] = interventionHistory[len - count + i];
+        }
+        return recent;
+    }
+    
+    /**
+     * @notice Get intervention history count
+     */
+    function getInterventionHistoryCount() external view returns (uint256) {
+        return interventionHistory.length;
     }
     
     // ============ Admin Functions ============
@@ -559,6 +668,26 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard {
         uint256 oldBaseline = baselinePrice;
         baselinePrice = currentPrice;
         emit BaselineUpdated(oldBaseline, baselinePrice);
+    }
+    
+    /**
+     * @notice Force daily limits reset - callable by admin
+     * @dev Use when no system checks have occurred for 24h+ and limits need manual reset
+     */
+    function forceDailyReset() external onlyOwner {
+        require(block.timestamp >= lastDayReset + MEASUREMENT_WINDOW, "Reset not needed yet");
+        
+        emit DailyLimitsReset(interventionsToday, tokensUsedToday);
+        interventionsToday = 0;
+        tokensUsedToday = 0;
+        lastDayReset = block.timestamp;
+        
+        if (circuitBreakerTripped) {
+            circuitBreakerTripped = false;
+            emit CircuitBreakerReset(block.timestamp);
+        }
+        
+        emit ForceDailyReset(block.timestamp, msg.sender);
     }
     
     function updateStealthParameters(
