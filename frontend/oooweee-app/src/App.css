@@ -1567,8 +1567,8 @@ select:focus {
 
 .stability-metric .label {
   font-family: 'VT323', monospace;
-  font-size: 1rem;
-  color: #666;
+  font-size: 1.1rem;
+  color: #333;
   display: block;
   margin-bottom: 0.3rem;
 }
@@ -1630,9 +1630,10 @@ select:focus {
 .admin-card h4 {
   font-family: 'Press Start 2P', cursive;
   font-size: 0.6rem;
-  color: #666;
+  color: #333;
   margin-bottom: 0.5rem;
   text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .admin-card .value {
@@ -1644,8 +1645,8 @@ select:focus {
 
 .admin-card .sub-value {
   font-family: 'VT323', monospace;
-  font-size: 1rem;
-  color: #666;
+  font-size: 1.1rem;
+  color: #555;
 }
 
 .admin-card.highlight {
@@ -1764,7 +1765,7 @@ select:focus {
 }
 
 .admin-stats-row .label {
-  color: #666;
+  color: #333;
 }
 
 .admin-stats-row .value {
@@ -1852,8 +1853,8 @@ select:focus {
 
 .validator-stat .label {
   font-family: 'VT323', monospace;
-  font-size: 0.9rem;
-  color: #666;
+  font-size: 1rem;
+  color: #333;
 }
 
 .validator-stat .value {
