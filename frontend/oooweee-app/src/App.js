@@ -92,6 +92,16 @@ function App() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [requiredOooweeeForPurchase, setRequiredOooweeeForPurchase] = useState(null);
   
+  // Donate modal state
+  const [showDonateModal, setShowDonateModal] = useState(false);
+  const [donateAmount, setDonateAmount] = useState('0.05');
+  const [donorMessage, setDonorMessage] = useState('');
+  const [donorShoutout, setDonorShoutout] = useState(() => {
+    // Load from localStorage on init
+    const saved = localStorage.getItem('oooweee_donor_shoutout');
+    return saved ? JSON.parse(saved) : null;
+  });
+  
   // Validator stats
   const [validatorStats, setValidatorStats] = useState({
     validators: 0,
@@ -687,31 +697,53 @@ function App() {
   };
 
   const donateToValidators = async () => {
-    const amount = prompt('Enter ETH amount to donate:');
-    if (amount && parseFloat(amount) > 0) {
-      try {
-        setLoading(true);
-        const tx = await validatorFundContract.donate({ 
-          value: ethers.utils.parseEther(amount) 
-        });
-        
-        await toast.promise(tx.wait(), {
-          loading: '💰 Sending donation...',
-          success: `🎉 Donated ${amount} ETH to validator fund!`,
-          error: '❌ Donation failed'
-        });
-        
-        await loadValidatorStats();
-      } catch (error) {
-        console.error(error);
-        if (error.code === 'ACTION_REJECTED') {
-          toast.error('Transaction cancelled');
-        } else {
-          toast.error('Donation failed');
-        }
-      } finally {
-        setLoading(false);
+    setShowDonateModal(true);
+  };
+  
+  const handleDonateSubmit = async () => {
+    if (!donateAmount || parseFloat(donateAmount) <= 0) {
+      toast.error('Enter a valid ETH amount');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      const amount = parseFloat(donateAmount);
+      const tx = await validatorFundContract.donate({ 
+        value: ethers.utils.parseEther(donateAmount) 
+      });
+      
+      await toast.promise(tx.wait(), {
+        loading: '💰 Sending donation...',
+        success: `🎉 Donated ${donateAmount} ETH to validator fund!`,
+        error: '❌ Donation failed'
+      });
+      
+      // If donation > 0.1 ETH and has a message, save shoutout
+      if (amount >= 0.1 && donorMessage.trim()) {
+        const newShoutout = {
+          message: donorMessage.trim().slice(0, 180),
+          amount: donateAmount,
+          sender: `${account.slice(0, 6)}...${account.slice(-4)}`,
+          timestamp: Date.now()
+        };
+        setDonorShoutout(newShoutout);
+        localStorage.setItem('oooweee_donor_shoutout', JSON.stringify(newShoutout));
       }
+      
+      await loadValidatorStats();
+      setShowDonateModal(false);
+      setDonateAmount('0.05');
+      setDonorMessage('');
+    } catch (error) {
+      console.error(error);
+      if (error.code === 'ACTION_REJECTED') {
+        toast.error('Transaction cancelled');
+      } else {
+        toast.error('Donation failed');
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1587,6 +1619,67 @@ function App() {
         </div>
       )}
       
+      {showDonateModal && (
+        <div className="modal-overlay" onClick={() => { setShowDonateModal(false); setDonorMessage(''); }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>💝 Donate to Validators</h2>
+            <button className="close-modal" onClick={() => { setShowDonateModal(false); setDonorMessage(''); }}>✕</button>
+            
+            <div className="buy-form">
+              <div className="balance-info">
+                <p>ETH Balance: {parseFloat(ethBalance).toFixed(4)} ETH</p>
+                <p>Your donation helps fund Ethereum validators that generate rewards for savers!</p>
+              </div>
+              
+              <div className="input-group">
+                <label>ETH Amount:</label>
+                <input
+                  type="number"
+                  value={donateAmount}
+                  onChange={(e) => setDonateAmount(e.target.value)}
+                  min="0.001"
+                  step="0.01"
+                  max={ethBalance}
+                />
+              </div>
+              
+              <div className="quick-amounts">
+                <button onClick={() => setDonateAmount('0.01')}>0.01 ETH</button>
+                <button onClick={() => setDonateAmount('0.05')}>0.05 ETH</button>
+                <button onClick={() => setDonateAmount('0.1')}>0.1 ETH</button>
+                <button onClick={() => setDonateAmount('0.5')}>0.5 ETH</button>
+              </div>
+              
+              <div className="shoutout-notice">
+                <p>📣 Donations &gt;0.1 ETH get a shoutout!</p>
+              </div>
+              
+              {parseFloat(donateAmount) >= 0.1 && (
+                <div className="input-group message-group">
+                  <label>Your Message (optional):</label>
+                  <textarea
+                    value={donorMessage}
+                    onChange={(e) => setDonorMessage(e.target.value.slice(0, 180))}
+                    placeholder="Leave a message for the community..."
+                    maxLength={180}
+                    rows={3}
+                  />
+                  <span className="char-count">{donorMessage.length}/180</span>
+                </div>
+              )}
+              
+              <button 
+                className="buy-btn rainbow-btn"
+                onClick={handleDonateSubmit}
+                disabled={loading || parseFloat(donateAmount) <= 0 || parseFloat(donateAmount) > parseFloat(ethBalance)}
+              >
+                {loading ? '⏳ Processing...' : `💝 Donate ${donateAmount} ETH`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="floating-coins">
         {[...Array(10)].map((_, i) => (
           <div
@@ -1743,6 +1836,16 @@ function App() {
                     <div className="validator-header">
                       <h3>🔐 Validator Network</h3>
                     </div>
+                    
+                    {donorShoutout && (
+                      <div className="donor-shoutout-banner">
+                        <div className="shoutout-icon">📣</div>
+                        <div className="shoutout-content">
+                          <p className="shoutout-message">"{donorShoutout.message}"</p>
+                          <p className="shoutout-meta">— {donorShoutout.sender} donated {donorShoutout.amount} ETH</p>
+                        </div>
+                      </div>
+                    )}
                     
                     <div className="stats-grid">
                       <div className="stat">

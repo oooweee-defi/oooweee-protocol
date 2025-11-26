@@ -2164,3 +2164,254 @@ select:focus {
     min-width: 80px;
   }
 }
+
+/* =============================================
+   DONOR SHOUTOUT & DONATE MODAL STYLES
+   ============================================= */
+
+/* Donor Shoutout Banner in Validator Card */
+.donor-shoutout-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+  border: 3px solid #ff9800;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  animation: shoutout-glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes shoutout-glow {
+  from {
+    box-shadow: 0 0 5px rgba(255, 152, 0, 0.3);
+  }
+  to {
+    box-shadow: 0 0 15px rgba(255, 152, 0, 0.5);
+  }
+}
+
+.shoutout-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.shoutout-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.shoutout-message {
+  font-family: 'VT323', monospace;
+  font-size: 1.3rem;
+  font-style: italic;
+  color: #333;
+  margin: 0 0 4px 0;
+  word-wrap: break-word;
+  line-height: 1.4;
+}
+
+.shoutout-meta {
+  font-family: 'VT323', monospace;
+  font-size: 1rem;
+  color: #666;
+  margin: 0;
+}
+
+/* Shoutout Notice in Donate Modal */
+.shoutout-notice {
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  border: 3px dashed #2196f3;
+  padding: 10px 14px;
+  margin: 0;
+  text-align: center;
+}
+
+.shoutout-notice p {
+  margin: 0;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: #1565c0;
+}
+
+/* Message Input Group in Donate Modal */
+.message-group {
+  position: relative;
+}
+
+.message-group textarea {
+  width: 100%;
+  padding: 12px;
+  border: 3px solid #000;
+  font-family: 'VT323', monospace;
+  font-size: 1.3rem;
+  resize: vertical;
+  min-height: 80px;
+  transition: box-shadow 0.2s;
+  background: white;
+}
+
+.message-group textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px #ff9800;
+}
+
+.message-group textarea::placeholder {
+  color: #999;
+}
+
+.char-count {
+  display: block;
+  text-align: right;
+  font-family: 'VT323', monospace;
+  font-size: 1rem;
+  color: #666;
+  margin-top: 4px;
+}
+
+/* Donation Stats in Validator Card */
+.donation-stats {
+  text-align: center;
+  margin: 1rem 0;
+  padding: 0.5rem;
+  background: #E8F5E9;
+  border: 2px dashed #4CAF50;
+  border-radius: 4px;
+}
+
+.donation-stats p {
+  font-family: 'VT323', monospace;
+  font-size: 1.1rem;
+  color: #333;
+  margin: 0.3rem 0;
+}
+
+/* Progress Label for Validator */
+.progress-label {
+  text-align: center;
+  font-family: 'VT323', monospace;
+  font-size: 1.2rem;
+  color: #333;
+  margin: 0.5rem 0;
+}
+
+/* Validator Progress Bar Fill */
+.validator-progress {
+  background: linear-gradient(90deg, #9C27B0, #E91E63, #F44336);
+  background-size: 200% 100%;
+  animation: gradient-shift 3s ease infinite;
+}
+
+/* =============================================
+   COMPLETED QUESTS TOGGLE STYLES
+   ============================================= */
+
+/* Toggle Completed Button Container */
+.toggle-completed {
+  margin-top: 20px;
+  text-align: center;
+}
+
+.toggle-completed .toggle-btn {
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%);
+  color: white;
+  border: 3px solid #000;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: all 0.1s;
+  box-shadow: 4px 4px 0px #000;
+  text-shadow: 1px 1px 0px rgba(0,0,0,0.3);
+}
+
+.toggle-completed .toggle-btn:hover {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px #000;
+}
+
+.toggle-completed .toggle-btn:active {
+  transform: translate(4px, 4px);
+  box-shadow: none;
+}
+
+/* Completed Section Styles */
+.completed-section {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 3px dashed #9c27b0;
+}
+
+.completed-section h3 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 1rem;
+  color: #fff;
+  text-shadow: 2px 2px 0px #000;
+  margin-bottom: 16px;
+}
+
+.account-card.completed {
+  background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+  border: 4px solid #9c27b0;
+  opacity: 0.95;
+}
+
+.account-card.completed:hover {
+  box-shadow: 8px 8px 0px #7b1fa2;
+}
+
+.completed-text {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #7b1fa2;
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+
+/* Error Note Styles */
+.error-note {
+  font-family: 'VT323', monospace;
+  font-size: 1.1rem;
+  color: #f44336;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: #FFEBEE;
+  border: 2px dashed #f44336;
+}
+
+/* =============================================
+   RESPONSIVE ADJUSTMENTS FOR NEW STYLES
+   ============================================= */
+
+@media (max-width: 768px) {
+  .donor-shoutout-banner {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+  
+  .shoutout-icon {
+    font-size: 20px;
+  }
+  
+  .shoutout-message {
+    font-size: 1.1rem;
+  }
+  
+  .shoutout-meta {
+    font-size: 0.9rem;
+  }
+  
+  .shoutout-notice p {
+    font-size: 0.5rem;
+  }
+  
+  .toggle-completed .toggle-btn {
+    font-size: 0.6rem;
+    padding: 10px 16px;
+  }
+  
+  .message-group textarea {
+    font-size: 1.1rem;
+  }
+}
