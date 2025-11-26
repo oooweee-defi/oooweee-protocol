@@ -91,7 +91,6 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard {
     event DailyLimitsReset(uint256 timestamp);
     event ETHSentToValidators(uint256 amount, uint256 timestamp);
     event ForceDailyReset(uint256 timestamp, address triggeredBy);
-    event TargetPriceCalculated(uint256 currentPrice, uint256 baselinePrice, uint256 targetPrice, uint256 tokensToSell);
     
     constructor(
         address _oooweeeToken,
@@ -237,7 +236,7 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard {
      */
     function _executeStabilityIntervention(
         uint256 currentPrice, 
-        uint256 priceIncreasePercent,
+        uint256 /* priceIncreasePercent */,
         bool systemTriggered
     ) internal {
         // Check circuit breakers
@@ -397,8 +396,6 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard {
         }
         
         uint256 tokensToSell = targetReserveToken - reserveToken;
-        
-        emit TargetPriceCalculated(currentPrice, baselinePrice, targetPrice, tokensToSell);
         
         return tokensToSell;
     }
