@@ -96,10 +96,17 @@ function App() {
   const [showDonateModal, setShowDonateModal] = useState(false);
   const [donateAmount, setDonateAmount] = useState('0.05');
   const [donorMessage, setDonorMessage] = useState('');
+  const [donorName, setDonorName] = useState('');
+  const [donorLocation, setDonorLocation] = useState('');
   const [donorShoutout, setDonorShoutout] = useState(() => {
     // Load from localStorage on init
     const saved = localStorage.getItem('oooweee_donor_shoutout');
     return saved ? JSON.parse(saved) : null;
+  });
+  const [donorLeaderboard, setDonorLeaderboard] = useState(() => {
+    // Load leaderboard from localStorage on init
+    const saved = localStorage.getItem('oooweee_donor_leaderboard');
+    return saved ? JSON.parse(saved) : [];
   });
   
   // Validator stats
@@ -719,11 +726,30 @@ function App() {
         error: '❌ Donation failed'
       });
       
+      // Create donor entry for leaderboard
+      const donorEntry = {
+        amount: amount,
+        name: donorName.trim().slice(0, 50) || 'Anonymous',
+        location: donorLocation.trim().slice(0, 50) || '',
+        sender: `${account.slice(0, 6)}...${account.slice(-4)}`,
+        message: donorMessage.trim().slice(0, 180),
+        timestamp: Date.now()
+      };
+      
+      // Update leaderboard (top 3 biggest donations)
+      const updatedLeaderboard = [...donorLeaderboard, donorEntry]
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 3);
+      setDonorLeaderboard(updatedLeaderboard);
+      localStorage.setItem('oooweee_donor_leaderboard', JSON.stringify(updatedLeaderboard));
+      
       // If donation > 0.1 ETH and has a message, save shoutout
       if (amount >= 0.1 && donorMessage.trim()) {
         const newShoutout = {
           message: donorMessage.trim().slice(0, 180),
           amount: donateAmount,
+          name: donorName.trim().slice(0, 50) || null,
+          location: donorLocation.trim().slice(0, 50) || null,
           sender: `${account.slice(0, 6)}...${account.slice(-4)}`,
           timestamp: Date.now()
         };
@@ -735,6 +761,8 @@ function App() {
       setShowDonateModal(false);
       setDonateAmount('0.05');
       setDonorMessage('');
+      setDonorName('');
+      setDonorLocation('');
     } catch (error) {
       console.error(error);
       if (error.code === 'ACTION_REJECTED') {
@@ -1620,10 +1648,10 @@ function App() {
       )}
       
       {showDonateModal && (
-        <div className="modal-overlay" onClick={() => { setShowDonateModal(false); setDonorMessage(''); }}>
+        <div className="modal-overlay" onClick={() => { setShowDonateModal(false); setDonorMessage(''); setDonorName(''); setDonorLocation(''); }}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <h2>💝 Donate to Validators</h2>
-            <button className="close-modal" onClick={() => { setShowDonateModal(false); setDonorMessage(''); }}>✕</button>
+            <button className="close-modal" onClick={() => { setShowDonateModal(false); setDonorMessage(''); setDonorName(''); setDonorLocation(''); }}>✕</button>
             
             <div className="buy-form">
               <div className="balance-info">
@@ -1648,6 +1676,30 @@ function App() {
                 <button onClick={() => setDonateAmount('0.05')}>0.05 ETH</button>
                 <button onClick={() => setDonateAmount('0.1')}>0.1 ETH</button>
                 <button onClick={() => setDonateAmount('0.5')}>0.5 ETH</button>
+              </div>
+              
+              <div className="donor-info-fields">
+                <div className="input-group">
+                  <label>Your Name (optional):</label>
+                  <input
+                    type="text"
+                    value={donorName}
+                    onChange={(e) => setDonorName(e.target.value.slice(0, 50))}
+                    placeholder="Anonymous"
+                    maxLength={50}
+                  />
+                </div>
+                
+                <div className="input-group">
+                  <label>Location (optional):</label>
+                  <input
+                    type="text"
+                    value={donorLocation}
+                    onChange={(e) => setDonorLocation(e.target.value.slice(0, 50))}
+                    placeholder="e.g. Dublin, Ireland"
+                    maxLength={50}
+                  />
+                </div>
               </div>
               
               <div className="shoutout-notice">
@@ -1837,12 +1889,36 @@ function App() {
                       <h3>🔐 Validator Network</h3>
                     </div>
                     
+                    {donorLeaderboard.length > 0 && (
+                      <div className="donor-leaderboard">
+                        <h4>🏆 Top Donors</h4>
+                        <div className="leaderboard-list">
+                          {donorLeaderboard.map((donor, index) => (
+                            <div key={index} className={`leaderboard-entry ${index === 0 ? 'gold' : index === 1 ? 'silver' : 'bronze'}`}>
+                              <span className="medal">
+                                {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
+                              </span>
+                              <div className="donor-info">
+                                <span className="donor-name">{donor.name}</span>
+                                {donor.location && <span className="donor-location">{donor.location}</span>}
+                              </div>
+                              <span className="donor-amount">{donor.amount} ETH</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
                     {donorShoutout && (
                       <div className="donor-shoutout-banner">
                         <div className="shoutout-icon">📣</div>
                         <div className="shoutout-content">
                           <p className="shoutout-message">"{donorShoutout.message}"</p>
-                          <p className="shoutout-meta">— {donorShoutout.sender} donated {donorShoutout.amount} ETH</p>
+                          <p className="shoutout-meta">
+                            — {donorShoutout.name || donorShoutout.sender}
+                            {donorShoutout.location && `, ${donorShoutout.location}`}
+                            {' '}donated {donorShoutout.amount} ETH
+                          </p>
                         </div>
                       </div>
                     )}
