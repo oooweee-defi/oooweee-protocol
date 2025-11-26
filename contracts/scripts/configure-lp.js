@@ -1,33 +1,24 @@
 const { ethers } = require("hardhat");
 
 async function main() {
-  const LP = "0x7C7abc858F7B06a9547e1dc33Db46F896C4BE6a8";
+  const LP = "0xBc272df4181318ddF450C57d3aa906126Bdc68c3";
 
-  // 1. Set LP on Stability
-  const stability = await ethers.getContractAt("OOOWEEEStability", "0xDA9FFC0a6Af6624FB660ca39131A7C2F1BE5e43e");
+  const stability = await ethers.getContractAt("OOOWEEEStability", "0x965dF26Ec6B0FB39A0819C077c66e44b5d9D56D5");
   await (await stability.setLiquidityPair(LP)).wait();
   console.log("✅ Stability → LP");
 
-  // 2. Set LP on Token
-  const token = await ethers.getContractAt("OOOWEEEToken", "0xC217a455152AE581Ee2306A3fd9625f86599DEeE");
+  const token = await ethers.getContractAt("OOOWEEEToken", "0xA07ABfFC91f379B331E6a1d94B9f808CDc772A3B");
   await (await token.setLiquidityPair(LP, true)).wait();
   console.log("✅ Token → LP");
 
-  // 3. Set pool on Oracle
-  const oracle = await ethers.getContractAt("SavingsPriceOracle", "0xd836ab9C012a98A4Cd56EC7c4BbF42a6a771556e");
+  const oracle = await ethers.getContractAt("SavingsPriceOracle", "0x0C1fA6ce3355BaF20b778aDe317887E51aBAe73E");
   await (await oracle.setOooweeePool(LP)).wait();
   console.log("✅ Oracle → LP");
 
-  // 4. Enable trading
   await (await token.enableTrading()).wait();
   console.log("✅ Trading ENABLED!");
 
-  console.log("\n🚀 DEPLOYMENT COMPLETE!");
+  console.log("\n🚀 READY TO GO!");
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  });
+main().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); });

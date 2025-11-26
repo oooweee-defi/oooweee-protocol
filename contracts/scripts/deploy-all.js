@@ -1,5 +1,4 @@
 // scripts/deploy-all.js
-const hre = require("hardhat");
 const { ethers } = require("hardhat");
 
 async function main() {
@@ -11,8 +10,8 @@ async function main() {
   const balance = await deployer.getBalance();
   console.log("Balance:", ethers.utils.formatEther(balance), "ETH\n");
 
-  // Sepolia Config
-  const UNISWAP_ROUTER = "0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008";
+  // Sepolia Config - UPDATED ROUTER & WETH
+  const UNISWAP_ROUTER = "0xeE567Fe1712Faf6149d80dA1E6934E354124CfE3";  // Official Uniswap V2 Sepolia
   const FOUNDER_WALLET = "0x56384f1205659291ba5b949d641582af6ae7006b";
   const OPERATIONS_WALLET = "0xb05f42b174e5152d34431ee4504210932ddfe715";
   const CHAINLINK_ETH_USD = "0x694AA1769357215DE4FAC081bf1f309aDC325306";
@@ -39,8 +38,8 @@ async function main() {
   console.log("3/6 Deploying OOOWEEEValidatorFund...");
   const ValidatorFund = await ethers.getContractFactory("OOOWEEEValidatorFund");
   const validatorFund = await ValidatorFund.deploy(
-    ethers.constants.AddressZero,  // stability - set later
-    ethers.constants.AddressZero   // rewards - set later
+    ethers.constants.AddressZero,
+    ethers.constants.AddressZero
   );
   await validatorFund.deployed();
   deployed.validatorFund = validatorFund.address;
@@ -79,7 +78,7 @@ async function main() {
     UNISWAP_ROUTER,
     deployed.validatorFund,
     OPERATIONS_WALLET,
-    OPERATIONS_WALLET  // L1 collector - not used on testnet
+    OPERATIONS_WALLET  // L1 collector placeholder
   );
   await rewards.deployed();
   deployed.rewards = rewards.address;
@@ -90,7 +89,6 @@ async function main() {
   // ============================================
   console.log("\n🔧 Configuring contracts...\n");
 
-  // ValidatorFund connections
   let tx;
   tx = await validatorFund.setStabilityContract(deployed.stability);
   await tx.wait();
@@ -99,12 +97,10 @@ async function main() {
   await tx.wait();
   console.log("✅ ValidatorFund → Rewards");
 
-  // Token setup
   tx = await token.setStabilityMechanism(deployed.stability);
   await tx.wait();
-  console.log("✅ Token → Stability mechanism");
+  console.log("✅ Token → Stability mechanism (89M transferred)");
 
-  // Exemptions
   tx = await token.setExemption(deployed.stability, true);
   await tx.wait();
   tx = await token.setExemption(deployed.savings, true);
@@ -117,7 +113,6 @@ async function main() {
   await tx.wait();
   console.log("✅ Protocol exemptions set");
 
-  // Savings setup
   tx = await savings.setRewardsDistributor(deployed.rewards);
   await tx.wait();
   console.log("✅ Savings → Rewards distributor");
@@ -125,24 +120,17 @@ async function main() {
   await tx.wait();
   console.log("✅ Savings → Fee collector");
 
-  // Oracle setup
-  tx = await oracle.setPriceFeed(0, CHAINLINK_ETH_USD);  // USD
+  tx = await oracle.setPriceFeed(0, CHAINLINK_ETH_USD);
   await tx.wait();
-  tx = await oracle.setPriceFeed(1, CHAINLINK_ETH_USD);  // EUR (using USD feed for testnet)
+  tx = await oracle.setPriceFeed(1, CHAINLINK_ETH_USD);
   await tx.wait();
   console.log("✅ Oracle price feeds set");
-
-  // Transfer stability reserve (89M tokens)
-  console.log("\n💰 Transferring 89M tokens to Stability...");
-  tx = await token.transfer(deployed.stability, ethers.utils.parseEther("89000000"));
-  await tx.wait();
-  console.log("✅ Stability reserve funded");
 
   // ============================================
   // OUTPUT
   // ============================================
   console.log("\n" + "=".repeat(50));
-  console.log("📋 DEPLOYMENT COMPLETE - Copy to abis.js:");
+  console.log("📋 DEPLOYMENT COMPLETE");
   console.log("=".repeat(50));
   console.log(`
 export const CONTRACT_ADDRESSES = {
@@ -153,31 +141,15 @@ export const CONTRACT_ADDRESSES = {
   OOOWEEERewardsDistribution: "${deployed.rewards}",
   SavingsPriceOracle: "${deployed.oracle}"
 };
+
+// Router & WETH for App.js
+const UNISWAP_ROUTER = "0xeE567Fe1712Faf6149d80dA1E6934E354124CfE3";
+const WETH_ADDRESS = "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14";
 `);
 
   console.log("=".repeat(50));
-  console.log("⚠️  AFTER CREATING UNISWAP LP:");
+  console.log("⚠️  NEXT: Create LP on Uniswap UI, then run configure-lp.js");
   console.log("=".repeat(50));
-  console.log(`
-// Run these after adding liquidity:
-
-const LP_ADDRESS = "<YOUR_LP_ADDRESS>";
-
-// 1. Set LP on Stability
-const stability = await ethers.getContractAt("OOOWEEEStability", "${deployed.stability}");
-await stability.setLiquidityPair(LP_ADDRESS);
-
-// 2. Set LP on Token
-const token = await ethers.getContractAt("OOOWEEEToken", "${deployed.token}");
-await token.setLiquidityPair(LP_ADDRESS, true);
-
-// 3. Set pool on Oracle
-const oracle = await ethers.getContractAt("SavingsPriceOracle", "${deployed.oracle}");
-await oracle.setOooweeePool(LP_ADDRESS);
-
-// 4. Enable trading
-await token.enableTrading();
-`);
 }
 
 main()
