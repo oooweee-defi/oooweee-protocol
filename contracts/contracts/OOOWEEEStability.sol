@@ -54,7 +54,7 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard {
     
     // Circuit breaker state
     bool public circuitBreakerTripped;
-    bool public checksEnabled = true;
+    bool public systemChecksEnabled = true;
     
     // Market conditions
     struct MarketState {
@@ -116,7 +116,7 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard {
      */
     function manualStabilityCheck() external payable nonReentrant {
         require(msg.value >= 0.01 ether, "Min 0.01 ETH required");
-        require(checksEnabled, "Checks disabled");
+        require(systemChecksEnabled, "Checks disabled");
         
         _checkAndResetDailyLimits();
         
@@ -146,7 +146,7 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard {
      */
     function systemStabilityCheck() external nonReentrant {
         require(msg.sender == systemAddress, "Only system");
-        require(checksEnabled, "Checks disabled");
+        require(systemChecksEnabled, "Checks disabled");
         
         _checkAndResetDailyLimits();
         
@@ -198,7 +198,7 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard {
     function _shouldIntervene(uint256 priceIncreasePercent) internal view returns (bool) {
         if (priceIncreasePercent == 0) return false;
         if (circuitBreakerTripped) return false;
-        if (!checksEnabled) return false;
+        if (!systemChecksEnabled) return false;
         if (tokensUsedToday >= MAX_DAILY_TOKEN_USE) return false;
         
         if (priceIncreasePercent >= CRITICAL_THRESHOLD) {
@@ -534,6 +534,72 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard {
         return interventionHistory.length;
     }
     
+    /**
+     * @notice Get stability info (for frontend compatibility)
+     */
+    function getStabilityInfo() external view returns (
+        uint256 currentPrice,
+        uint256 tokenBalance,
+        uint256 totalInterventionsCount,
+        uint256 totalTokensSold,
+        uint256 totalETHEarned,
+        uint256 totalETHToValidators,
+        uint256 baseline,
+        uint256 priceIncrease
+    ) {
+        currentPrice = getCurrentPrice();
+        tokenBalance = oooweeeToken.balanceOf(address(this));
+        totalInterventionsCount = totalInterventions;
+        totalTokensSold = totalTokensUsed;
+        totalETHEarned = totalETHCaptured;
+        totalETHToValidators = totalETHSentToValidators;
+        baseline = baselinePrice;
+        priceIncrease = _calculatePriceIncrease(currentPrice);
+    }
+    
+    /**
+     * @notice Get circuit breaker status (for frontend compatibility)
+     */
+    function getCircuitBreakerStatus() external view returns (
+        bool tripped,
+        uint256 dailyInterventions,
+        uint256 dailyTokensUsed,
+        uint256 remainingInterventions,
+        uint256 remainingTokens
+    ) {
+        tripped = circuitBreakerTripped;
+        dailyInterventions = interventionsToday;
+        dailyTokensUsed = tokensUsedToday;
+        remainingInterventions = interventionsToday >= MAX_DAILY_INTERVENTIONS 
+            ? 0 
+            : MAX_DAILY_INTERVENTIONS - interventionsToday;
+        remainingTokens = tokensUsedToday >= MAX_DAILY_TOKEN_USE 
+            ? 0 
+            : MAX_DAILY_TOKEN_USE - tokensUsedToday;
+    }
+    
+    /**
+     * @notice Get market conditions (for frontend compatibility)
+     */
+    function getMarketConditions() external view returns (
+        bool highVolatility,
+        uint256 currentCheckInterval,
+        uint256 blocksSinceLastSpike,
+        uint256 dailyInterventionCount
+    ) {
+        highVolatility = market.highVolatilityMode;
+        currentCheckInterval = 0;  // Not used in this version
+        blocksSinceLastSpike = market.lastSpikeBlock > 0 ? block.number - market.lastSpikeBlock : 0;
+        dailyInterventionCount = interventionsToday;
+    }
+    
+    /**
+     * @notice Get token balance (for frontend compatibility)
+     */
+    function getTokenBalance() external view returns (uint256) {
+        return oooweeeToken.balanceOf(address(this));
+    }
+    
     // ============ Admin Functions ============
     
     function setLiquidityPair(address _pair) external onlyOwner {
@@ -565,7 +631,14 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard {
     }
     
     function setChecksEnabled(bool _enabled) external onlyOwner {
-        checksEnabled = _enabled;
+        systemChecksEnabled = _enabled;
+    }
+    
+    /**
+     * @notice Toggle system checks (alias for setChecksEnabled)
+     */
+    function toggleSystemChecks() external onlyOwner {
+        systemChecksEnabled = !systemChecksEnabled;
     }
     
     function forceDailyReset() external onlyOwner {
@@ -602,5 +675,14 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard {
         } else {
             IERC20(token).transfer(owner(), amount);
         }
+    }
+    
+    /**
+     * @notice Recover all OOOWEEE tokens to operations wallet (for contract upgrades)
+     */
+    function emergencyRecoverTokens() external onlyOwner {
+        uint256 balance = oooweeeToken.balanceOf(address(this));
+        require(balance > 0, "No tokens to recover");
+        oooweeeToken.transfer(owner(), balance);
     }
 }
