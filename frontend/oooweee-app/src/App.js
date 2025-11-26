@@ -352,7 +352,7 @@ function App() {
     }
   }, [routerContract, updateOooweeePrice]);
 
-  // Estimate OOOWEEE output
+  // Estimate OOOWEEE output (debounced)
   useEffect(() => {
     const estimateOooweee = async () => {
       if (!routerContract || !ethToBuy || parseFloat(ethToBuy) <= 0) {
@@ -370,7 +370,9 @@ function App() {
       }
     };
     
-    estimateOooweee();
+    // Debounce: wait 500ms after user stops typing
+    const timeoutId = setTimeout(estimateOooweee, 500);
+    return () => clearTimeout(timeoutId);
   }, [ethToBuy, routerContract]);
 
   // Load validator stats - with error handling
@@ -1636,6 +1638,22 @@ function App() {
             <div className="hero-section">
               <img src={oooweeLogo} alt="OOOWEEE" className="main-logo pixel-art" />
               <p className="tagline">OOOWEEE! Make your $aving goals non-negotiable!</p>
+              
+              {/* Price Ticker */}
+              <div className="price-ticker">
+                <div className="price-item">
+                  <span className="price-label">OOOWEEE/ETH</span>
+                  <span className="price-value">{oooweeePrice > 0 ? oooweeePrice.toFixed(10) : '...'}</span>
+                </div>
+                <div className="price-item">
+                  <span className="price-label">OOOWEEE/EUR</span>
+                  <span className="price-value">€{ethPrice?.eur ? (oooweeePrice * ethPrice.eur).toFixed(6) : '...'}</span>
+                </div>
+                <div className="price-item">
+                  <span className="price-label">ETH/EUR</span>
+                  <span className="price-value">€{ethPrice?.eur ? ethPrice.eur.toLocaleString() : '...'}</span>
+                </div>
+              </div>
             </div>
 
             {!account ? (
@@ -1887,19 +1905,45 @@ function App() {
                               </div>
                               
                               <div className="deposit-section">
-                                <input 
-                                  type="number" 
-                                  placeholder="Amount to deposit"
-                                  id={`deposit-${acc.id}`}
-                                  min="0.001"
-                                  step="0.001"
-                                  className="deposit-input"
-                                />
+                                {(() => {
+                                  const currency = acc.isFiatTarget ? getCurrencyFromCode(acc.targetCurrency) : 'EUR';
+                                  const currencySymbol = CURRENCIES[currency.toUpperCase()]?.symbol || '€';
+                                  return (
+                                    <>
+                                      <label className="deposit-label">Deposit ({currency})</label>
+                                      <input 
+                                        type="number" 
+                                        placeholder={`Amount in ${currency}`}
+                                        id={`deposit-${acc.id}`}
+                                        min="1"
+                                        step="1"
+                                        className="deposit-input"
+                                        onChange={(e) => {
+                                          const fiatAmount = e.target.value;
+                                          const oooweeeAmount = convertFiatToOooweee(fiatAmount, currency);
+                                          const converter = document.getElementById(`deposit-convert-${acc.id}`);
+                                          if (converter) {
+                                            converter.textContent = fiatAmount && fiatAmount > 0 
+                                              ? `≈ ${oooweeeAmount.toLocaleString()} OOOWEEE`
+                                              : '';
+                                          }
+                                        }}
+                                      />
+                                      <span id={`deposit-convert-${acc.id}`} className="deposit-conversion"></span>
+                                    </>
+                                  );
+                                })()}
                                 <button 
                                   onClick={() => {
-                                    const amount = document.getElementById(`deposit-${acc.id}`).value;
-                                    if (amount && amount > 0) {
-                                      depositToAccount(acc.id, amount);
+                                    const currency = acc.isFiatTarget ? getCurrencyFromCode(acc.targetCurrency) : 'EUR';
+                                    const fiatAmount = document.getElementById(`deposit-${acc.id}`).value;
+                                    if (fiatAmount && fiatAmount > 0) {
+                                      const oooweeeAmount = convertFiatToOooweee(fiatAmount, currency);
+                                      if (oooweeeAmount > 0) {
+                                        depositToAccount(acc.id, oooweeeAmount.toString());
+                                      } else {
+                                        toast.error('Amount too small');
+                                      }
                                     } else {
                                       toast.error('Enter an amount');
                                     }

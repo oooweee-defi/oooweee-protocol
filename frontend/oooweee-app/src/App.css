@@ -2072,3 +2072,95 @@ select:focus {
     align-items: flex-start;
   }
 }
+/* ======================================== */
+/* Price Ticker - NEW */
+/* ======================================== */
+.price-ticker {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  margin-top: 1rem;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  border: 2px solid #333;
+  flex-wrap: wrap;
+}
+
+.price-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.price-label {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.6rem;
+  color: #888;
+  text-transform: uppercase;
+}
+
+.price-value {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.8rem;
+  color: #4CAF50;
+  text-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+}
+
+/* ======================================== */
+/* Deposit Section Override for new layout */
+/* ======================================== */
+.deposit-section {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.deposit-label {
+  display: block;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.6rem;
+  color: #666;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+}
+
+.deposit-conversion {
+  display: block;
+  color: var(--oooweee-green);
+  margin-top: 0.25rem;
+  margin-bottom: 0.5rem;
+  min-height: 1.2em;
+  font-family: 'VT323', monospace;
+  font-size: 1rem;
+}
+
+.deposit-section .deposit-input {
+  width: 100%;
+  margin-bottom: 0;
+}
+
+.deposit-section .deposit-btn {
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+/* Responsive price ticker */
+@media (max-width: 768px) {
+  .price-ticker {
+    gap: 1rem;
+    padding: 0.75rem;
+  }
+  
+  .price-label {
+    font-size: 0.5rem;
+  }
+  
+  .price-value {
+    font-size: 0.6rem;
+  }
+  
+  .price-item {
+    min-width: 80px;
+  }
+}
