@@ -2162,6 +2162,14 @@ function App() {
                   )}
                 </div>
                 
+                {completedAccounts.length > 0 && (
+                  <div className="toggle-completed">
+                    <button onClick={() => setShowCompleted(!showCompleted)} className="toggle-btn">
+                      {showCompleted ? '📦 Hide' : '👁️ Show'} Completed ({completedAccounts.length})
+                    </button>
+                  </div>
+                )}
+                
                 <div className="create-section">
                   <h2>🎮 Start New Savings Quest</h2>
                   
@@ -2293,14 +2301,6 @@ function App() {
                     {loading ? '⏳ Processing...' : '🚀 Create Account'}
                   </button>
                 </div>
-                
-                {completedAccounts.length > 0 && (
-                  <div className="toggle-completed">
-                    <button onClick={() => setShowCompleted(!showCompleted)} className="toggle-btn">
-                      {showCompleted ? '📦 Hide' : '👁️ Show'} Completed ({completedAccounts.length})
-                    </button>
-                  </div>
-                )}
               </div>
             )}
           </>
