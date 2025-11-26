@@ -2135,39 +2135,41 @@ function App() {
                           );
                         })}
                       </div>
-                      
-                      {showCompleted && completedAccounts.length > 0 && (
-                        <div className="completed-section">
-                          <h3>✅ Completed Quests</h3>
-                          <div className="accounts-grid">
-                            {completedAccounts.map(acc => (
-                              <div key={acc.id} className="account-card completed">
-                                <div className="account-header">
-                                  <h3>{acc.goalName} ✅</h3>
-                                  <span className={`account-type ${acc.type.toLowerCase()}`}>{acc.type}</span>
-                                </div>
-                                <div className="account-details">
-                                  <p className="completed-text">🏆 Quest Complete!</p>
-                                  <p>Final: {displayCurrency === 'crypto'
-                                    ? `${parseFloat(acc.target || acc.balance).toLocaleString()} $OOOWEEE`
-                                    : getOooweeeInFiat(acc.target || acc.balance, 'eur')
-                                  }</p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
                     </>
                   )}
                 </div>
                 
                 {completedAccounts.length > 0 && (
-                  <div className="toggle-completed">
-                    <button onClick={() => setShowCompleted(!showCompleted)} className="toggle-btn">
-                      {showCompleted ? '📦 Hide' : '👁️ Show'} Completed ({completedAccounts.length})
-                    </button>
-                  </div>
+                  <>
+                    <div className="toggle-completed">
+                      <button onClick={() => setShowCompleted(!showCompleted)} className="toggle-btn">
+                        {showCompleted ? '📦 Hide' : '👁️ Show'} Completed ({completedAccounts.length})
+                      </button>
+                    </div>
+                    
+                    {showCompleted && (
+                      <div className="completed-section">
+                        <h3>✅ Completed Quests</h3>
+                        <div className="accounts-grid">
+                          {completedAccounts.map(acc => (
+                            <div key={acc.id} className="account-card completed">
+                              <div className="account-header">
+                                <h3>{acc.goalName} ✅</h3>
+                                <span className={`account-type ${acc.type.toLowerCase()}`}>{acc.type}</span>
+                              </div>
+                              <div className="account-details">
+                                <p className="completed-text">🏆 Quest Complete!</p>
+                                <p>Final: {displayCurrency === 'crypto'
+                                  ? `${parseFloat(acc.target || acc.balance).toLocaleString()} $OOOWEEE`
+                                  : getOooweeeInFiat(acc.target || acc.balance, 'eur')
+                                }</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
                 
                 <div className="create-section">
