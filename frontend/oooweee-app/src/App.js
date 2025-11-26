@@ -1185,85 +1185,6 @@ function App() {
     );
   }
 
-  const BuyModal = () => (
-    <div className="modal-overlay" onClick={() => { setShowBuyModal(false); setRequiredOooweeeForPurchase(null); }}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <h2>🛒 Buy $OOOWEEE</h2>
-        <button className="close-modal" onClick={() => { setShowBuyModal(false); setRequiredOooweeeForPurchase(null); }}>✕</button>
-        
-        <div className="buy-form">
-          <div className="balance-info">
-            <p>ETH Balance: {parseFloat(ethBalance).toFixed(4)} ETH</p>
-            <p>Current Rate: 1 ETH = {(1/oooweeePrice).toFixed(0)} OOOWEEE</p>
-          </div>
-          
-          {requiredOooweeeForPurchase ? (
-            <>
-              <div className="output-estimate">
-                <p>You need exactly:</p>
-                <h3>{Math.ceil(requiredOooweeeForPurchase).toLocaleString()} $OOOWEEE</h3>
-                <p className="fiat-value">≈ {ethToBuy} ETH (with 5% buffer)</p>
-              </div>
-              
-              <button 
-                className="buy-btn rainbow-btn"
-                onClick={buyExactOooweee}
-                disabled={loading}
-              >
-                {loading ? '⏳ Processing...' : `🚀 Buy Exactly ${Math.ceil(requiredOooweeeForPurchase).toLocaleString()} OOOWEEE`}
-              </button>
-              
-              <button 
-                className="secondary-btn"
-                onClick={() => setRequiredOooweeeForPurchase(null)}
-                style={{ marginTop: '0.5rem', background: 'transparent', border: '2px solid #000', width: '100%', padding: '0.5rem', cursor: 'pointer' }}
-              >
-                Or buy a custom amount →
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="input-group">
-                <label>ETH Amount:</label>
-                <input
-                  type="number"
-                  value={ethToBuy}
-                  onChange={(e) => setEthToBuy(e.target.value)}
-                  min="0.001"
-                  step="0.001"
-                  max={ethBalance}
-                />
-              </div>
-              
-              <div className="output-estimate">
-                <p>You will receive approximately:</p>
-                <h3>{parseFloat(estimatedOooweee).toLocaleString()} $OOOWEEE</h3>
-                {ethPrice && (
-                  <p className="fiat-value">≈ {getOooweeeInFiat(estimatedOooweee, 'eur')}</p>
-                )}
-              </div>
-              
-              <div className="quick-amounts">
-                <button onClick={() => setEthToBuy('0.01')}>0.01 ETH</button>
-                <button onClick={() => setEthToBuy('0.05')}>0.05 ETH</button>
-                <button onClick={() => setEthToBuy('0.1')}>0.1 ETH</button>
-                <button onClick={() => setEthToBuy('0.5')}>0.5 ETH</button>
-              </div>
-              
-              <button 
-                className="buy-btn rainbow-btn"
-                onClick={buyOooweee}
-                disabled={loading || parseFloat(ethToBuy) <= 0}
-              >
-                {loading ? '⏳ Processing...' : '🚀 Swap for OOOWEEE'}
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-
   const renderAboutPage = () => (
     <div className="about-page">
       <div className="about-header">
@@ -1587,7 +1508,84 @@ function App() {
     <div className="App">
       <Toaster position="top-right" />
       
-      {showBuyModal && <BuyModal />}
+      {showBuyModal && (
+        <div className="modal-overlay" onClick={() => { setShowBuyModal(false); setRequiredOooweeeForPurchase(null); }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>🛒 Buy $OOOWEEE</h2>
+            <button className="close-modal" onClick={() => { setShowBuyModal(false); setRequiredOooweeeForPurchase(null); }}>✕</button>
+            
+            <div className="buy-form">
+              <div className="balance-info">
+                <p>ETH Balance: {parseFloat(ethBalance).toFixed(4)} ETH</p>
+                <p>Current Rate: 1 ETH = {(1/oooweeePrice).toFixed(0)} OOOWEEE</p>
+              </div>
+              
+              {requiredOooweeeForPurchase ? (
+                <>
+                  <div className="output-estimate">
+                    <p>You need exactly:</p>
+                    <h3>{Math.ceil(requiredOooweeeForPurchase).toLocaleString()} $OOOWEEE</h3>
+                    <p className="fiat-value">≈ {ethToBuy} ETH (with 5% buffer)</p>
+                  </div>
+                  
+                  <button 
+                    className="buy-btn rainbow-btn"
+                    onClick={buyExactOooweee}
+                    disabled={loading}
+                  >
+                    {loading ? '⏳ Processing...' : `🚀 Buy Exactly ${Math.ceil(requiredOooweeeForPurchase).toLocaleString()} OOOWEEE`}
+                  </button>
+                  
+                  <button 
+                    className="secondary-btn"
+                    onClick={() => setRequiredOooweeeForPurchase(null)}
+                    style={{ marginTop: '0.5rem', background: 'transparent', border: '2px solid #000', width: '100%', padding: '0.5rem', cursor: 'pointer' }}
+                  >
+                    Or buy a custom amount →
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="input-group">
+                    <label>ETH Amount:</label>
+                    <input
+                      type="number"
+                      value={ethToBuy}
+                      onChange={(e) => setEthToBuy(e.target.value)}
+                      min="0.001"
+                      step="0.001"
+                      max={ethBalance}
+                    />
+                  </div>
+                  
+                  <div className="output-estimate">
+                    <p>You will receive approximately:</p>
+                    <h3>{parseFloat(estimatedOooweee).toLocaleString()} $OOOWEEE</h3>
+                    {ethPrice && (
+                      <p className="fiat-value">≈ {getOooweeeInFiat(estimatedOooweee, 'eur')}</p>
+                    )}
+                  </div>
+                  
+                  <div className="quick-amounts">
+                    <button onClick={() => setEthToBuy('0.01')}>0.01 ETH</button>
+                    <button onClick={() => setEthToBuy('0.05')}>0.05 ETH</button>
+                    <button onClick={() => setEthToBuy('0.1')}>0.1 ETH</button>
+                    <button onClick={() => setEthToBuy('0.5')}>0.5 ETH</button>
+                  </div>
+                  
+                  <button 
+                    className="buy-btn rainbow-btn"
+                    onClick={buyOooweee}
+                    disabled={loading || parseFloat(ethToBuy) <= 0}
+                  >
+                    {loading ? '⏳ Processing...' : '🚀 Swap for OOOWEEE'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       
       <div className="floating-coins">
         {[...Array(10)].map((_, i) => (
