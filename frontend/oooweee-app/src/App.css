@@ -331,7 +331,7 @@
   padding: 1.5rem;
   box-shadow: 8px 8px 0px #000;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .validator-card::before {
@@ -637,7 +637,7 @@
 
 .wallet-info {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 2rem;
   margin-bottom: 2rem;
 }
@@ -1989,6 +1989,10 @@ select:focus {
   .wallet-info {
     grid-template-columns: 1fr;
     gap: 1rem;
+  }
+  
+  .validator-card {
+    overflow: visible;
   }
   
   .stats-grid {
