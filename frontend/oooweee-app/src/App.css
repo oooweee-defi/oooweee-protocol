@@ -324,6 +324,276 @@
   box-shadow: 4px 4px 0px #000;
 }
 
+/* Community Page Styles */
+.community-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.community-header {
+  text-align: center;
+  margin-bottom: 3rem;
+  animation: slideDown 0.5s ease-out;
+}
+
+.community-header h1 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 2rem;
+  color: #FFD700;
+  text-shadow: 3px 3px 0px #000;
+  margin-bottom: 1rem;
+}
+
+.community-header p {
+  font-family: 'VT323', monospace;
+  font-size: 1.5rem;
+  color: #fff;
+  text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.3);
+}
+
+.community-card {
+  background: rgba(255, 255, 255, 0.95);
+  border: 4px solid #000;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  box-shadow: 8px 8px 0px #000;
+  animation: slideUp 0.5s ease-out;
+}
+
+.community-card h2 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 1.2rem;
+  color: #000;
+  margin-bottom: 1.5rem;
+  text-align: center;
+  padding-bottom: 1rem;
+  border-bottom: 2px dashed #ccc;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Validator Stats Card */
+.validator-stats-card .validator-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.metric-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, #f5f5f5, #e8e8e8);
+  border: 2px solid #000;
+  border-radius: 8px;
+  transition: transform 0.2s;
+}
+
+.metric-item:hover {
+  transform: translateY(-2px);
+}
+
+.metric-icon {
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+.metric-content h4 {
+  font-family: 'VT323', monospace;
+  font-size: 1.1rem;
+  color: #666;
+  margin: 0 0 0.3rem 0;
+}
+
+.metric-content .metric-value {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.9rem;
+  color: #000;
+}
+
+.validator-progress-section {
+  margin: 2rem 0;
+}
+
+.validator-progress-section h3 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.9rem;
+  color: #000;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+/* Leaderboard Card */
+.leaderboard-card .leaderboard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.leaderboard-card .leaderboard-entry {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  border: 3px solid #000;
+  transition: transform 0.2s;
+  background: white;
+}
+
+.leaderboard-card .leaderboard-entry:hover {
+  transform: translateX(5px);
+}
+
+.leaderboard-card .leaderboard-entry.gold {
+  background: linear-gradient(135deg, #FFF9C4 0%, #FFE082 100%);
+  border-color: #FFA000;
+}
+
+.leaderboard-card .leaderboard-entry.silver {
+  background: linear-gradient(135deg, #FAFAFA 0%, #E0E0E0 100%);
+  border-color: #9E9E9E;
+}
+
+.leaderboard-card .leaderboard-entry.bronze {
+  background: linear-gradient(135deg, #FFE0B2 0%, #FFCC80 100%);
+  border-color: #E65100;
+}
+
+.leaderboard-card .medal {
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+.leaderboard-card .donor-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.leaderboard-card .donor-name {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.7rem;
+  color: #000;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.leaderboard-card .donor-location {
+  font-family: 'VT323', monospace;
+  font-size: 1.1rem;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.leaderboard-card .donor-amount {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.6rem;
+  color: #000;
+  white-space: nowrap;
+  flex-shrink: 0;
+  background: var(--oooweee-yellow);
+  padding: 0.4rem 0.6rem;
+  border: 2px solid #000;
+}
+
+/* Shoutout Card */
+.shoutout-card .shoutout-content-wrapper {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.5rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, #FFF9C4, #FFE082);
+  border: 3px dashed #FFA000;
+  border-radius: 8px;
+}
+
+.shoutout-card .shoutout-icon {
+  font-size: 2.5rem;
+  flex-shrink: 0;
+}
+
+.shoutout-card .shoutout-content {
+  flex: 1;
+}
+
+.shoutout-card .shoutout-message {
+  font-family: 'VT323', monospace;
+  font-size: 1.5rem;
+  font-style: italic;
+  color: #333;
+  margin: 0 0 1rem 0;
+  line-height: 1.4;
+}
+
+.shoutout-card .shoutout-meta {
+  font-family: 'VT323', monospace;
+  font-size: 1.2rem;
+  color: #666;
+  margin: 0;
+}
+
+/* Support Card */
+.support-card .support-methods {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 2rem;
+}
+
+.support-item {
+  text-align: center;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #E8F5E9, #C8E6C9);
+  border: 3px solid #4CAF50;
+  border-radius: 8px;
+  transition: transform 0.2s;
+}
+
+.support-item:hover {
+  transform: translateY(-3px);
+  box-shadow: 4px 4px 0px #000;
+}
+
+.support-icon {
+  font-size: 2.5rem;
+  display: block;
+  margin-bottom: 1rem;
+}
+
+.support-item h3 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.8rem;
+  color: #000;
+  margin-bottom: 0.5rem;
+}
+
+.support-item p {
+  font-family: 'VT323', monospace;
+  font-size: 1.3rem;
+  color: #333;
+}
+
+.community-cta {
+  text-align: center;
+  margin-top: 3rem;
+}
+
 /* Validator Card */
 .validator-card {
   background: rgba(255, 255, 255, 0.95);
@@ -2060,18 +2330,44 @@ select:focus {
     align-items: flex-start;
   }
   
-  /* CRITICAL: Force donor leaderboard visibility on mobile */
-  .donor-leaderboard {
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
+  /* Community Page Mobile Styles */
+  .community-page {
+    padding: 1rem;
   }
   
-  /* CRITICAL: Force shoutout banner visibility on mobile */
-  .donor-shoutout-banner {
-    display: flex !important;
-    visibility: visible !important;
-    opacity: 1 !important;
+  .community-header h1 {
+    font-size: 1.3rem;
+  }
+  
+  .community-card {
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  .validator-stats-card .validator-metrics {
+    grid-template-columns: 1fr;
+  }
+  
+  .support-card .support-methods {
+    grid-template-columns: 1fr;
+  }
+  
+  .shoutout-card .shoutout-content-wrapper {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .shoutout-card .shoutout-message {
+    font-size: 1.2rem;
+  }
+  
+  .leaderboard-card .donor-name {
+    font-size: 0.6rem;
+  }
+  
+  .leaderboard-card .donor-amount {
+    font-size: 0.5rem;
+    padding: 0.3rem 0.4rem;
   }
   
   /* Donor info fields stacked on mobile */
