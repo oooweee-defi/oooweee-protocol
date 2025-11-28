@@ -86,6 +86,7 @@ function App() {
   const [initialDepositInput, setInitialDepositInput] = useState('');
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showBuyModal, setShowBuyModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [ethToBuy, setEthToBuy] = useState('0.01');
   const [estimatedOooweee, setEstimatedOooweee] = useState('0');
   const [accountCurrency, setAccountCurrency] = useState('EUR');
@@ -1870,6 +1871,146 @@ function App() {
         </div>
       )}
       
+      {showCreateModal && (
+        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+          <div className="modal-content create-modal" onClick={(e) => e.stopPropagation()}>
+            <h2>🎮 Start New Savings Quest</h2>
+            <button className="close-modal" onClick={() => setShowCreateModal(false)}>✕</button>
+            
+            <div className="buy-form">
+              <div className="form-group">
+                <label>Quest Type:</label>
+                <select 
+                  id="accountType" 
+                  value={accountType}
+                  onChange={(e) => setAccountType(e.target.value)}
+                  className="select-input"
+                >
+                  <option value="time">⏰ Time Quest - Lock until date</option>
+                  <option value="growth">🌱 Growth Quest - Grow to target</option>
+                  <option value="balance">⚖️ Balance Quest - Send at target</option>
+                </select>
+              </div>
+              
+              <div className="form-group">
+                <label>💱 Display Currency:</label>
+                <select 
+                  value={accountCurrency}
+                  onChange={(e) => setAccountCurrency(e.target.value)}
+                  className="select-input"
+                >
+                  {Object.entries(CURRENCIES).map(([code, info]) => (
+                    <option key={code} value={code}>{info.symbol} {info.name}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="form-group">
+                <label>Quest Name:</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g., Epic Vacation" 
+                  id="goalName"
+                  className="text-input"
+                />
+              </div>
+              
+              <div className="form-group">
+                <label>💰 Initial Deposit ({CURRENCIES[accountCurrency].symbol}):</label>
+                <input 
+                  type="number" 
+                  placeholder={`Deposit in ${CURRENCIES[accountCurrency].name}`}
+                  id="initialDeposit"
+                  min="10"
+                  step="1"
+                  value={initialDepositInput}
+                  onChange={(e) => setInitialDepositInput(e.target.value)}
+                  className="number-input"
+                />
+                {initialDepositInput && (
+                  <p className="conversion-note">
+                    ≈ {convertFiatToOooweee(initialDepositInput, accountCurrency.toLowerCase()).toLocaleString()} $OOOWEEE at current rate
+                  </p>
+                )}
+                <p className="fee-note">💡 1% creation fee from initial deposit</p>
+                <p className="fee-note">📋 Minimum deposit: €10 equivalent</p>
+                {initialDepositInput && parseFloat(initialDepositInput) < 10 && accountCurrency === 'EUR' && (
+                  <p className="error-note">⚠️ Minimum deposit is €10</p>
+                )}
+                {(() => {
+                  const oooweeeNeeded = convertFiatToOooweee(initialDepositInput, accountCurrency.toLowerCase());
+                  return parseFloat(balance) < oooweeeNeeded && initialDepositInput ? (
+                    <p className="swap-notice">⚠️ Insufficient balance - will offer to buy with ETH</p>
+                  ) : null;
+                })()}
+              </div>
+              
+              {accountType === 'time' && (
+                <div className="form-group">
+                  <label>🗓️ Unlock Date:</label>
+                  <input 
+                    type="date" 
+                    id="unlockDate"
+                    min={new Date().toISOString().split('T')[0]}
+                    className="date-input"
+                  />
+                </div>
+              )}
+              
+              {(accountType === 'growth' || accountType === 'balance') && (
+                <div className="form-group">
+                  <label>🎯 Target Amount ({CURRENCIES[accountCurrency].symbol}):</label>
+                  <input 
+                    type="number" 
+                    placeholder={`Target in ${CURRENCIES[accountCurrency].name}`}
+                    id="targetAmount"
+                    value={targetAmountInput}
+                    onChange={(e) => setTargetAmountInput(e.target.value)}
+                    min="1"
+                    step="1"
+                    className="number-input"
+                  />
+                  {targetAmountInput && (
+                    <p className="conversion-note">
+                      ≈ {convertFiatToOooweee(targetAmountInput, accountCurrency.toLowerCase()).toLocaleString()} $OOOWEEE at current rate
+                    </p>
+                  )}
+                  {accountType === 'growth' && initialDepositInput && targetAmountInput && (
+                    (() => {
+                      if (parseFloat(initialDepositInput) >= parseFloat(targetAmountInput)) {
+                        return <p className="error-note">⚠️ Target must be higher than initial deposit ({CURRENCIES[accountCurrency].symbol}{initialDepositInput})</p>;
+                      }
+                      return null;
+                    })()
+                  )}
+                </div>
+              )}
+              
+              {accountType === 'balance' && (
+                <div className="form-group">
+                  <label>📮 Recipient Address:</label>
+                  <input 
+                    type="text" 
+                    placeholder="0x..." 
+                    id="recipientAddress"
+                    className="text-input"
+                  />
+                  <p className="info-note">Auto-sends when target + 1% is reached</p>
+                </div>
+              )}
+              
+              <button 
+                onClick={() => { handleCreateAccount(); setShowCreateModal(false); }} 
+                disabled={loading}
+                className="buy-btn rainbow-btn"
+              >
+                {loading ? '⏳ Processing...' : '🚀 Create Savings Account'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="floating-coins">
         {[...Array(10)].map((_, i) => (
           <div
@@ -2027,6 +2168,13 @@ function App() {
                       onClick={() => setShowBuyModal(true)}
                     >
                       🛒 Buy $OOOWEEE
+                    </button>
+                    
+                    <button 
+                      className="create-savings-btn"
+                      onClick={() => setShowCreateModal(true)}
+                    >
+                      🎮 New Savings Quest
                     </button>
                   </div>
                 </div>
@@ -2307,138 +2455,6 @@ function App() {
                     )}
                   </>
                 )}
-                
-                <div className="create-section">
-                  <h2>🎮 Start New Savings Quest</h2>
-                  
-                  <div className="form-group">
-                    <select 
-                      id="accountType" 
-                      value={accountType}
-                      onChange={(e) => setAccountType(e.target.value)}
-                      className="select-input"
-                    >
-                      <option value="time">⏰ Time Quest - Lock until date</option>
-                      <option value="growth">🌱 Growth Quest - Grow to target</option>
-                      <option value="balance">⚖️ Balance Quest - Send at target</option>
-                    </select>
-                  </div>
-                  
-                  <div className="form-group">
-                    <label>💱 Display Currency:</label>
-                    <select 
-                      value={accountCurrency}
-                      onChange={(e) => setAccountCurrency(e.target.value)}
-                      className="select-input"
-                    >
-                      {Object.entries(CURRENCIES).map(([code, info]) => (
-                        <option key={code} value={code}>{info.symbol} {info.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  
-                  <div className="form-group">
-                    <input 
-                      type="text" 
-                      placeholder="Quest name (e.g., Epic Vacation)" 
-                      id="goalName"
-                      className="text-input"
-                    />
-                  </div>
-                  
-                  <div className="form-group">
-                    <label>💰 Initial Deposit ({CURRENCIES[accountCurrency].symbol}):</label>
-                    <input 
-                      type="number" 
-                      placeholder={`Deposit in ${CURRENCIES[accountCurrency].name}`}
-                      id="initialDeposit"
-                      min="10"
-                      step="1"
-                      value={initialDepositInput}
-                      onChange={(e) => setInitialDepositInput(e.target.value)}
-                      className="number-input"
-                    />
-                    {initialDepositInput && (
-                      <p className="conversion-note">
-                        ≈ {convertFiatToOooweee(initialDepositInput, accountCurrency.toLowerCase()).toLocaleString()} $OOOWEEE at current rate
-                      </p>
-                    )}
-                    <p className="fee-note">💡 1% creation fee from initial deposit</p>
-                    <p className="fee-note">📋 Minimum deposit: €10 equivalent</p>
-                    {initialDepositInput && parseFloat(initialDepositInput) < 10 && accountCurrency === 'EUR' && (
-                      <p className="error-note">⚠️ Minimum deposit is €10</p>
-                    )}
-                    {(() => {
-                      const oooweeeNeeded = convertFiatToOooweee(initialDepositInput, accountCurrency.toLowerCase());
-                      return parseFloat(balance) < oooweeeNeeded && initialDepositInput ? (
-                        <p className="swap-notice">⚠️ Insufficient balance - will offer to buy with ETH</p>
-                      ) : null;
-                    })()}
-                  </div>
-                  
-                  {accountType === 'time' && (
-                    <div className="form-group">
-                      <label>🗓️ Unlock Date:</label>
-                      <input 
-                        type="date" 
-                        id="unlockDate"
-                        min={new Date().toISOString().split('T')[0]}
-                        className="date-input"
-                      />
-                    </div>
-                  )}
-                  
-                  {(accountType === 'growth' || accountType === 'balance') && (
-                    <div className="form-group">
-                      <label>🎯 Target Amount ({CURRENCIES[accountCurrency].symbol}):</label>
-                      <input 
-                        type="number" 
-                        placeholder={`Target in ${CURRENCIES[accountCurrency].name}`}
-                        id="targetAmount"
-                        value={targetAmountInput}
-                        onChange={(e) => setTargetAmountInput(e.target.value)}
-                        min="1"
-                        step="1"
-                        className="number-input"
-                      />
-                      {targetAmountInput && (
-                        <p className="conversion-note">
-                          ≈ {convertFiatToOooweee(targetAmountInput, accountCurrency.toLowerCase()).toLocaleString()} $OOOWEEE at current rate
-                        </p>
-                      )}
-                      {accountType === 'growth' && initialDepositInput && targetAmountInput && (
-                        (() => {
-                          // Both initialDepositInput and targetAmountInput are now in fiat
-                          if (parseFloat(initialDepositInput) >= parseFloat(targetAmountInput)) {
-                            return <p className="error-note">⚠️ Target must be higher than initial deposit ({CURRENCIES[accountCurrency].symbol}{initialDepositInput})</p>;
-                          }
-                          return null;
-                        })()
-                      )}
-                    </div>
-                  )}
-                  
-                  {accountType === 'balance' && (
-                    <div className="form-group">
-                      <label>📮 Recipient Address:</label>
-                      <input 
-                        type="text" 
-                        placeholder="0x..." 
-                        id="recipientAddress"
-                        className="text-input"
-                      />
-                      <p className="info-note">Auto-sends when target + 1% is reached</p>
-                    </div>
-                  )}
-                  
-                  <button 
-                    onClick={handleCreateAccount} 
-                    disabled={loading}
-                    className="create-btn rainbow-btn"
-                  >
-                    {loading ? '⏳ Processing...' : '🚀 Create Account'}
-                  </button>
-                </div>
               </div>
             )}
           </>

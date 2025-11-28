@@ -1092,6 +1092,50 @@
   box-shadow: 2px 2px 0px #000;
 }
 
+.create-savings-btn {
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 0.9rem;
+  font-size: 0.7rem;
+  font-weight: bold;
+  font-family: 'Press Start 2P', cursive;
+  border: 3px solid #000;
+  box-shadow: 4px 4px 0px #000;
+  cursor: pointer;
+  transition: all 0.1s;
+  color: #000;
+  text-shadow: none;
+  background: linear-gradient(135deg, #E1BEE7 0%, #CE93D8 50%, #BA68C8 100%);
+}
+
+.create-savings-btn:hover {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px #000;
+  background: linear-gradient(135deg, #CE93D8 0%, #BA68C8 50%, #AB47BC 100%);
+}
+
+.create-savings-btn:active {
+  transform: translate(4px, 4px);
+  box-shadow: none;
+}
+
+/* Create Modal specific styles */
+.create-modal {
+  max-width: 550px;
+}
+
+.create-modal .form-group {
+  margin-bottom: 1rem;
+}
+
+.create-modal .form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.65rem;
+  color: #000;
+}
+
 /* Buy Modal - IMPROVED */
 .modal-overlay {
   position: fixed;
