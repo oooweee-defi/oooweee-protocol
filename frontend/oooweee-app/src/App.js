@@ -1326,6 +1326,142 @@ function App() {
     </div>
   );
   
+  // NEW Community page render method
+  const renderCommunityPage = () => (
+    <div className="community-page">
+      <div className="community-header">
+        <h1>🌟 OOOWEEE Community</h1>
+        <p>Supporting the network, together!</p>
+      </div>
+
+      {/* Validator Network Stats */}
+      <div className="community-card validator-stats-card">
+        <h2>🔐 Validator Network</h2>
+        <div className="validator-metrics">
+          <div className="metric-item">
+            <span className="metric-icon">🖥️</span>
+            <div className="metric-content">
+              <h4>Active Validators</h4>
+              <p className="metric-value">{validatorStats.validators}</p>
+            </div>
+          </div>
+          <div className="metric-item">
+            <span className="metric-icon">⏳</span>
+            <div className="metric-content">
+              <h4>Next Validator In</h4>
+              <p className="metric-value">{parseFloat(validatorStats.nextValidatorIn).toFixed(4)} ETH</p>
+            </div>
+          </div>
+          <div className="metric-item">
+            <span className="metric-icon">🛡️</span>
+            <div className="metric-content">
+              <h4>From Stability</h4>
+              <p className="metric-value">{parseFloat(validatorStats.fromStability).toFixed(4)} ETH</p>
+            </div>
+          </div>
+          <div className="metric-item">
+            <span className="metric-icon">🎁</span>
+            <div className="metric-content">
+              <h4>From Rewards</h4>
+              <p className="metric-value">{parseFloat(validatorStats.fromRewards).toFixed(4)} ETH</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="validator-progress-section">
+          <h3>Progress to Next Validator</h3>
+          <div className="progress-bar">
+            <div 
+              className="progress-fill validator-progress"
+              style={{ width: `${validatorStats.progress}%` }}
+            />
+          </div>
+          <p className="progress-text">{parseFloat(validatorStats.pendingETH).toFixed(4)} / 32 ETH ({validatorStats.progress.toFixed(1)}%)</p>
+        </div>
+        
+        <div className="donation-stats">
+          <p>💝 Total Community Donations: {parseFloat(validatorStats.totalDonations).toFixed(4)} ETH</p>
+          <p>👥 Total Donors: {validatorStats.donors}</p>
+        </div>
+        
+        {account && (
+          <button className="donate-btn rainbow-btn" onClick={donateToValidators} disabled={loading}>
+            💰 Donate to Validators
+          </button>
+        )}
+      </div>
+
+      {/* Donor Leaderboard */}
+      {donorLeaderboard.length > 0 && (
+        <div className="community-card leaderboard-card">
+          <h2>🏆 Top Donors</h2>
+          <div className="leaderboard-list">
+            {donorLeaderboard.map((donor, index) => (
+              <div key={index} className={`leaderboard-entry ${index === 0 ? 'gold' : index === 1 ? 'silver' : 'bronze'}`}>
+                <span className="medal">
+                  {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
+                </span>
+                <div className="donor-info">
+                  <span className="donor-name">{donor.name}</span>
+                  {donor.location && <span className="donor-location">{donor.location}</span>}
+                </div>
+                <span className="donor-amount">{donor.amount} ETH</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Community Shoutout */}
+      {donorShoutout && (
+        <div className="community-card shoutout-card">
+          <h2>📣 Community Message</h2>
+          <div className="shoutout-content-wrapper">
+            <div className="shoutout-icon">💖</div>
+            <div className="shoutout-content">
+              <blockquote className="shoutout-message">"{donorShoutout.message}"</blockquote>
+              <p className="shoutout-meta">
+                — {donorShoutout.name || donorShoutout.sender}
+                {donorShoutout.location && `, ${donorShoutout.location}`}
+                {' '}donated {donorShoutout.amount} ETH
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* How to Support */}
+      <div className="community-card support-card">
+        <h2>💪 How You Can Support</h2>
+        <div className="support-methods">
+          <div className="support-item">
+            <span className="support-icon">💝</span>
+            <h3>Donate ETH</h3>
+            <p>Help fund validators that generate rewards for all savers</p>
+          </div>
+          <div className="support-item">
+            <span className="support-icon">💰</span>
+            <h3>Save with OOOWEEE</h3>
+            <p>Create savings accounts to build the ecosystem</p>
+          </div>
+          <div className="support-item">
+            <span className="support-icon">📢</span>
+            <h3>Spread the Word</h3>
+            <p>Share OOOWEEE with friends and family</p>
+          </div>
+        </div>
+      </div>
+
+      {!account && (
+        <div className="community-cta">
+          <button onClick={connectWallet} className="connect-btn rainbow-btn" disabled={isConnecting}>
+            <span>🔗</span> Connect Wallet to Participate
+          </button>
+        </div>
+      )}
+    </div>
+  );
+  
   // Improved Admin Dashboard
   const renderAdminDashboard = () => (
     <div className="admin-dashboard">
@@ -1759,6 +1895,12 @@ function App() {
             🎮 Dashboard
           </button>
           <button 
+            className={`tab-btn ${activeTab === 'community' ? 'active' : ''}`}
+            onClick={() => setActiveTab('community')}
+          >
+            🌟 Community
+          </button>
+          <button 
             className={`tab-btn ${activeTab === 'about' ? 'active' : ''}`}
             onClick={() => setActiveTab('about')}
           >
@@ -1776,6 +1918,8 @@ function App() {
 
         {activeTab === 'about' ? (
           renderAboutPage()
+        ) : activeTab === 'community' ? (
+          renderCommunityPage()
         ) : activeTab === 'admin' && account?.toLowerCase() === ADMIN_WALLET.toLowerCase() ? (
           renderAdminDashboard()
         ) : (
@@ -1883,82 +2027,6 @@ function App() {
                       onClick={() => setShowBuyModal(true)}
                     >
                       🛒 Buy $OOOWEEE
-                    </button>
-                  </div>
-
-                  <div className="validator-card">
-                    <div className="validator-header">
-                      <h3>🔐 Validator Network</h3>
-                    </div>
-                    
-                    {donorLeaderboard.length > 0 && (
-                      <div className="donor-leaderboard">
-                        <h4>🏆 Top Donors</h4>
-                        <div className="leaderboard-list">
-                          {donorLeaderboard.map((donor, index) => (
-                            <div key={index} className={`leaderboard-entry ${index === 0 ? 'gold' : index === 1 ? 'silver' : 'bronze'}`}>
-                              <span className="medal">
-                                {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
-                              </span>
-                              <div className="donor-info">
-                                <span className="donor-name">{donor.name}</span>
-                                {donor.location && <span className="donor-location">{donor.location}</span>}
-                              </div>
-                              <span className="donor-amount">{donor.amount} ETH</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    
-                    {donorShoutout && (
-                      <div className="donor-shoutout-banner">
-                        <div className="shoutout-icon">📣</div>
-                        <div className="shoutout-content">
-                          <p className="shoutout-message">"{donorShoutout.message}"</p>
-                          <p className="shoutout-meta">
-                            — {donorShoutout.name || donorShoutout.sender}
-                            {donorShoutout.location && `, ${donorShoutout.location}`}
-                            {' '}donated {donorShoutout.amount} ETH
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                    
-                    <div className="stats-grid">
-                      <div className="stat">
-                        <span className="label">Active Validators</span>
-                        <span className="value">{validatorStats.validators}</span>
-                      </div>
-                      <div className="stat">
-                        <span className="label">Next Validator In</span>
-                        <span className="value">{parseFloat(validatorStats.nextValidatorIn).toFixed(4)} ETH</span>
-                      </div>
-                      <div className="stat">
-                        <span className="label">From Stability</span>
-                        <span className="value">{parseFloat(validatorStats.fromStability).toFixed(4)} ETH</span>
-                      </div>
-                      <div className="stat">
-                        <span className="label">From Rewards</span>
-                        <span className="value">{parseFloat(validatorStats.fromRewards).toFixed(4)} ETH</span>
-                      </div>
-                    </div>
-                    
-                    <div className="progress-bar">
-                      <div 
-                        className="progress-fill validator-progress"
-                        style={{ width: `${validatorStats.progress}%` }}
-                      />
-                    </div>
-                    <p className="progress-label">{parseFloat(validatorStats.pendingETH).toFixed(4)} / 32 ETH</p>
-                    
-                    <div className="donation-stats">
-                      <p>💝 Total Donations: {parseFloat(validatorStats.totalDonations).toFixed(4)} ETH</p>
-                      <p>👥 Donors: {validatorStats.donors}</p>
-                    </div>
-                    
-                    <button className="donate-btn" onClick={donateToValidators} disabled={loading}>
-                      💰 Donate ETH
                     </button>
                   </div>
                 </div>
