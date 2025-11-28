@@ -847,10 +847,12 @@ function App() {
 
   const loadSavingsAccounts = async (account, savingsContract, provider) => {
     try {
-      const accountIds = await savingsContract.getUserAccounts(account);
+      // Use getUserAccountCount to get TOTAL accounts (not just active ones)
+      const [totalCount, activeCount] = await savingsContract.getUserAccountCount(account);
       const accountDetails = [];
       
-      for (let id of accountIds) {
+      // Loop through ALL account IDs from 0 to total-1
+      for (let id = 0; id < totalCount.toNumber(); id++) {
         try {
           const info = await savingsContract.getAccountDetails(account, id);
           
@@ -1829,20 +1831,6 @@ function App() {
               </div>
             ) : (
               <div className="dashboard">
-                {/* DEBUG INFO - Remove after testing */}
-                <div style={{
-                  background: '#fff',
-                  border: '3px solid #f44336',
-                  padding: '12px 16px',
-                  marginBottom: '16px',
-                  fontFamily: 'VT323, monospace',
-                  fontSize: '1.1rem',
-                  color: '#333',
-                  textAlign: 'center'
-                }}>
-                  <strong>DEBUG:</strong> Total Accounts: {accounts.length} | Active: {activeAccounts.length} | Completed: {completedAccounts.length} | Leaderboard: {donorLeaderboard.length} | Shoutout: {donorShoutout ? 'Yes' : 'No'}
-                </div>
-                
                 <div className="wallet-info">
                   <div className="wallet-card">
                     <div className="wallet-header">
@@ -2165,21 +2153,87 @@ function App() {
                       <div className="completed-section">
                         <h3>✅ Completed Quests</h3>
                         <div className="accounts-grid">
-                          {completedAccounts.map(acc => (
-                            <div key={acc.id} className="account-card completed">
-                              <div className="account-header">
-                                <h3>{acc.goalName} ✅</h3>
-                                <span className={`account-type ${acc.type.toLowerCase()}`}>{acc.type}</span>
+                          {completedAccounts.map(acc => {
+                            const currency = getCurrencyFromCode(acc.targetCurrency);
+                            const currencyInfo = CURRENCIES[currency];
+                            
+                            return (
+                              <div key={acc.id} className="account-card completed">
+                                <div className="account-header">
+                                  <h3>{acc.goalName}</h3>
+                                  <div className="header-badges">
+                                    <span className={`account-type ${acc.type.toLowerCase()}`}>
+                                      {acc.type === 'Time' ? '⏰' : acc.type === 'Growth' ? '🌱' : '⚖️'} {acc.type}
+                                    </span>
+                                    <span className="currency-badge">{currency}</span>
+                                  </div>
+                                </div>
+                                
+                                <div className="account-details">
+                                  <p className="completed-text">🏆 Quest Complete!</p>
+                                  
+                                  {acc.isFiatTarget ? (
+                                    <>
+                                      {(acc.type === 'Growth' || acc.type === 'Balance') && (
+                                        <div className="detail-row">
+                                          <span>Target Reached:</span>
+                                          <span className="value">
+                                            {currencyInfo.symbol}
+                                            {(acc.targetFiat / Math.pow(10, currencyInfo.decimals)).toFixed(currencyInfo.decimals)}
+                                          </span>
+                                        </div>
+                                      )}
+                                      <div className="detail-row">
+                                        <span>Final Value:</span>
+                                        <span className="value">
+                                          {currencyInfo.symbol}
+                                          {(acc.currentFiatValue / Math.pow(10, currencyInfo.decimals)).toFixed(currencyInfo.decimals)}
+                                        </span>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div className="detail-row">
+                                      <span>Final Balance:</span>
+                                      <span className="value">
+                                        {displayCurrency === 'crypto'
+                                          ? `${parseFloat(acc.balance).toLocaleString()} $OOOWEEE`
+                                          : getOooweeeInFiat(acc.balance, 'eur')
+                                        }
+                                      </span>
+                                    </div>
+                                  )}
+                                  
+                                  {acc.type === 'Time' && acc.unlockTime > 0 && (
+                                    <div className="detail-row secondary">
+                                      <span>Unlocked:</span>
+                                      <span className="value">
+                                        {new Date(acc.unlockTime * 1000).toLocaleDateString()}
+                                      </span>
+                                    </div>
+                                  )}
+                                  
+                                  {acc.type === 'Balance' && acc.recipient && (
+                                    <div className="detail-row secondary">
+                                      <span>Sent to:</span>
+                                      <span className="value address">
+                                        {acc.recipient.slice(0, 6)}...{acc.recipient.slice(-4)}
+                                      </span>
+                                    </div>
+                                  )}
+                                  
+                                  <div className="progress-section">
+                                    <div className="progress-bar">
+                                      <div 
+                                        className="progress-fill rainbow-fill"
+                                        style={{ width: '100%' }}
+                                      />
+                                    </div>
+                                    <span className="progress-text">100% Complete ✨</span>
+                                  </div>
+                                </div>
                               </div>
-                              <div className="account-details">
-                                <p className="completed-text">🏆 Quest Complete!</p>
-                                <p>Final: {displayCurrency === 'crypto'
-                                  ? `${parseFloat(acc.target || acc.balance).toLocaleString()} $OOOWEEE`
-                                  : getOooweeeInFiat(acc.target || acc.balance, 'eur')
-                                }</p>
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     )}
