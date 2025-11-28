@@ -1033,22 +1033,6 @@
   text-shadow: 2px 2px 0px #000;
 }
 
-.toggle-completed {
-  background: rgba(255,255,255,0.2);
-  border: 2px solid #fff;
-  color: #fff;
-  padding: 0.5rem 1rem;
-  font-family: 'VT323', monospace;
-  font-size: 1.1rem;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.toggle-completed:hover {
-  background: rgba(255,255,255,0.3);
-  transform: translateY(-2px);
-}
-
 .empty-state {
   text-align: center;
   padding: 3rem;
@@ -2074,6 +2058,25 @@ select:focus {
     font-size: 0.9rem;
     flex-direction: column;
     align-items: flex-start;
+  }
+  
+  /* CRITICAL: Force donor leaderboard visibility on mobile */
+  .donor-leaderboard {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+  
+  /* CRITICAL: Force shoutout banner visibility on mobile */
+  .donor-shoutout-banner {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+  
+  /* Donor info fields stacked on mobile */
+  .donor-info-fields {
+    grid-template-columns: 1fr;
   }
 }
 /* ======================================== */

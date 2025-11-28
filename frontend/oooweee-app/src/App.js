@@ -1829,6 +1829,20 @@ function App() {
               </div>
             ) : (
               <div className="dashboard">
+                {/* DEBUG INFO - Remove after testing */}
+                <div style={{
+                  background: '#fff',
+                  border: '3px solid #f44336',
+                  padding: '12px 16px',
+                  marginBottom: '16px',
+                  fontFamily: 'VT323, monospace',
+                  fontSize: '1.1rem',
+                  color: '#333',
+                  textAlign: 'center'
+                }}>
+                  <strong>DEBUG:</strong> Total Accounts: {accounts.length} | Active: {activeAccounts.length} | Completed: {completedAccounts.length} | Leaderboard: {donorLeaderboard.length} | Shoutout: {donorShoutout ? 'Yes' : 'No'}
+                </div>
+                
                 <div className="wallet-info">
                   <div className="wallet-card">
                     <div className="wallet-header">
