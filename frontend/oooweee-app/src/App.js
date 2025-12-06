@@ -672,7 +672,7 @@ function App() {
       
       // Load user data (read-only operations)
       await loadBalances(address, web3Provider, token);
-      await loadSavingsAccounts(address, savings, web3Provider);
+      await loadSavingsAccounts(address, savings, web3Provider, router, ethPrice);
       
       // Subscribe to events
       if (instance.on) {
@@ -812,8 +812,14 @@ function App() {
     }
   };
 
-  // FIX: Calculate progress locally instead of calling state-changing function
-  const calculateProgress = (acc, oooweeePrice, ethPrice) => {
+  // Helper function to get currency code from enum value
+  const getCurrencyFromCode = (code) => {
+    const currencies = Object.keys(CURRENCIES);
+    return currencies[code] || 'EUR';
+  };
+
+  // FIX: Calculate progress with passed price values (not from closure)
+  const calculateProgress = (acc, currentOooweeePrice, currentEthPrice) => {
     if (acc.type === 'Time') {
       // Time accounts: progress based on time
       const now = Math.floor(Date.now() / 1000);
@@ -828,8 +834,8 @@ function App() {
     if (acc.isFiatTarget && acc.targetFiat > 0) {
       // Calculate current fiat value from token balance
       const currencyCode = getCurrencyFromCode(acc.targetCurrency);
-      const ethPriceForCurrency = ethPrice?.[currencyCode.toLowerCase()] || ethPrice?.eur || 1850;
-      const tokenValueInEth = parseFloat(acc.balance) * oooweeePrice;
+      const ethPriceForCurrency = currentEthPrice?.[currencyCode.toLowerCase()] || currentEthPrice?.eur || 1850;
+      const tokenValueInEth = parseFloat(acc.balance) * currentOooweeePrice;
       const currentFiatValue = tokenValueInEth * ethPriceForCurrency;
       
       // targetFiat is in smallest units (cents)
@@ -846,16 +852,49 @@ function App() {
     return 0;
   };
 
-  const loadSavingsAccounts = async (account, savingsContract, provider) => {
+  // FIX: loadSavingsAccounts now fetches fresh price from router to avoid stale closure bug
+  const loadSavingsAccounts = async (userAccount, savingsContractInstance, providerInstance, routerContractInstance, currentEthPrice) => {
     try {
+      // CRITICAL FIX: Fetch fresh OOOWEEE price directly from router
+      // This prevents stale closure issues where the state value is outdated
+      let freshOooweeePrice = 0.00001; // Default fallback
+      
+      if (routerContractInstance) {
+        try {
+          const ethAmount = ethers.utils.parseEther("1");
+          const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.OOOWEEEToken];
+          const amounts = await routerContractInstance.getAmountsOut(ethAmount, path);
+          const oooweeePerEth = parseFloat(ethers.utils.formatUnits(amounts[1], 18));
+          freshOooweeePrice = 1 / oooweeePerEth;
+          
+          // Also update the state so UI stays in sync
+          setOooweeePrice(freshOooweeePrice);
+        } catch (priceError) {
+          console.error('Error fetching fresh OOOWEEE price:', priceError);
+        }
+      }
+      
+      // Use current ethPrice or fetch fresh if not provided
+      let freshEthPrice = currentEthPrice;
+      if (!freshEthPrice) {
+        try {
+          const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd,eur,gbp,jpy,cny,cad,aud,chf,inr,krw');
+          const data = await response.json();
+          freshEthPrice = data.ethereum;
+          setEthPrice(freshEthPrice);
+        } catch (e) {
+          freshEthPrice = { usd: 2000, eur: 1850, gbp: 1600, jpy: 280000, cny: 14000, cad: 2600, aud: 3000, chf: 1800, inr: 165000, krw: 2600000 };
+        }
+      }
+      
       // Use getUserAccountCount to get TOTAL accounts (not just active ones)
-      const [totalCount, activeCount] = await savingsContract.getUserAccountCount(account);
+      const [totalCount, activeCount] = await savingsContractInstance.getUserAccountCount(userAccount);
       const accountDetails = [];
       
       // Loop through ALL account IDs from 0 to total-1
       for (let id = 0; id < totalCount.toNumber(); id++) {
         try {
-          const info = await savingsContract.getAccountDetails(account, id);
+          const info = await savingsContractInstance.getAccountDetails(userAccount, id);
           
           const ACCOUNT_TYPES = ['Time', 'Balance', 'Growth'];
 
@@ -874,14 +913,14 @@ function App() {
             isFiatTarget: info[4].gt(0)
           };
           
-          // Calculate progress locally
-          accData.progress = calculateProgress(accData, oooweeePrice, ethPrice);
+          // Calculate progress using FRESH price values
+          accData.progress = calculateProgress(accData, freshOooweeePrice, freshEthPrice);
           
-          // Calculate current fiat value for display
+          // Calculate current fiat value for display using FRESH prices
           if (accData.isFiatTarget) {
             const currencyCode = getCurrencyFromCode(accData.targetCurrency);
-            const ethPriceForCurrency = ethPrice?.[currencyCode.toLowerCase()] || ethPrice?.eur || 1850;
-            const tokenValueInEth = parseFloat(accData.balance) * oooweeePrice;
+            const ethPriceForCurrency = freshEthPrice?.[currencyCode.toLowerCase()] || freshEthPrice?.eur || 1850;
+            const tokenValueInEth = parseFloat(accData.balance) * freshOooweeePrice;
             accData.currentFiatValue = Math.floor(tokenValueInEth * ethPriceForCurrency * 100); // In cents
           } else {
             accData.currentFiatValue = 0;
@@ -910,7 +949,7 @@ function App() {
         error: '❌ Failed to claim rewards'
       });
       
-      await loadSavingsAccounts(account, savingsContract, provider);
+      await loadSavingsAccounts(account, savingsContract, provider, routerContract, ethPrice);
       
     } catch (error) {
       console.error(error);
@@ -931,7 +970,7 @@ function App() {
         error: '❌ Failed to claim rewards'
       });
       
-      await loadSavingsAccounts(account, savingsContract, provider);
+      await loadSavingsAccounts(account, savingsContract, provider, routerContract, ethPrice);
       
     } catch (error) {
       console.error(error);
@@ -980,7 +1019,7 @@ function App() {
         error: '❌ Failed to create account'
       });
       
-      await loadSavingsAccounts(account, savingsContract, provider);
+      await loadSavingsAccounts(account, savingsContract, provider, routerContract, ethPrice);
       await loadBalances(account, provider, tokenContract);
     } catch (error) {
       console.error(error);
@@ -1036,7 +1075,7 @@ function App() {
         error: '❌ Failed to create account'
       });
       
-      await loadSavingsAccounts(account, savingsContract, provider);
+      await loadSavingsAccounts(account, savingsContract, provider, routerContract, ethPrice);
       await loadBalances(account, provider, tokenContract);
     } catch (error) {
       console.error(error);
@@ -1092,7 +1131,7 @@ function App() {
         error: '❌ Failed to create account'
       });
       
-      await loadSavingsAccounts(account, savingsContract, provider);
+      await loadSavingsAccounts(account, savingsContract, provider, routerContract, ethPrice);
       await loadBalances(account, provider, tokenContract);
     } catch (error) {
       console.error(error);
@@ -1207,7 +1246,8 @@ function App() {
         error: '❌ Failed to deposit'
       });
       
-      await loadSavingsAccounts(account, savingsContract, provider);
+      // CRITICAL: Pass all required params including routerContract for fresh price fetch
+      await loadSavingsAccounts(account, savingsContract, provider, routerContract, ethPrice);
       await loadBalances(account, provider, tokenContract);
 
     } catch (error) {
@@ -1226,11 +1266,6 @@ function App() {
     const now = Math.floor(Date.now() / 1000);
     const remaining = unlockTime - now;
     return Math.max(0, Math.floor(remaining / 86400));
-  };
-
-  const getCurrencyFromCode = (code) => {
-    const currencies = Object.keys(CURRENCIES);
-    return currencies[code] || 'EUR';
   };
 
   const activeAccounts = accounts.filter(acc => acc.isActive);
