@@ -4,16 +4,13 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "./SavingsPriceOracle.sol";
 
 contract OOOWEEESavings is ReentrancyGuard, Ownable {
     IERC20 public immutable oooweeeToken;
-    IUniswapV2Router02 public immutable uniswapRouter;
     SavingsPriceOracle public priceOracle;
 
     enum AccountType { Time, Balance, Growth }
-    // Currency and price config now live in SavingsPriceOracle
     
     // OPTIMIZED STRUCT PACKING - Saves ~20,000 gas per account
     struct SavingsAccount {
@@ -51,8 +48,6 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
     uint256 public withdrawalFeeRate = 100; // 1% = 100/10000
     uint256 public constant FEE_DIVISOR = 10000;
     uint256 public constant MAX_LOCK_DURATION = 36500 days; // 100 years max
-    uint256 public constant PRICE_STALENESS_THRESHOLD = 3600; // 1 hour
-    uint256 public constant SLIPPAGE_TOLERANCE = 300; // 3%
     
     address public feeCollector;
     address public rewardsDistributor;
@@ -99,20 +94,19 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
         address indexed owner,
         uint256 indexed accountId,
         string goalName,
-        uint256 ethTransferred,
+        uint256 tokensReturned,
         uint256 feeCollected
     );
     
     event BalanceTransferred(
         address indexed from,
         address indexed to,
-        uint256 ethAmount,
+        uint256 tokenAmount,
         string goalName
     );
     
     event RewardsReceived(uint256 amount, uint256 timestamp);
     event RewardsClaimed(address indexed user, uint256 indexed accountId, uint256 claimed);
-    event PoolAddressSet(address indexed pool);
     event FeeCollectorSet(address indexed collector);
     event RewardsDistributorSet(address indexed distributor);
     event FeesUpdated(uint256 creationFee, uint256 withdrawalFee);
@@ -120,11 +114,9 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
 
     constructor(
         address _tokenAddress,
-        address _uniswapRouter,
         address _priceOracle
     ) Ownable() {
         oooweeeToken = IERC20(_tokenAddress);
-        uniswapRouter = IUniswapV2Router02(_uniswapRouter);
         priceOracle = SavingsPriceOracle(_priceOracle);
         feeCollector = msg.sender;
     }
@@ -159,10 +151,6 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
     
     // ============ Price Functions ============
     
-    /**
-     * @notice Get balance value in fiat (state-changing version)
-     * @dev Use this for contract logic - updates price cache
-     */
     function getBalanceInFiat(
         uint256 oooweeeBalance,
         SavingsPriceOracle.Currency currency
@@ -171,10 +159,6 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
         return (oooweeeBalance * pricePerToken) / 1e18;
     }
     
-    /**
-     * @notice Get balance value in fiat (view version)
-     * @dev Use this for frontend/read-only calls - does NOT update price cache
-     */
     function getBalanceInFiatView(
         uint256 oooweeeBalance,
         SavingsPriceOracle.Currency currency
@@ -183,10 +167,6 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
         return (oooweeeBalance * pricePerToken) / 1e18;
     }
     
-    /**
-     * @notice Convert fiat to tokens (state-changing version)
-     * @dev Use this for contract logic
-     */
     function getFiatToTokens(
         uint256 fiatAmount,
         SavingsPriceOracle.Currency currency
@@ -196,10 +176,6 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
         return (fiatAmount * 1e18) / pricePerToken;
     }
     
-    /**
-     * @notice Convert fiat to tokens (view version)
-     * @dev Use this for frontend/read-only calls
-     */
     function getFiatToTokensView(
         uint256 fiatAmount,
         SavingsPriceOracle.Currency currency
@@ -458,7 +434,7 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
         }
     }
     
-    // ============ Auto-Transfer Logic ============
+    // ============ Auto-Transfer Logic (SIMPLIFIED - Returns OOOWEEE) ============
     
     function _checkFiatTarget(
         uint256 balance,
@@ -476,20 +452,21 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
         
         if (account.accountType == AccountType.Time) {
             if (block.timestamp >= account.unlockTime) {
-                _executeAutoTransfer(owner, accountId);
+                _executeReturn(owner, accountId);
             }
         } else if (account.accountType == AccountType.Growth) {
             if (account.isFiatTarget) {
                 if (_checkFiatTarget(account.balance, account.targetFiat, account.targetCurrency)) {
-                    _executeAutoTransfer(owner, accountId);
+                    _executeReturn(owner, accountId);
                 }
             } else {
                 if (account.balance >= account.targetAmount) {
-                    _executeAutoTransfer(owner, accountId);
+                    _executeReturn(owner, accountId);
                 }
             }
         } else if (account.accountType == AccountType.Balance) {
             if (account.isFiatTarget) {
+                // Balance accounts need 1% buffer to cover fees
                 uint256 requiredFiat = account.targetFiat + (account.targetFiat / 100);
                 if (_checkFiatTarget(account.balance, requiredFiat, account.targetCurrency)) {
                     _executeBalanceTransfer(owner, accountId);
@@ -503,7 +480,11 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
         }
     }
     
-    function _executeAutoTransfer(address owner, uint256 accountId) private {
+    /**
+     * @notice Return OOOWEEE tokens to account owner (Time & Growth accounts)
+     * @dev NO ETH CONVERSION - simply transfers tokens back to owner
+     */
+    function _executeReturn(address owner, uint256 accountId) private {
         SavingsAccount storage account = userAccounts[owner][accountId];
         
         _updateAccountRewards(owner, accountId);
@@ -511,9 +492,11 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
         uint256 balance = account.balance;
         if (balance == 0) return;
         
+        // Calculate and deduct fee
         uint256 fee = (balance * withdrawalFeeRate) / FEE_DIVISOR;
         uint256 amountAfterFee = balance - fee;
         
+        // Update state
         account.balance = 0;
         account.isActive = false;
         account.completedAt = uint32(block.timestamp);
@@ -523,23 +506,27 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
         totalGoalsCompleted++;
         totalFeesCollected += fee;
         
+        // Transfer fee to collector
         if (fee > 0) {
             oooweeeToken.transfer(feeCollector, fee);
         }
         
-        uint256 ethReceived = _swapTokensForETH(amountAfterFee);
+        // Return OOOWEEE tokens to owner (NO SWAP!)
+        require(oooweeeToken.transfer(owner, amountAfterFee), "Token transfer failed");
         
-        (bool success, ) = owner.call{value: ethReceived}("");
-        require(success, "ETH transfer failed");
-        
-        emit GoalCompleted(owner, accountId, account.goalName, ethReceived, fee);
+        emit GoalCompleted(owner, accountId, account.goalName, amountAfterFee, fee);
     }
     
+    /**
+     * @notice Transfer OOOWEEE tokens to recipient (Balance accounts)
+     * @dev Sends target amount to recipient, keeps remainder in account
+     */
     function _executeBalanceTransfer(address owner, uint256 accountId) private {
         SavingsAccount storage account = userAccounts[owner][accountId];
         
         _updateAccountRewards(owner, accountId);
         
+        // Calculate transfer amount based on target
         uint256 transferAmount = account.isFiatTarget 
             ? getFiatToTokens(account.targetFiat, account.targetCurrency)
             : account.targetAmount;
@@ -548,62 +535,43 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
             transferAmount = account.balance;
         }
         
+        // Calculate fee
         uint256 fee = (transferAmount * withdrawalFeeRate) / FEE_DIVISOR;
         uint256 amountAfterFee = transferAmount - fee;
         
+        // Deduct from balance
         account.balance -= transferAmount;
         
+        // Close account if dust remains
         if (account.balance < 1000) {
             account.balance = 0;
             account.isActive = false;
             account.completedAt = uint32(block.timestamp);
         }
         
+        // Update stats
         totalValueLocked -= transferAmount;
         totalActiveBalance -= transferAmount;
         totalFeesCollected += fee;
         
+        // Transfer fee
         if (fee > 0) {
             oooweeeToken.transfer(feeCollector, fee);
         }
         
-        uint256 ethReceived = _swapTokensForETH(amountAfterFee);
+        // Send OOOWEEE tokens to recipient (NO SWAP!)
+        require(oooweeeToken.transfer(account.recipient, amountAfterFee), "Token transfer failed");
         
-        (bool success, ) = account.recipient.call{value: ethReceived}("");
-        require(success, "ETH transfer failed");
-        
-        emit BalanceTransferred(owner, account.recipient, ethReceived, account.goalName);
+        emit BalanceTransferred(owner, account.recipient, amountAfterFee, account.goalName);
         
         if (!account.isActive) {
             totalGoalsCompleted++;
         }
     }
     
-    function _swapTokensForETH(uint256 tokenAmount) private returns (uint256) {
-        if (tokenAmount == 0) return 0;
-        
-        oooweeeToken.approve(address(uniswapRouter), tokenAmount);
-        
-        address[] memory path = new address[](2);
-        path[0] = address(oooweeeToken);
-        path[1] = uniswapRouter.WETH();
-        
-        uint256[] memory amounts = uniswapRouter.getAmountsOut(tokenAmount, path);
-        uint256 minETHOut = (amounts[1] * (10000 - SLIPPAGE_TOLERANCE)) / 10000;
-        
-        uint256 initialBalance = address(this).balance;
-        
-        uniswapRouter.swapExactTokensForETHSupportingFeeOnTransferTokens(
-            tokenAmount,
-            minETHOut,
-            path,
-            address(this),
-            block.timestamp + 300
-        );
-        
-        return address(this).balance - initialBalance;
-    }
-    
+    /**
+     * @notice Manual withdrawal for completed Time accounts
+     */
     function manualWithdraw(uint256 accountId) external nonReentrant {
         require(accountId < userAccounts[msg.sender].length, "Invalid account");
         
@@ -615,7 +583,7 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
             require(block.timestamp >= account.unlockTime, "Account still locked");
         }
         
-        _executeAutoTransfer(msg.sender, accountId);
+        _executeReturn(msg.sender, accountId);
     }
     
     // ============ View Functions ============
@@ -672,10 +640,6 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
         );
     }
     
-    /**
-     * @notice Get account fiat progress (state-changing version)
-     * @dev Updates price cache - use for contract logic
-     */
     function getAccountFiatProgress(address owner, uint256 accountId) 
         external returns (
             uint256 currentValue,
@@ -709,10 +673,6 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
         }
     }
     
-    /**
-     * @notice Get account fiat progress (view version)
-     * @dev Does NOT update price cache - safe for frontend/read-only calls
-     */
     function getAccountFiatProgressView(address owner, uint256 accountId) 
         external view returns (
             uint256 currentValue,
@@ -766,8 +726,6 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
         return 0;
     }
     
-    // Price info can now be queried directly from SavingsPriceOracle.
-    
     function getStatsView() external view returns (
         uint256 _totalValueLocked,
         uint256 _totalAccountsCreated,
@@ -786,5 +744,5 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
         );
     }
     
-    receive() external payable {}
+    // NO receive() needed - contract no longer handles ETH
 }
