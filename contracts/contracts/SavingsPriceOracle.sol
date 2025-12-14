@@ -90,6 +90,7 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
             uint256 updatedAt,
             uint80
         ) {
+            // Staleness check is appropriate for Chainlink feeds
             if (updatedAt <= block.timestamp - PRICE_STALENESS_THRESHOLD) {
                 return defaultPrices[currency];
             }
@@ -180,7 +181,9 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
 
     /**
      * @notice Calculate OOOWEEE price using Chainlink ETH price and Uniswap reserves
-     * @dev FIXED: Properly handles decimal conversion between Chainlink (8) and currency decimals
+     * @dev FIXED: Removed staleness check for Uniswap reserves - they are always current state
+     *      Unlike Chainlink feeds that can stop updating, Uniswap reserves always reflect
+     *      the actual pool state regardless of when the last trade occurred.
      * @param currency The target currency
      * @return success Whether price was successfully retrieved
      * @return price Price in smallest currency unit (e.g., cents)
@@ -195,11 +198,14 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
         try IUniswapV2Pair(oooweeePool).getReserves() returns (
             uint112 reserve0,
             uint112 reserve1,
-            uint32 lastUpdate
+            uint32 /* lastUpdate - intentionally ignored */
         ) {
-            if (uint256(lastUpdate) <= block.timestamp - PRICE_STALENESS_THRESHOLD) {
-                return (false, 0);
-            }
+            // NOTE: No staleness check for Uniswap reserves!
+            // Uniswap reserves are ALWAYS the current state of the pool.
+            // The lastUpdate timestamp only indicates when the last swap occurred,
+            // NOT when the data became invalid. A pool with no trades still has
+            // valid, current reserves.
+            
             if (reserve0 == 0 || reserve1 == 0) return (false, 0);
 
             address token0 = IUniswapV2Pair(oooweeePool).token0();
@@ -216,17 +222,14 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
             }
             
             // Calculate final price in currency's smallest unit
-            // priceInEth: 18 decimals (ETH per token)
-            // ethPrice: 8 decimals (fiat per ETH from Chainlink)
-            // Target: currencyDecimals (e.g., 2 for cents)
+            // priceInEth has 18 decimals
+            // ethPrice has 8 decimals (Chainlink standard)
+            // We want result in currencyDecimals (typically 2 for cents)
             //
             // Formula: (priceInEth * ethPrice) / 10^(18 + 8 - targetDecimals)
-            // Example for EUR (2 decimals):
-            //   priceInEth = 6.88e12 (0.00000688 ETH with 18 decimals)
-            //   ethPrice = 1.85e11 (€1850 with 8 decimals)
-            //   result = (6.88e12 * 1.85e11) / 10^(18+8-2) = 1.27e24 / 1e24 = 1.27 cents
             
             uint8 targetDecimals = currencyDecimals[currency];
+            // Safety: ensure we have valid decimals
             if (targetDecimals == 0 && currency != Currency.JPY && currency != Currency.KRW) {
                 targetDecimals = 2; // Default fallback for uninitialized
             }
@@ -270,6 +273,10 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
         return (true, price);
     }
 
+    /**
+     * @notice Calculate weighted average price from multiple liquidity pools
+     * @dev FIXED: Removed staleness check for Uniswap reserves
+     */
     function _getMultiPoolAverage(Currency currency)
         internal view returns (bool, uint256)
     {
@@ -285,11 +292,9 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
             try IUniswapV2Pair(poolInfo.pool).getReserves() returns (
                 uint112 reserve0,
                 uint112 reserve1,
-                uint32 lastUpdate
+                uint32 /* lastUpdate - intentionally ignored */
             ) {
-                if (uint256(lastUpdate) <= block.timestamp - PRICE_STALENESS_THRESHOLD) {
-                    continue;
-                }
+                // NOTE: No staleness check - Uniswap reserves are always current
                 if (reserve0 == 0 || reserve1 == 0) continue;
 
                 address token0 = IUniswapV2Pair(poolInfo.pool).token0();
