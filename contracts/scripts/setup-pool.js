@@ -10,7 +10,7 @@ async function main() {
   // ============================================
   // NEW POOL ADDRESS
   // ============================================
-  const PAIR_ADDRESS = "0x4FDc01f03d30a718854cE4105eBC77CDAC374073";
+  const PAIR_ADDRESS = "0x9B2474a702605F4f0f48104046a28B3880BaeD54";
 
   // Load deployment
   let deployment;
@@ -21,10 +21,21 @@ async function main() {
     process.exit(1);
   }
 
+  // Handle both naming conventions in deployment file
+  const contracts = {
+    token: deployment.contracts.token || deployment.contracts.OOOWEEEToken,
+    oracle: deployment.contracts.oracle || deployment.contracts.SavingsPriceOracle,
+    stability: deployment.contracts.stability || deployment.contracts.OOOWEEEStability,
+    savings: deployment.contracts.savings || deployment.contracts.OOOWEEESavings,
+    rewards: deployment.contracts.rewards || deployment.contracts.OOOWEEERewardsDistribution,
+    validatorFund: deployment.contracts.validatorFund || deployment.contracts.OOOWEEEValidatorFund,
+    collector: deployment.contracts.collector || deployment.contracts.ValidatorCollector,
+  };
+
   const [deployer] = await ethers.getSigners();
   console.log("Deployer:", deployer.address);
   console.log("Pair Address:", PAIR_ADDRESS);
-  console.log("Token Address:", deployment.contracts.token);
+  console.log("Token Address:", contracts.token);
   console.log();
 
   // ============================================
@@ -39,12 +50,12 @@ async function main() {
   const token0 = await pair.token0();
   const token1 = await pair.token1();
   
-  const tokenLower = deployment.contracts.token.toLowerCase();
+  const tokenLower = contracts.token.toLowerCase();
   if (token0.toLowerCase() !== tokenLower && token1.toLowerCase() !== tokenLower) {
     console.error("❌ ERROR: Pool does not contain OOOWEEE token!");
     console.log("Token0:", token0);
     console.log("Token1:", token1);
-    console.log("Expected:", deployment.contracts.token);
+    console.log("Expected:", contracts.token);
     process.exit(1);
   }
   console.log("    ✅ Pool contains correct OOOWEEE token\n");
@@ -52,9 +63,9 @@ async function main() {
   // ============================================
   // GET CONTRACT INSTANCES
   // ============================================
-  const token = await ethers.getContractAt("OOOWEEEToken", deployment.contracts.token);
-  const oracle = await ethers.getContractAt("SavingsPriceOracle", deployment.contracts.oracle);
-  const stability = await ethers.getContractAt("OOOWEEEStability", deployment.contracts.stability);
+  const token = await ethers.getContractAt("OOOWEEEToken", contracts.token);
+  const oracle = await ethers.getContractAt("SavingsPriceOracle", contracts.oracle);
+  const stability = await ethers.getContractAt("OOOWEEEStability", contracts.stability);
 
   // ============================================
   // CONFIGURE POOL IN ALL CONTRACTS
@@ -76,9 +87,9 @@ async function main() {
   console.log("    ✅ Token pair set");
 
   console.log("4/5 Setting exemptions...");
-  const tx4 = await token.setExemption(deployment.contracts.savings, true);
+  const tx4 = await token.setExemption(contracts.savings, true);
   await tx4.wait();
-  const tx5 = await token.setExemption(deployment.contracts.rewards, true);
+  const tx5 = await token.setExemption(contracts.rewards, true);
   await tx5.wait();
   const tx6 = await token.setExemption(PAIR_ADDRESS, true);
   await tx6.wait();
@@ -119,7 +130,7 @@ async function main() {
   const currentPrice = await stability.getCurrentPrice();
   console.log("Current OOOWEEE Price:", ethers.utils.formatEther(currentPrice), "ETH");
 
-  const stabilityBalance = await token.balanceOf(deployment.contracts.stability);
+  const stabilityBalance = await token.balanceOf(contracts.stability);
   console.log("Stability Token Balance:", ethers.utils.formatEther(stabilityBalance), "OOOWEEE");
 
   const tradingEnabled = await token.tradingEnabled();
@@ -145,14 +156,14 @@ async function main() {
 // Generated: ${new Date().toISOString()}
 
 export const CONTRACT_ADDRESSES = {
-  token: "${deployment.contracts.token}",
-  savings: "${deployment.contracts.savings}",
-  oracle: "${deployment.contracts.oracle}",
-  stability: "${deployment.contracts.stability}",
-  validatorFund: "${deployment.contracts.validatorFund}",
-  rewards: "${deployment.contracts.rewards}",
-  collector: "${deployment.contracts.collector}",
-  uniswapPair: "${PAIR_ADDRESS}",
+  OOOWEEEToken: "${contracts.token}",
+  OOOWEEESavings: "${contracts.savings}",
+  SavingsPriceOracle: "${contracts.oracle}",
+  OOOWEEEStability: "${contracts.stability}",
+  OOOWEEEValidatorFund: "${contracts.validatorFund}",
+  OOOWEEERewardsDistribution: "${contracts.rewards}",
+  ValidatorCollector: "${contracts.collector}",
+  UniswapPair: "${PAIR_ADDRESS}",
 };
 
 export const NETWORK = {
