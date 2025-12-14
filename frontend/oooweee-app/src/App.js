@@ -23,18 +23,11 @@ const WETH_ADDRESS = "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14";
 // ADMIN WALLET - Update this to your operations wallet address
 const ADMIN_WALLET = "0xB05F42B174E5152d34431eE4504210932ddfE715";
 
-// Currency configuration
+// Currency configuration - USD/EUR/GBP only
 const CURRENCIES = {
   USD: { code: 0, symbol: '$', name: 'US Dollar', decimals: 4, locale: 'en-US' },
   EUR: { code: 1, symbol: '€', name: 'Euro', decimals: 4, locale: 'en-IE' },
-  GBP: { code: 2, symbol: '£', name: 'British Pound', decimals: 4, locale: 'en-GB' },
-  JPY: { code: 3, symbol: '¥', name: 'Japanese Yen', decimals: 2, locale: 'ja-JP' },
-  CNY: { code: 4, symbol: '¥', name: 'Chinese Yuan', decimals: 4, locale: 'zh-CN' },
-  CAD: { code: 5, symbol: 'C$', name: 'Canadian Dollar', decimals: 4, locale: 'en-CA' },
-  AUD: { code: 6, symbol: 'A$', name: 'Australian Dollar', decimals: 4, locale: 'en-AU' },
-  CHF: { code: 7, symbol: 'CHF', name: 'Swiss Franc', decimals: 4, locale: 'de-CH' },
-  INR: { code: 8, symbol: '₹', name: 'Indian Rupee', decimals: 4, locale: 'en-IN' },
-  KRW: { code: 9, symbol: '₩', name: 'Korean Won', decimals: 2, locale: 'ko-KR' }
+  GBP: { code: 2, symbol: '£', name: 'British Pound', decimals: 4, locale: 'en-GB' }
 };
 
 // Web3Modal provider options
@@ -314,12 +307,12 @@ function App() {
       setWeb3Modal(web3ModalInstance);
       
       try {
-        const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd,eur,gbp,jpy,cny,cad,aud,chf,inr,krw');
+        const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd,eur,gbp');
         const data = await response.json();
         setEthPrice(data.ethereum);
       } catch (error) {
         console.error('Error fetching ETH price:', error);
-        setEthPrice({ usd: 2000, eur: 1850, gbp: 1600, jpy: 280000, cny: 14000, cad: 2600, aud: 3000, chf: 1800, inr: 165000, krw: 2600000 });
+        setEthPrice({ usd: 2000, eur: 1850, gbp: 1600 });
       }
       
       setTimeout(() => setIsAppLoading(false), 1500);
@@ -813,9 +806,10 @@ function App() {
   };
 
   // Helper function to get currency code from enum value
+  // Explicit array to avoid relying on Object.keys() order
+  const CURRENCY_CODES = ['USD', 'EUR', 'GBP'];
   const getCurrencyFromCode = (code) => {
-    const currencies = Object.keys(CURRENCIES);
-    return currencies[code] || 'EUR';
+    return CURRENCY_CODES[code] || 'EUR';
   };
 
   // FIX: Calculate progress with passed price values (not from closure)
@@ -834,12 +828,13 @@ function App() {
     if (acc.isFiatTarget && acc.targetFiat > 0) {
       // Calculate current fiat value from token balance
       const currencyCode = getCurrencyFromCode(acc.targetCurrency);
+      const currencyInfo = CURRENCIES[currencyCode.toUpperCase()] || CURRENCIES.EUR;
       const ethPriceForCurrency = currentEthPrice?.[currencyCode.toLowerCase()] || currentEthPrice?.eur || 1850;
       const tokenValueInEth = parseFloat(acc.balance) * currentOooweeePrice;
       const currentFiatValue = tokenValueInEth * ethPriceForCurrency;
       
-      // targetFiat is in smallest units (cents)
-      const targetFiatValue = acc.targetFiat / 100;
+      // targetFiat is in smallest units (4 decimals: 10000 = $1.00)
+      const targetFiatValue = acc.targetFiat / Math.pow(10, currencyInfo.decimals);
       
       if (targetFiatValue <= 0) return 0;
       return Math.min(100, Math.floor((currentFiatValue / targetFiatValue) * 100));
@@ -883,7 +878,7 @@ function App() {
           freshEthPrice = data.ethereum;
           setEthPrice(freshEthPrice);
         } catch (e) {
-          freshEthPrice = { usd: 2000, eur: 1850, gbp: 1600, jpy: 280000, cny: 14000, cad: 2600, aud: 3000, chf: 1800, inr: 165000, krw: 2600000 };
+          freshEthPrice = { usd: 2000, eur: 1850, gbp: 1600 };
         }
       }
       

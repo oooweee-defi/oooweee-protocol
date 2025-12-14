@@ -10,7 +10,7 @@ import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 contract SavingsPriceOracle is Ownable, ReentrancyGuard {
     // NOTE: These enums must match OOOWEEESavings
     enum Currency {
-        USD, EUR, GBP, JPY, CNY, CAD, AUD, CHF, INR, KRW
+        USD, EUR, GBP
     }
 
     enum PriceSource {
@@ -56,19 +56,11 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
         uniswapRouter = IUniswapV2Router02(_uniswapRouter);
         
         // Initialize currency decimals (smallest unit representation)
-        // UPDATED: Using 4 decimals for sub-cent precision
+        // Using 4 decimals for sub-cent precision
         // This allows prices like 0.33 cents (33 in 4-decimal format) to be represented
-        // Without this, sub-cent prices round to 0 and break the oracle
         currencyDecimals[Currency.USD] = 4;  // 10000 = $1.00
         currencyDecimals[Currency.EUR] = 4;  // 10000 = €1.00
         currencyDecimals[Currency.GBP] = 4;  // 10000 = £1.00
-        currencyDecimals[Currency.JPY] = 2;  // 100 = ¥1 (Yen has no subdivision, but use 2 for sub-yen)
-        currencyDecimals[Currency.CNY] = 4;  // 10000 = ¥1.00
-        currencyDecimals[Currency.CAD] = 4;  // 10000 = C$1.00
-        currencyDecimals[Currency.AUD] = 4;  // 10000 = A$1.00
-        currencyDecimals[Currency.CHF] = 4;  // 10000 = CHF1.00
-        currencyDecimals[Currency.INR] = 4;  // 10000 = ₹1.00
-        currencyDecimals[Currency.KRW] = 2;  // 100 = ₩1 (Won has no subdivision)
     }
 
     // ===== Core price accessors =====
@@ -331,16 +323,10 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
         
         uint8 decimals = currencyDecimals[currency];
         if (decimals == 0) {
-            decimals = 4; // Default
+            decimals = 4; // Default for USD/EUR/GBP
         }
         
-        // For currencies with 2 decimals (JPY, KRW), allow broader range
-        if (decimals == 2) {
-            // Price should be between 0.01 and 10000 units
-            return price >= 1 && price <= 1000000;
-        }
-        
-        // For currencies with 4 decimals
+        // All supported currencies use 4 decimals
         // Price should be between 0.0001 (1 unit) and $1000 (10000000 units) per token
         uint256 minPrice = 1; // 0.0001 of currency unit
         uint256 maxPrice = 1000 * (10 ** decimals); // $1000 maximum per token
