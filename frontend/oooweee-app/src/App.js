@@ -812,7 +812,7 @@ function App() {
     return CURRENCY_CODES[code] || 'EUR';
   };
 
-  // FIX: Calculate progress with passed price values (not from closure)
+  // FIX: Calculate progress using contract's fiat value (not frontend recalculation)
   const calculateProgress = (acc, currentOooweeePrice, currentEthPrice) => {
     if (acc.type === 'Time') {
       // Time accounts: progress based on time
@@ -826,7 +826,14 @@ function App() {
     }
     
     if (acc.isFiatTarget && acc.targetFiat > 0) {
-      // Calculate current fiat value from token balance
+      // Use contract's currentFiatValue if available (matches displayed value)
+      if (acc.currentFiatValue && acc.currentFiatValue > 0) {
+        // Both values are in smallest units (4 decimals)
+        const progress = (acc.currentFiatValue / acc.targetFiat) * 100;
+        return Math.min(100, Math.floor(progress));
+      }
+      
+      // Fallback to frontend calculation if contract value not available
       const currencyCode = getCurrencyFromCode(acc.targetCurrency);
       const currencyInfo = CURRENCIES[currencyCode.toUpperCase()] || CURRENCIES.EUR;
       const ethPriceForCurrency = currentEthPrice?.[currencyCode.toLowerCase()] || currentEthPrice?.eur || 1850;
