@@ -915,10 +915,6 @@ function App() {
             isFiatTarget: info[4].gt(0)
           };
           
-          // Calculate progress using FRESH price values
-          accData.progress = calculateProgress(accData, freshOooweeePrice, freshEthPrice);
-          
-
          // Calculate current fiat value using CONTRACT's oracle (ensures match)
           if (accData.isFiatTarget) {
             try {
@@ -936,6 +932,9 @@ function App() {
           } else {
             accData.currentFiatValue = 0;
           }
+
+          // Calculate progress AFTER currentFiatValue is set (so it uses contract's value)
+          accData.progress = calculateProgress(accData, freshOooweeePrice, freshEthPrice);
           
           accountDetails.push(accData);
         } catch (error) {
