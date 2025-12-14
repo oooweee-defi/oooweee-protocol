@@ -1,5 +1,7 @@
 // scripts/deploy-all.js
+const hre = require("hardhat");
 const { ethers } = require("hardhat");
+const fs = require("fs");
 
 async function main() {
   console.log("🚀 OOOWEEE Protocol - Sepolia Testnet Deployment");
@@ -7,35 +9,60 @@ async function main() {
 
   const [deployer] = await ethers.getSigners();
   console.log("Deployer:", deployer.address);
-  const balance = await deployer.getBalance();
-  console.log("Balance:", ethers.utils.formatEther(balance), "ETH\n");
+  console.log("Balance:", ethers.utils.formatEther(await deployer.getBalance()), "ETH\n");
 
-  // Sepolia Config - UPDATED ROUTER & WETH
-  const UNISWAP_ROUTER = "0xeE567Fe1712Faf6149d80dA1E6934E354124CfE3";  // Official Uniswap V2 Sepolia
-  const FOUNDER_WALLET = "0x56384f1205659291ba5b949d641582af6ae7006b";
-  const OPERATIONS_WALLET = "0xb05f42b174e5152d34431ee4504210932ddfe715";
-  const CHAINLINK_ETH_USD = "0x694AA1769357215DE4FAC081bf1f309aDC325306";
+  // ============================================
+  // CONFIGURATION - Sepolia Testnet
+  // ============================================
+  const CONFIG = {
+    uniswapRouter: "0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008",
+    founderWallet: "0x56384f1205659291ba5b949d641582af6ae7006b",  // 10M OOOWEEE
+    operationsWallet: deployer.address,  // 1M OOOWEEE
+    chainlinkEthUsd: "0x694AA1769357215DE4FAC081bf1f309aDC325306",
+  };
+
+  console.log("Founder Wallet:", CONFIG.founderWallet, "(receives 10M OOOWEEE)");
+  console.log("Operations Wallet:", CONFIG.operationsWallet, "(receives 1M OOOWEEE)\n");
 
   const deployed = {};
 
-  // 1. OOOWEEEToken
-  console.log("1/6 Deploying OOOWEEEToken...");
+  // ============================================
+  // 1. Deploy OOOWEEEToken
+  // ============================================
+  console.log("1/7 Deploying OOOWEEEToken...");
   const Token = await ethers.getContractFactory("OOOWEEEToken");
-  const token = await Token.deploy(FOUNDER_WALLET, OPERATIONS_WALLET);
+  const token = await Token.deploy(CONFIG.founderWallet, CONFIG.operationsWallet);
   await token.deployed();
   deployed.token = token.address;
-  console.log("    ✅", deployed.token);
+  console.log("    ✅ OOOWEEEToken:", deployed.token);
 
-  // 2. SavingsPriceOracle
-  console.log("2/6 Deploying SavingsPriceOracle...");
+  // ============================================
+  // 2. Deploy SavingsPriceOracle
+  // ============================================
+  console.log("\n2/7 Deploying SavingsPriceOracle...");
   const Oracle = await ethers.getContractFactory("SavingsPriceOracle");
-  const oracle = await Oracle.deploy(UNISWAP_ROUTER);
+  const oracle = await Oracle.deploy(CONFIG.uniswapRouter);
   await oracle.deployed();
   deployed.oracle = oracle.address;
-  console.log("    ✅", deployed.oracle);
+  console.log("    ✅ SavingsPriceOracle:", deployed.oracle);
 
-  // 3. OOOWEEEValidatorFund
-  console.log("3/6 Deploying OOOWEEEValidatorFund...");
+  // ============================================
+  // 3. Deploy OOOWEEESavings (NO ROUTER - returns tokens directly)
+  // ============================================
+  console.log("\n3/7 Deploying OOOWEEESavings...");
+  const Savings = await ethers.getContractFactory("OOOWEEESavings");
+  const savings = await Savings.deploy(
+    deployed.token,
+    deployed.oracle
+  );
+  await savings.deployed();
+  deployed.savings = savings.address;
+  console.log("    ✅ OOOWEEESavings:", deployed.savings);
+
+  // ============================================
+  // 4. Deploy OOOWEEEValidatorFund
+  // ============================================
+  console.log("\n4/7 Deploying OOOWEEEValidatorFund...");
   const ValidatorFund = await ethers.getContractFactory("OOOWEEEValidatorFund");
   const validatorFund = await ValidatorFund.deploy(
     ethers.constants.AddressZero,
@@ -43,113 +70,166 @@ async function main() {
   );
   await validatorFund.deployed();
   deployed.validatorFund = validatorFund.address;
-  console.log("    ✅", deployed.validatorFund);
+  console.log("    ✅ OOOWEEEValidatorFund:", deployed.validatorFund);
 
-  // 4. OOOWEEEStability
-  console.log("4/6 Deploying OOOWEEEStability...");
+  // ============================================
+  // 5. Deploy OOOWEEEStability
+  // ============================================
+  console.log("\n5/7 Deploying OOOWEEEStability...");
   const Stability = await ethers.getContractFactory("OOOWEEEStability");
   const stability = await Stability.deploy(
     deployed.token,
-    UNISWAP_ROUTER,
+    CONFIG.uniswapRouter,
     deployed.validatorFund
   );
   await stability.deployed();
   deployed.stability = stability.address;
-  console.log("    ✅", deployed.stability);
+  console.log("    ✅ OOOWEEEStability:", deployed.stability);
 
-  // 5. OOOWEEESavings
-  console.log("5/6 Deploying OOOWEEESavings...");
-  const Savings = await ethers.getContractFactory("OOOWEEESavings");
-  const savings = await Savings.deploy(
-    deployed.token,
-    UNISWAP_ROUTER,
-    deployed.oracle
-  );
-  await savings.deployed();
-  deployed.savings = savings.address;
-  console.log("    ✅", deployed.savings);
-
-  // 6. OOOWEEERewardsDistribution
-  console.log("6/6 Deploying OOOWEEERewardsDistribution...");
+  // ============================================
+  // 6. Deploy OOOWEEERewardsDistribution
+  // ============================================
+  console.log("\n6/7 Deploying OOOWEEERewardsDistribution...");
   const Rewards = await ethers.getContractFactory("OOOWEEERewardsDistribution");
   const rewards = await Rewards.deploy(
     deployed.savings,
     deployed.token,
-    UNISWAP_ROUTER,
+    CONFIG.uniswapRouter,
     deployed.validatorFund,
-    OPERATIONS_WALLET,
-    OPERATIONS_WALLET  // L1 collector placeholder
+    CONFIG.operationsWallet,
+    CONFIG.operationsWallet
   );
   await rewards.deployed();
   deployed.rewards = rewards.address;
-  console.log("    ✅", deployed.rewards);
+  console.log("    ✅ OOOWEEERewardsDistribution:", deployed.rewards);
 
   // ============================================
-  // CONFIGURATION
+  // 7. Deploy ValidatorCollector
   // ============================================
-  console.log("\n🔧 Configuring contracts...\n");
-
-  let tx;
-  tx = await validatorFund.setStabilityContract(deployed.stability);
-  await tx.wait();
-  console.log("✅ ValidatorFund → Stability");
-  tx = await validatorFund.setRewardsContract(deployed.rewards);
-  await tx.wait();
-  console.log("✅ ValidatorFund → Rewards");
-
-  tx = await token.setStabilityMechanism(deployed.stability);
-  await tx.wait();
-  console.log("✅ Token → Stability mechanism (89M transferred)");
-
-  tx = await token.setExemption(deployed.stability, true);
-  await tx.wait();
-  tx = await token.setExemption(deployed.savings, true);
-  await tx.wait();
-  tx = await token.setExemption(deployed.validatorFund, true);
-  await tx.wait();
-  tx = await token.setExemption(deployed.rewards, true);
-  await tx.wait();
-  tx = await token.setExemption(UNISWAP_ROUTER, true);
-  await tx.wait();
-  console.log("✅ Protocol exemptions set");
-
-  tx = await savings.setRewardsDistributor(deployed.rewards);
-  await tx.wait();
-  console.log("✅ Savings → Rewards distributor");
-  tx = await savings.setFeeCollector(OPERATIONS_WALLET);
-  await tx.wait();
-  console.log("✅ Savings → Fee collector");
-
-  tx = await oracle.setPriceFeed(0, CHAINLINK_ETH_USD);
-  await tx.wait();
-  tx = await oracle.setPriceFeed(1, CHAINLINK_ETH_USD);
-  await tx.wait();
-  console.log("✅ Oracle price feeds set");
+  console.log("\n7/7 Deploying ValidatorCollector...");
+  const Collector = await ethers.getContractFactory("ValidatorCollector");
+  const collector = await Collector.deploy(
+    "0xFBb0621E0B23b5478B630BD55a5f21f67730B0F1",
+    deployed.rewards,
+    CONFIG.operationsWallet
+  );
+  await collector.deployed();
+  deployed.collector = collector.address;
+  console.log("    ✅ ValidatorCollector:", deployed.collector);
 
   // ============================================
-  // OUTPUT
+  // POST-DEPLOYMENT CONFIGURATION
   // ============================================
   console.log("\n" + "=".repeat(50));
-  console.log("📋 DEPLOYMENT COMPLETE");
+  console.log("⚙️  Configuring contracts...\n");
+
+  console.log("Setting stability mechanism in token...");
+  const tx1 = await token.setStabilityMechanism(deployed.stability);
+  await tx1.wait();
+  console.log("    ✅ Stability mechanism set (89M tokens transferred)");
+
+  console.log("Setting stability contract in validator fund...");
+  const tx2 = await validatorFund.setStabilityContract(deployed.stability);
+  await tx2.wait();
+  console.log("    ✅ Stability contract set");
+
+  console.log("Setting rewards contract in validator fund...");
+  const tx3 = await validatorFund.setRewardsContract(deployed.rewards);
+  await tx3.wait();
+  console.log("    ✅ Rewards contract set");
+
+  console.log("Setting rewards distributor in savings...");
+  const tx4 = await savings.setRewardsDistributor(deployed.rewards);
+  await tx4.wait();
+  console.log("    ✅ Rewards distributor set");
+
+  console.log("Setting Chainlink ETH/USD price feed...");
+  const tx5 = await oracle.setPriceFeed(0, CONFIG.chainlinkEthUsd);
+  await tx5.wait();
+  console.log("    ✅ ETH/USD price feed set");
+
+  console.log("Setting emergency fallback prices...");
+  const tx6 = await oracle.setEmergencyFixedRate(0, 100);
+  await tx6.wait();
+  const tx7 = await oracle.setEmergencyFixedRate(1, 100);
+  await tx7.wait();
+  console.log("    ✅ Emergency prices set");
+
+  // ============================================
+  // VERIFY TOKEN DISTRIBUTION
+  // ============================================
+  console.log("\n" + "=".repeat(50));
+  console.log("💰 TOKEN DISTRIBUTION");
+  console.log("=".repeat(50));
+  
+  const founderBalance = await token.balanceOf(CONFIG.founderWallet);
+  const opsBalance = await token.balanceOf(CONFIG.operationsWallet);
+  const stabilityBalance = await token.balanceOf(deployed.stability);
+  
+  console.log(`Founder (${CONFIG.founderWallet}): ${ethers.utils.formatEther(founderBalance)} OOOWEEE`);
+  console.log(`Operations (${CONFIG.operationsWallet}): ${ethers.utils.formatEther(opsBalance)} OOOWEEE`);
+  console.log(`Stability (${deployed.stability}): ${ethers.utils.formatEther(stabilityBalance)} OOOWEEE`);
+
+  // ============================================
+  // SAVE DEPLOYMENT
+  // ============================================
+  const deployment = {
+    network: "sepolia",
+    deployer: deployer.address,
+    timestamp: new Date().toISOString(),
+    contracts: {
+      token: deployed.token,
+      oracle: deployed.oracle,
+      savings: deployed.savings,
+      validatorFund: deployed.validatorFund,
+      stability: deployed.stability,
+      rewards: deployed.rewards,
+      collector: deployed.collector,
+    },
+    wallets: {
+      founder: CONFIG.founderWallet,
+      operations: CONFIG.operationsWallet,
+    },
+    config: CONFIG,
+  };
+
+  fs.writeFileSync(
+    "deployment-sepolia.json",
+    JSON.stringify(deployment, null, 2)
+  );
+  console.log("\n✅ Deployment saved to deployment-sepolia.json");
+
+  // ============================================
+  // SUMMARY
+  // ============================================
+  console.log("\n" + "=".repeat(50));
+  console.log("📋 DEPLOYMENT SUMMARY");
   console.log("=".repeat(50));
   console.log(`
-export const CONTRACT_ADDRESSES = {
-  OOOWEEEToken: "${deployed.token}",
-  OOOWEEESavings: "${deployed.savings}",
-  OOOWEEEValidatorFund: "${deployed.validatorFund}",
-  OOOWEEEStability: "${deployed.stability}",
-  OOOWEEERewardsDistribution: "${deployed.rewards}",
-  SavingsPriceOracle: "${deployed.oracle}"
-};
-
-// Router & WETH for App.js
-const UNISWAP_ROUTER = "0xeE567Fe1712Faf6149d80dA1E6934E354124CfE3";
-const WETH_ADDRESS = "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14";
+OOOWEEEToken:               ${deployed.token}
+SavingsPriceOracle:         ${deployed.oracle}
+OOOWEEESavings:             ${deployed.savings}
+OOOWEEEValidatorFund:       ${deployed.validatorFund}
+OOOWEEEStability:           ${deployed.stability}
+OOOWEEERewardsDistribution: ${deployed.rewards}
+ValidatorCollector:         ${deployed.collector}
 `);
 
   console.log("=".repeat(50));
-  console.log("⚠️  NEXT: Create LP on Uniswap UI, then run configure-lp.js");
+  console.log("📝 NEXT STEPS");
   console.log("=".repeat(50));
+  console.log(`
+1. CREATE UNISWAP POOL
+   Token Address: ${deployed.token}
+   Go to: https://app.uniswap.org/#/add/v2/ETH/${deployed.token}
+   
+2. RUN POOL SETUP
+   Update PAIR_ADDRESS in setup-pool.js
+   npx hardhat run scripts/setup-pool.js --network sepolia
+
+3. UPDATE FRONTEND
+   Copy addresses to your abis.js file
+`);
 }
 
 main()

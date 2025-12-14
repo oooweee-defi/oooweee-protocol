@@ -1,10 +1,12 @@
 export const CONTRACT_ADDRESSES = {
-  OOOWEEEToken: "0xE9E1AbFa961A3967FB4daF22875521a3c9249a44",
-  OOOWEEESavings: "0x170380dA7490dA483022273372f4238b555CdA40",
-  OOOWEEEValidatorFund: "0xbBD33434C727953ce371c7B4Dc8073da05BE7F57",
-  OOOWEEEStability: "0x02Cb71F76b8d3018dD2F14e72d90F1542Dc0f821",  // ← NEW
-  OOOWEEERewardsDistribution: "0xCe7e5a7C461d1495cac26c306D7F40876853c77A",
-  SavingsPriceOracle: "0x023E34b8BE60037f12E13e9C948c172e88651407"
+  OOOWEEEToken: "0x700732ca3B5F751775284C75a4f90D179c89d5ce",
+  OOOWEEESavings: "0xaABe5E9510157AFf6fb02Bd7D65ED4E093Cda863",
+  OOOWEEEValidatorFund: "0xE580dFEe31234c7622F389326B7ED1BB753C8b10",
+  OOOWEEEStability: "0xefDFf57c5ff02Cdc539165A2546f8bF04Db71e66",
+  OOOWEEERewardsDistribution: "0xBf9b3925d4C3884C16d2a7c20E6C5A899c0f92C8",
+  SavingsPriceOracle: "0xBA6a77e90666Ae9fF4A88fE2DeC25662184AfAc0",
+  ValidatorCollector: "0xB0C448c3D7e1b57fee1Da789E3F65ba618F09F01",
+  UniswapPair: "0x4FDc01f03d30a718854cE4105eBC77CDAC374073"
 };
 
 // ============================================
@@ -334,14 +336,13 @@ export const OOOWEEETokenABI = [
 ];
 
 // ============================================
-// OOOWEEESavings ABI - UPDATED WITH VIEW FUNCTIONS
+// OOOWEEESavings ABI - UPDATED: Returns OOOWEEE tokens (no ETH conversion)
 // ============================================
 export const OOOWEEESavingsABI = [
-  // Constructor
+  // Constructor - NOW ONLY 2 PARAMS (no uniswapRouter)
   {
     "inputs": [
       { "internalType": "address", "name": "_tokenAddress", "type": "address" },
-      { "internalType": "address", "name": "_uniswapRouter", "type": "address" },
       { "internalType": "address", "name": "_priceOracle", "type": "address" }
     ],
     "stateMutability": "nonpayable",
@@ -364,12 +365,12 @@ export const OOOWEEESavingsABI = [
   {
     "anonymous": false,
     "inputs": [
-      { "indexed": true, "internalType": "address", "name": "owner", "type": "address" },
-      { "indexed": true, "internalType": "uint256", "name": "accountId", "type": "uint256" },
-      { "indexed": false, "internalType": "enum SavingsPriceOracle.Currency", "name": "currency", "type": "uint8" },
-      { "indexed": false, "internalType": "uint256", "name": "targetFiat", "type": "uint256" }
+      { "indexed": true, "internalType": "address", "name": "from", "type": "address" },
+      { "indexed": true, "internalType": "address", "name": "to", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "tokenAmount", "type": "uint256" },
+      { "indexed": false, "internalType": "string", "name": "goalName", "type": "string" }
     ],
-    "name": "FiatAccountCreated",
+    "name": "BalanceTransferred",
     "type": "event"
   },
   {
@@ -386,10 +387,38 @@ export const OOOWEEESavingsABI = [
   {
     "anonymous": false,
     "inputs": [
+      { "indexed": true, "internalType": "address", "name": "collector", "type": "address" }
+    ],
+    "name": "FeeCollectorSet",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": false, "internalType": "uint256", "name": "creationFee", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "withdrawalFee", "type": "uint256" }
+    ],
+    "name": "FeesUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "address", "name": "owner", "type": "address" },
+      { "indexed": true, "internalType": "uint256", "name": "accountId", "type": "uint256" },
+      { "indexed": false, "internalType": "enum SavingsPriceOracle.Currency", "name": "currency", "type": "uint8" },
+      { "indexed": false, "internalType": "uint256", "name": "targetFiat", "type": "uint256" }
+    ],
+    "name": "FiatAccountCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
       { "indexed": true, "internalType": "address", "name": "owner", "type": "address" },
       { "indexed": true, "internalType": "uint256", "name": "accountId", "type": "uint256" },
       { "indexed": false, "internalType": "string", "name": "goalName", "type": "string" },
-      { "indexed": false, "internalType": "uint256", "name": "ethTransferred", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "tokensReturned", "type": "uint256" },
       { "indexed": false, "internalType": "uint256", "name": "feeCollected", "type": "uint256" }
     ],
     "name": "GoalCompleted",
@@ -398,21 +427,18 @@ export const OOOWEEESavingsABI = [
   {
     "anonymous": false,
     "inputs": [
-      { "indexed": true, "internalType": "address", "name": "from", "type": "address" },
-      { "indexed": true, "internalType": "address", "name": "to", "type": "address" },
-      { "indexed": false, "internalType": "uint256", "name": "ethAmount", "type": "uint256" },
-      { "indexed": false, "internalType": "string", "name": "goalName", "type": "string" }
+      { "indexed": true, "internalType": "address", "name": "previousOwner", "type": "address" },
+      { "indexed": true, "internalType": "address", "name": "newOwner", "type": "address" }
     ],
-    "name": "BalanceTransferred",
+    "name": "OwnershipTransferred",
     "type": "event"
   },
   {
     "anonymous": false,
     "inputs": [
-      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" },
-      { "indexed": false, "internalType": "uint256", "name": "timestamp", "type": "uint256" }
+      { "indexed": true, "internalType": "address", "name": "newOracle", "type": "address" }
     ],
-    "name": "RewardsReceived",
+    "name": "PriceOracleUpdated",
     "type": "event"
   },
   {
@@ -428,22 +454,6 @@ export const OOOWEEESavingsABI = [
   {
     "anonymous": false,
     "inputs": [
-      { "indexed": true, "internalType": "address", "name": "pool", "type": "address" }
-    ],
-    "name": "PoolAddressSet",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "address", "name": "collector", "type": "address" }
-    ],
-    "name": "FeeCollectorSet",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
       { "indexed": true, "internalType": "address", "name": "distributor", "type": "address" }
     ],
     "name": "RewardsDistributorSet",
@@ -452,27 +462,10 @@ export const OOOWEEESavingsABI = [
   {
     "anonymous": false,
     "inputs": [
-      { "indexed": false, "internalType": "uint256", "name": "creationFee", "type": "uint256" },
-      { "indexed": false, "internalType": "uint256", "name": "withdrawalFee", "type": "uint256" }
+      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "timestamp", "type": "uint256" }
     ],
-    "name": "FeesUpdated",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "address", "name": "newOracle", "type": "address" }
-    ],
-    "name": "PriceOracleUpdated",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "address", "name": "previousOwner", "type": "address" },
-      { "indexed": true, "internalType": "address", "name": "newOwner", "type": "address" }
-    ],
-    "name": "OwnershipTransferred",
+    "name": "RewardsReceived",
     "type": "event"
   },
   // Constants
@@ -490,20 +483,6 @@ export const OOOWEEESavingsABI = [
     "stateMutability": "view",
     "type": "function"
   },
-  {
-    "inputs": [],
-    "name": "PRICE_STALENESS_THRESHOLD",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "SLIPPAGE_TOLERANCE",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
   // State Variables
   {
     "inputs": [],
@@ -514,29 +493,8 @@ export const OOOWEEESavingsABI = [
   },
   {
     "inputs": [],
-    "name": "uniswapRouter",
-    "outputs": [{ "internalType": "contract IUniswapV2Router02", "name": "", "type": "address" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
     "name": "priceOracle",
     "outputs": [{ "internalType": "contract SavingsPriceOracle", "name": "", "type": "address" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "creationFeeRate",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "withdrawalFeeRate",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
@@ -551,6 +509,20 @@ export const OOOWEEESavingsABI = [
     "inputs": [],
     "name": "rewardsDistributor",
     "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "creationFeeRate",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "withdrawalFeeRate",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
@@ -692,7 +664,7 @@ export const OOOWEEESavingsABI = [
     "stateMutability": "nonpayable",
     "type": "function"
   },
-  // NEW: Price Functions (view - for frontend)
+  // Price Functions (view - for frontend)
   {
     "inputs": [
       { "internalType": "uint256", "name": "oooweeeBalance", "type": "uint256" },
@@ -800,7 +772,6 @@ export const OOOWEEESavingsABI = [
     "stateMutability": "view",
     "type": "function"
   },
-  // NEW: Get user account count
   {
     "inputs": [{ "internalType": "address", "name": "user", "type": "address" }],
     "name": "getUserAccountCount",
@@ -846,7 +817,6 @@ export const OOOWEEESavingsABI = [
     "stateMutability": "nonpayable",
     "type": "function"
   },
-  // NEW: View version of getAccountFiatProgress
   {
     "inputs": [
       { "internalType": "address", "name": "owner", "type": "address" },
@@ -876,7 +846,6 @@ export const OOOWEEESavingsABI = [
     "stateMutability": "view",
     "type": "function"
   },
-  // User Accounts Mapping (for direct access)
   {
     "inputs": [
       { "internalType": "address", "name": "", "type": "address" },
@@ -900,6 +869,819 @@ export const OOOWEEESavingsABI = [
       { "internalType": "string", "name": "goalName", "type": "string" }
     ],
     "stateMutability": "view",
+    "type": "function"
+  }
+];
+
+// ============================================
+// SavingsPriceOracle ABI
+// ============================================
+export const SavingsPriceOracleABI = [
+  // Constructor
+  {
+    "inputs": [{ "internalType": "address", "name": "_uniswapRouter", "type": "address" }],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  // Events
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": false, "internalType": "enum SavingsPriceOracle.Currency", "name": "currency", "type": "uint8" },
+      { "indexed": false, "internalType": "address", "name": "feed", "type": "address" }
+    ],
+    "name": "PriceFeedUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": false, "internalType": "enum SavingsPriceOracle.PriceSource", "name": "oldSource", "type": "uint8" },
+      { "indexed": false, "internalType": "enum SavingsPriceOracle.PriceSource", "name": "newSource", "type": "uint8" }
+    ],
+    "name": "PriceSourceChanged",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [{ "indexed": false, "internalType": "string", "name": "reason", "type": "string" }],
+    "name": "EmergencyPriceModeActivated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": false, "internalType": "enum SavingsPriceOracle.Currency", "name": "currency", "type": "uint8" },
+      { "indexed": false, "internalType": "uint256", "name": "price", "type": "uint256" }
+    ],
+    "name": "ManualPriceSet",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": false, "internalType": "address", "name": "pool", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "weight", "type": "uint256" }
+    ],
+    "name": "PoolAdded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": false, "internalType": "address", "name": "pool", "type": "address" },
+      { "indexed": false, "internalType": "string", "name": "reason", "type": "string" }
+    ],
+    "name": "PoolDeactivated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [{ "indexed": true, "internalType": "address", "name": "pool", "type": "address" }],
+    "name": "PoolAddressSet",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "address", "name": "previousOwner", "type": "address" },
+      { "indexed": true, "internalType": "address", "name": "newOwner", "type": "address" }
+    ],
+    "name": "OwnershipTransferred",
+    "type": "event"
+  },
+  // Constants
+  {
+    "inputs": [],
+    "name": "PRICE_STALENESS_THRESHOLD",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "CHAINLINK_DECIMALS",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  // State Variables
+  {
+    "inputs": [],
+    "name": "uniswapRouter",
+    "outputs": [{ "internalType": "contract IUniswapV2Router02", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "oooweeePool",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "activePriceSource",
+    "outputs": [{ "internalType": "enum SavingsPriceOracle.PriceSource", "name": "", "type": "uint8" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "emergencyPriceMode",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  // Mappings
+  {
+    "inputs": [{ "internalType": "enum SavingsPriceOracle.Currency", "name": "", "type": "uint8" }],
+    "name": "priceFeeds",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "enum SavingsPriceOracle.Currency", "name": "", "type": "uint8" }],
+    "name": "currencyDecimals",
+    "outputs": [{ "internalType": "uint8", "name": "", "type": "uint8" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "enum SavingsPriceOracle.Currency", "name": "", "type": "uint8" }],
+    "name": "defaultPrices",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "enum SavingsPriceOracle.Currency", "name": "", "type": "uint8" }],
+    "name": "emergencyFixedRates",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  // Ownable
+  {
+    "inputs": [],
+    "name": "owner",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "renounceOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "newOwner", "type": "address" }],
+    "name": "transferOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  // Price Functions
+  {
+    "inputs": [{ "internalType": "enum SavingsPriceOracle.Currency", "name": "currency", "type": "uint8" }],
+    "name": "getETHPrice",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "enum SavingsPriceOracle.Currency", "name": "currency", "type": "uint8" }],
+    "name": "getOooweeePrice",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "enum SavingsPriceOracle.Currency", "name": "currency", "type": "uint8" }],
+    "name": "getOooweeePriceView",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "enum SavingsPriceOracle.Currency", "name": "currency", "type": "uint8" }],
+    "name": "getCurrencyDecimals",
+    "outputs": [{ "internalType": "uint8", "name": "", "type": "uint8" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getLiquidityPoolCount",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  // Admin Functions
+  {
+    "inputs": [{ "internalType": "address", "name": "_pool", "type": "address" }],
+    "name": "setOooweeePool",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "enum SavingsPriceOracle.Currency", "name": "currency", "type": "uint8" },
+      { "internalType": "address", "name": "feed", "type": "address" }
+    ],
+    "name": "setPriceFeed",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "enum SavingsPriceOracle.Currency", "name": "currency", "type": "uint8" },
+      { "internalType": "uint256", "name": "price", "type": "uint256" }
+    ],
+    "name": "setDefaultPrice",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "enum SavingsPriceOracle.Currency", "name": "currency", "type": "uint8" },
+      { "internalType": "uint256", "name": "rate", "type": "uint256" }
+    ],
+    "name": "setEmergencyFixedRate",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "enum SavingsPriceOracle.Currency", "name": "currency", "type": "uint8" },
+      { "internalType": "uint8", "name": "decimals_", "type": "uint8" }
+    ],
+    "name": "setCurrencyDecimals",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "enum SavingsPriceOracle.PriceSource", "name": "source", "type": "uint8" }],
+    "name": "setActivePriceSource",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "bool", "name": "enabled", "type": "bool" },
+      { "internalType": "string", "name": "reason", "type": "string" }
+    ],
+    "name": "setEmergencyMode",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "pool", "type": "address" },
+      { "internalType": "uint256", "name": "weight", "type": "uint256" }
+    ],
+    "name": "addLiquidityPool",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "index", "type": "uint256" }],
+    "name": "removeLiquidityPool",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+];
+
+// ============================================
+// OOOWEEEStability ABI
+// ============================================
+export const OOOWEEEStabilityABI = [
+  // Constructor
+  {
+    "inputs": [
+      { "internalType": "address", "name": "_oooweeeToken", "type": "address" },
+      { "internalType": "address", "name": "_uniswapRouter", "type": "address" },
+      { "internalType": "address", "name": "_validatorFund", "type": "address" }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  // Events
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": false, "internalType": "uint256", "name": "tokensInjected", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "ethCaptured", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "priceBefore", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "priceAfter", "type": "uint256" },
+      { "indexed": false, "internalType": "bool", "name": "systemTriggered", "type": "bool" }
+    ],
+    "name": "StabilityIntervention",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": false, "internalType": "uint256", "name": "oldBaseline", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "newBaseline", "type": "uint256" }
+    ],
+    "name": "BaselineUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": false, "internalType": "string", "name": "reason", "type": "string" },
+      { "indexed": false, "internalType": "uint256", "name": "timestamp", "type": "uint256" }
+    ],
+    "name": "CircuitBreakerTripped",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [{ "indexed": false, "internalType": "uint256", "name": "timestamp", "type": "uint256" }],
+    "name": "CircuitBreakerReset",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": false, "internalType": "uint256", "name": "blockNumber", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "currentPrice", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "priceIncrease", "type": "uint256" },
+      { "indexed": false, "internalType": "bool", "name": "intervened", "type": "bool" }
+    ],
+    "name": "SystemCheck",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [{ "indexed": false, "internalType": "uint256", "name": "timestamp", "type": "uint256" }],
+    "name": "DailyLimitsReset",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "timestamp", "type": "uint256" }
+    ],
+    "name": "ETHSentToValidators",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": false, "internalType": "uint256", "name": "timestamp", "type": "uint256" },
+      { "indexed": false, "internalType": "address", "name": "triggeredBy", "type": "address" }
+    ],
+    "name": "ForceDailyReset",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "address", "name": "previousOwner", "type": "address" },
+      { "indexed": true, "internalType": "address", "name": "newOwner", "type": "address" }
+    ],
+    "name": "OwnershipTransferred",
+    "type": "event"
+  },
+  // Constants
+  {
+    "inputs": [],
+    "name": "INTERVENTION_THRESHOLD",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "CRITICAL_THRESHOLD",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "HIGH_VOLATILITY_THRESHOLD",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "MAX_DAILY_INTERVENTIONS",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "MAX_DAILY_TOKEN_USE",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "MAX_SELL_PERCENT",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "MEASUREMENT_WINDOW",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  // State Variables
+  {
+    "inputs": [],
+    "name": "oooweeeToken",
+    "outputs": [{ "internalType": "contract IERC20", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "uniswapRouter",
+    "outputs": [{ "internalType": "contract IUniswapV2Router02", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "liquidityPair",
+    "outputs": [{ "internalType": "contract IUniswapV2Pair", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "validatorFundWallet",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "systemAddress",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "baselinePrice",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "baselineTimestamp",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "interventionsToday",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "tokensUsedToday",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "lastDayReset",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalInterventions",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalTokensUsed",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalETHCaptured",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalETHSentToValidators",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "lastInterventionPrice",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "circuitBreakerTripped",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "systemChecksEnabled",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  // Ownable
+  {
+    "inputs": [],
+    "name": "owner",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "renounceOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "newOwner", "type": "address" }],
+    "name": "transferOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  // Main Functions
+  {
+    "inputs": [],
+    "name": "manualStabilityCheck",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "systemStabilityCheck",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  // View Functions
+  {
+    "inputs": [],
+    "name": "getCurrentPrice",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getStabilityStatus",
+    "outputs": [
+      { "internalType": "uint256", "name": "currentPrice", "type": "uint256" },
+      { "internalType": "uint256", "name": "baseline", "type": "uint256" },
+      { "internalType": "uint256", "name": "priceIncrease", "type": "uint256" },
+      { "internalType": "bool", "name": "needsIntervention", "type": "bool" },
+      { "internalType": "uint256", "name": "remainingInterventions", "type": "uint256" },
+      { "internalType": "uint256", "name": "remainingTokens", "type": "uint256" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getStabilityInfo",
+    "outputs": [
+      { "internalType": "uint256", "name": "currentPrice", "type": "uint256" },
+      { "internalType": "uint256", "name": "tokenBalance", "type": "uint256" },
+      { "internalType": "uint256", "name": "totalInterventionsCount", "type": "uint256" },
+      { "internalType": "uint256", "name": "totalTokensSold", "type": "uint256" },
+      { "internalType": "uint256", "name": "totalETHEarned", "type": "uint256" },
+      { "internalType": "uint256", "name": "totalETHToValidators", "type": "uint256" },
+      { "internalType": "uint256", "name": "baseline", "type": "uint256" },
+      { "internalType": "uint256", "name": "priceIncrease", "type": "uint256" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getCircuitBreakerStatus",
+    "outputs": [
+      { "internalType": "bool", "name": "tripped", "type": "bool" },
+      { "internalType": "uint256", "name": "dailyInterventions", "type": "uint256" },
+      { "internalType": "uint256", "name": "dailyTokensUsed", "type": "uint256" },
+      { "internalType": "uint256", "name": "remainingInterventions", "type": "uint256" },
+      { "internalType": "uint256", "name": "remainingTokens", "type": "uint256" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getMarketConditions",
+    "outputs": [
+      { "internalType": "bool", "name": "highVolatility", "type": "bool" },
+      { "internalType": "uint256", "name": "currentCheckInterval", "type": "uint256" },
+      { "internalType": "uint256", "name": "blocksSinceLastSpike", "type": "uint256" },
+      { "internalType": "uint256", "name": "dailyInterventionCount", "type": "uint256" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getTokenBalance",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "needsDailyReset",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "timeUntilDailyReset",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getInterventionHistory",
+    "outputs": [
+      {
+        "components": [
+          { "internalType": "uint64", "name": "timestamp", "type": "uint64" },
+          { "internalType": "uint256", "name": "priceBefore", "type": "uint256" },
+          { "internalType": "uint256", "name": "priceAfter", "type": "uint256" },
+          { "internalType": "uint256", "name": "tokensInjected", "type": "uint256" },
+          { "internalType": "uint256", "name": "ethCaptured", "type": "uint256" },
+          { "internalType": "bool", "name": "systemTriggered", "type": "bool" }
+        ],
+        "internalType": "struct OOOWEEEStability.InterventionRecord[]",
+        "name": "",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "count", "type": "uint256" }],
+    "name": "getRecentInterventions",
+    "outputs": [
+      {
+        "components": [
+          { "internalType": "uint64", "name": "timestamp", "type": "uint64" },
+          { "internalType": "uint256", "name": "priceBefore", "type": "uint256" },
+          { "internalType": "uint256", "name": "priceAfter", "type": "uint256" },
+          { "internalType": "uint256", "name": "tokensInjected", "type": "uint256" },
+          { "internalType": "uint256", "name": "ethCaptured", "type": "uint256" },
+          { "internalType": "bool", "name": "systemTriggered", "type": "bool" }
+        ],
+        "internalType": "struct OOOWEEEStability.InterventionRecord[]",
+        "name": "",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getInterventionHistoryCount",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  // Admin Functions
+  {
+    "inputs": [{ "internalType": "address", "name": "_pair", "type": "address" }],
+    "name": "setLiquidityPair",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "_fund", "type": "address" }],
+    "name": "setValidatorFund",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "_system", "type": "address" }],
+    "name": "setSystemAddress",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "updateBaselinePrice",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "resetCircuitBreaker",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "bool", "name": "_enabled", "type": "bool" }],
+    "name": "setChecksEnabled",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "toggleSystemChecks",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "forceDailyReset",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "_baseCaptureRate", "type": "uint256" },
+      { "internalType": "uint256", "name": "_captureRange", "type": "uint256" }
+    ],
+    "name": "setCaptureRates",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "token", "type": "address" },
+      { "internalType": "uint256", "name": "amount", "type": "uint256" }
+    ],
+    "name": "emergencyWithdraw",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "emergencyRecoverTokens",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   // Receive ETH
@@ -940,9 +1722,7 @@ export const OOOWEEEValidatorFundABI = [
   },
   {
     "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "uint256", "name": "validatorId", "type": "uint256" }
-    ],
+    "inputs": [{ "indexed": true, "internalType": "uint256", "name": "validatorId", "type": "uint256" }],
     "name": "ValidatorCreated",
     "type": "event"
   },
@@ -957,25 +1737,19 @@ export const OOOWEEEValidatorFundABI = [
   },
   {
     "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "address", "name": "newContract", "type": "address" }
-    ],
+    "inputs": [{ "indexed": true, "internalType": "address", "name": "newContract", "type": "address" }],
     "name": "StabilityContractUpdated",
     "type": "event"
   },
   {
     "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "address", "name": "newContract", "type": "address" }
-    ],
+    "inputs": [{ "indexed": true, "internalType": "address", "name": "newContract", "type": "address" }],
     "name": "RewardsContractUpdated",
     "type": "event"
   },
   {
     "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "address", "name": "newOperator", "type": "address" }
-    ],
+    "inputs": [{ "indexed": true, "internalType": "address", "name": "newOperator", "type": "address" }],
     "name": "OperatorAddressUpdated",
     "type": "event"
   },
@@ -1006,15 +1780,15 @@ export const OOOWEEEValidatorFundABI = [
   // Constants
   {
     "inputs": [],
-    "name": "L2_BRIDGE",
-    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "name": "VALIDATOR_STAKE",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [],
-    "name": "VALIDATOR_STAKE",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "name": "L2_BRIDGE",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
     "stateMutability": "view",
     "type": "function"
   },
@@ -1076,20 +1850,6 @@ export const OOOWEEEValidatorFundABI = [
     "type": "function"
   },
   {
-    "inputs": [{ "internalType": "address", "name": "", "type": "address" }],
-    "name": "donations",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "name": "donors",
-    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [],
     "name": "stabilityContract",
     "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
@@ -1099,6 +1859,20 @@ export const OOOWEEEValidatorFundABI = [
   {
     "inputs": [],
     "name": "rewardsContract",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "name": "donations",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "name": "donors",
     "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
     "stateMutability": "view",
     "type": "function"
@@ -1228,637 +2002,6 @@ export const OOOWEEEValidatorFundABI = [
 ];
 
 // ============================================
-// OOOWEEEStability ABI - UPDATED WITH NEW FUNCTIONS
-// ============================================
-export const OOOWEEEStabilityABI = [
-  // Constructor
-  {
-    "inputs": [
-      { "internalType": "address", "name": "_oooweeeToken", "type": "address" },
-      { "internalType": "address", "name": "_uniswapRouter", "type": "address" },
-      { "internalType": "address", "name": "_validatorFundWallet", "type": "address" }
-    ],
-    "stateMutability": "nonpayable",
-    "type": "constructor"
-  },
-  // Events
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "uint256", "name": "blockNumber", "type": "uint256" },
-      { "indexed": false, "internalType": "uint256", "name": "currentPrice", "type": "uint256" },
-      { "indexed": false, "internalType": "uint256", "name": "priceIncrease", "type": "uint256" },
-      { "indexed": false, "internalType": "bool", "name": "interventionTriggered", "type": "bool" }
-    ],
-    "name": "SystemCheck",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": false, "internalType": "uint256", "name": "tokensUsed", "type": "uint256" },
-      { "indexed": false, "internalType": "uint256", "name": "ethCaptured", "type": "uint256" },
-      { "indexed": false, "internalType": "uint256", "name": "oldPrice", "type": "uint256" },
-      { "indexed": false, "internalType": "uint256", "name": "newPrice", "type": "uint256" },
-      { "indexed": false, "internalType": "bool", "name": "systemTriggered", "type": "bool" }
-    ],
-    "name": "StabilityIntervention",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" },
-      { "indexed": false, "internalType": "uint256", "name": "timestamp", "type": "uint256" }
-    ],
-    "name": "ETHSentToValidators",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": false, "internalType": "string", "name": "reason", "type": "string" },
-      { "indexed": false, "internalType": "uint256", "name": "timestamp", "type": "uint256" }
-    ],
-    "name": "CircuitBreakerTripped",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": false, "internalType": "uint256", "name": "timestamp", "type": "uint256" }
-    ],
-    "name": "CircuitBreakerReset",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": false, "internalType": "uint256", "name": "interventions", "type": "uint256" },
-      { "indexed": false, "internalType": "uint256", "name": "tokensUsed", "type": "uint256" }
-    ],
-    "name": "DailyLimitsReset",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": false, "internalType": "uint256", "name": "oldBaseline", "type": "uint256" },
-      { "indexed": false, "internalType": "uint256", "name": "newBaseline", "type": "uint256" }
-    ],
-    "name": "BaselineUpdated",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": false, "internalType": "uint256", "name": "newInterval", "type": "uint256" }
-    ],
-    "name": "SystemCheckIntervalUpdated",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": false, "internalType": "bool", "name": "highVolatility", "type": "bool" },
-      { "indexed": false, "internalType": "uint256", "name": "checkInterval", "type": "uint256" }
-    ],
-    "name": "MarketConditionChanged",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" },
-      { "indexed": false, "internalType": "address", "name": "to", "type": "address" }
-    ],
-    "name": "EmergencyRecovery",
-    "type": "event"
-  },
-  // NEW: Force Daily Reset Event
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": false, "internalType": "uint256", "name": "timestamp", "type": "uint256" },
-      { "indexed": false, "internalType": "address", "name": "triggeredBy", "type": "address" }
-    ],
-    "name": "ForceDailyReset",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "address", "name": "previousOwner", "type": "address" },
-      { "indexed": true, "internalType": "address", "name": "newOwner", "type": "address" }
-    ],
-    "name": "OwnershipTransferred",
-    "type": "event"
-  },
-  // Constants
-  {
-    "inputs": [],
-    "name": "SEQUENCER_ADDRESS",
-    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "SYSTEM_ADDRESS",
-    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "MEASUREMENT_WINDOW",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "MAX_SELL_PERCENT",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "SLIPPAGE_TOLERANCE",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "BASELINE_UPDATE_THRESHOLD",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "CRITICAL_THRESHOLD",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "HIGH_VOLATILITY_THRESHOLD",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "MAX_DAILY_INTERVENTIONS",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "MAX_DAILY_TOKEN_USE",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  // NEW: History constants
-  {
-    "inputs": [],
-    "name": "MAX_HISTORY",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  // State Variables
-  {
-    "inputs": [],
-    "name": "oooweeeToken",
-    "outputs": [{ "internalType": "contract IERC20", "name": "", "type": "address" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "uniswapRouter",
-    "outputs": [{ "internalType": "contract IUniswapV2Router02", "name": "", "type": "address" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "liquidityPair",
-    "outputs": [{ "internalType": "contract IUniswapV2Pair", "name": "", "type": "address" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "validatorFundWallet",
-    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "lastSystemCheck",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "systemCheckInterval",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "minSystemCheckInterval",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "maxSystemCheckInterval",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "lastCheckTime",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "lastCheckPrice",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "totalInterventions",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "totalTokensUsed",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "totalETHCaptured",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "totalETHSentToValidators",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "baselinePrice",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "lastInterventionPrice",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "consecutiveSpikes",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "recentVolatility",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "market",
-    "outputs": [
-      { "internalType": "uint256", "name": "lastSpikeBlock", "type": "uint256" },
-      { "internalType": "uint256", "name": "dailyInterventions", "type": "uint256" },
-      { "internalType": "uint256", "name": "hourlyVolume", "type": "uint256" },
-      { "internalType": "bool", "name": "highVolatilityMode", "type": "bool" }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "interventionsToday",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "lastDayReset",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "tokensUsedToday",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "circuitBreakerTripped",
-    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "systemChecksEnabled",
-    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  // NEW: Intervention History Array
-  {
-    "inputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "name": "interventionHistory",
-    "outputs": [
-      { "internalType": "uint64", "name": "timestamp", "type": "uint64" },
-      { "internalType": "uint256", "name": "priceBefore", "type": "uint256" },
-      { "internalType": "uint256", "name": "priceAfter", "type": "uint256" },
-      { "internalType": "uint256", "name": "tokensInjected", "type": "uint256" },
-      { "internalType": "uint256", "name": "ethCaptured", "type": "uint256" },
-      { "internalType": "bool", "name": "systemTriggered", "type": "bool" }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  // Ownable
-  {
-    "inputs": [],
-    "name": "owner",
-    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "renounceOwnership",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "newOwner", "type": "address" }],
-    "name": "transferOwnership",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  // Emergency Recovery
-  {
-    "inputs": [],
-    "name": "emergencyRecoverTokens",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  // System Functions
-  {
-    "inputs": [],
-    "name": "systemStabilityCheck",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "manualStabilityCheck",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  // View Functions
-  {
-    "inputs": [],
-    "name": "getCurrentPrice",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getTokenBalance",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getStabilityInfo",
-    "outputs": [
-      { "internalType": "uint256", "name": "currentPrice", "type": "uint256" },
-      { "internalType": "uint256", "name": "tokenBalance", "type": "uint256" },
-      { "internalType": "uint256", "name": "totalInterventionsCount", "type": "uint256" },
-      { "internalType": "uint256", "name": "totalTokensSold", "type": "uint256" },
-      { "internalType": "uint256", "name": "totalETHEarned", "type": "uint256" },
-      { "internalType": "uint256", "name": "totalETHToValidators", "type": "uint256" },
-      { "internalType": "uint256", "name": "baseline", "type": "uint256" },
-      { "internalType": "uint256", "name": "priceIncrease", "type": "uint256" }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getCircuitBreakerStatus",
-    "outputs": [
-      { "internalType": "bool", "name": "tripped", "type": "bool" },
-      { "internalType": "uint256", "name": "dailyInterventions", "type": "uint256" },
-      { "internalType": "uint256", "name": "dailyTokensUsed", "type": "uint256" },
-      { "internalType": "uint256", "name": "remainingInterventions", "type": "uint256" },
-      { "internalType": "uint256", "name": "remainingTokens", "type": "uint256" }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getMarketConditions",
-    "outputs": [
-      { "internalType": "bool", "name": "highVolatility", "type": "bool" },
-      { "internalType": "uint256", "name": "currentCheckInterval", "type": "uint256" },
-      { "internalType": "uint256", "name": "blocksSinceLastSpike", "type": "uint256" },
-      { "internalType": "uint256", "name": "dailyInterventionCount", "type": "uint256" }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  // NEW: Daily Reset Functions
-  {
-    "inputs": [],
-    "name": "needsDailyReset",
-    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "timeUntilDailyReset",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  // NEW: Intervention History Functions
-  {
-    "inputs": [],
-    "name": "getInterventionHistory",
-    "outputs": [{
-      "components": [
-        { "internalType": "uint64", "name": "timestamp", "type": "uint64" },
-        { "internalType": "uint256", "name": "priceBefore", "type": "uint256" },
-        { "internalType": "uint256", "name": "priceAfter", "type": "uint256" },
-        { "internalType": "uint256", "name": "tokensInjected", "type": "uint256" },
-        { "internalType": "uint256", "name": "ethCaptured", "type": "uint256" },
-        { "internalType": "bool", "name": "systemTriggered", "type": "bool" }
-      ],
-      "internalType": "struct OOOWEEEStability.InterventionRecord[]",
-      "name": "",
-      "type": "tuple[]"
-    }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "uint256", "name": "count", "type": "uint256" }],
-    "name": "getRecentInterventions",
-    "outputs": [{
-      "components": [
-        { "internalType": "uint64", "name": "timestamp", "type": "uint64" },
-        { "internalType": "uint256", "name": "priceBefore", "type": "uint256" },
-        { "internalType": "uint256", "name": "priceAfter", "type": "uint256" },
-        { "internalType": "uint256", "name": "tokensInjected", "type": "uint256" },
-        { "internalType": "uint256", "name": "ethCaptured", "type": "uint256" },
-        { "internalType": "bool", "name": "systemTriggered", "type": "bool" }
-      ],
-      "internalType": "struct OOOWEEEStability.InterventionRecord[]",
-      "name": "",
-      "type": "tuple[]"
-    }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getInterventionHistoryCount",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  // Admin Functions
-  {
-    "inputs": [{ "internalType": "address", "name": "_pair", "type": "address" }],
-    "name": "setLiquidityPair",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "_wallet", "type": "address" }],
-    "name": "setValidatorFundWallet",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "uint256", "name": "_interval", "type": "uint256" }],
-    "name": "setSystemCheckInterval",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "toggleSystemChecks",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "resetCircuitBreaker",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "updateBaselinePrice",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  // NEW: Force Daily Reset
-  {
-    "inputs": [],
-    "name": "forceDailyReset",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "uint256", "name": "_baseThreshold", "type": "uint256" },
-      { "internalType": "uint256", "name": "_thresholdRange", "type": "uint256" },
-      { "internalType": "uint256", "name": "_baseCaptureRate", "type": "uint256" },
-      { "internalType": "uint256", "name": "_captureRange", "type": "uint256" }
-    ],
-    "name": "updateStealthParameters",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "to", "type": "address" }],
-    "name": "emergencyWithdrawETH",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  // Receive ETH
-  { "stateMutability": "payable", "type": "receive" }
-];
-
-// ============================================
 // OOOWEEERewardsDistribution ABI
 // ============================================
 export const OOOWEEERewardsDistributionABI = [
@@ -1887,9 +2030,7 @@ export const OOOWEEERewardsDistributionABI = [
   },
   {
     "anonymous": false,
-    "inputs": [
-      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }
-    ],
+    "inputs": [{ "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }],
     "name": "RewardsReceivedFromL1",
     "type": "event"
   },
@@ -1919,17 +2060,13 @@ export const OOOWEEERewardsDistributionABI = [
   },
   {
     "anonymous": false,
-    "inputs": [
-      { "indexed": false, "internalType": "address", "name": "newCollector", "type": "address" }
-    ],
+    "inputs": [{ "indexed": false, "internalType": "address", "name": "newCollector", "type": "address" }],
     "name": "L1CollectorUpdated",
     "type": "event"
   },
   {
     "anonymous": false,
-    "inputs": [
-      { "indexed": false, "internalType": "uint256", "name": "newThreshold", "type": "uint256" }
-    ],
+    "inputs": [{ "indexed": false, "internalType": "uint256", "name": "newThreshold", "type": "uint256" }],
     "name": "ThresholdUpdated",
     "type": "event"
   },
@@ -2003,6 +2140,13 @@ export const OOOWEEERewardsDistributionABI = [
   // State Variables
   {
     "inputs": [],
+    "name": "l1ValidatorCollector",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "savingsContract",
     "outputs": [{ "internalType": "contract IOOOWEEESavings", "name": "", "type": "address" }],
     "stateMutability": "view",
@@ -2032,13 +2176,6 @@ export const OOOWEEERewardsDistributionABI = [
   {
     "inputs": [],
     "name": "operationsWallet",
-    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "l1ValidatorCollector",
     "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
     "stateMutability": "view",
     "type": "function"
@@ -2080,14 +2217,14 @@ export const OOOWEEERewardsDistributionABI = [
   },
   {
     "inputs": [],
-    "name": "lastDistribution",
+    "name": "distributionThreshold",
     "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [],
-    "name": "distributionThreshold",
+    "name": "lastDistribution",
     "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
@@ -2117,7 +2254,7 @@ export const OOOWEEERewardsDistributionABI = [
   // Main Functions
   {
     "inputs": [],
-    "name": "receiveRewardsFromL1",
+    "name": "receiveFromL1Bridge",
     "outputs": [],
     "stateMutability": "payable",
     "type": "function"
@@ -2129,22 +2266,29 @@ export const OOOWEEERewardsDistributionABI = [
     "stateMutability": "nonpayable",
     "type": "function"
   },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "amount", "type": "uint256" }],
+    "name": "fundValidators",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
   // Admin Functions
   {
-    "inputs": [
-      { "internalType": "address", "name": "_savings", "type": "address" },
-      { "internalType": "address", "name": "_token", "type": "address" },
-      { "internalType": "address", "name": "_validatorFund", "type": "address" },
-      { "internalType": "address", "name": "_operations", "type": "address" }
-    ],
-    "name": "updateContracts",
+    "inputs": [{ "internalType": "address", "name": "_l1Collector", "type": "address" }],
+    "name": "setL1ValidatorCollector",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
-    "inputs": [{ "internalType": "address", "name": "_collector", "type": "address" }],
-    "name": "setL1ValidatorCollector",
+    "inputs": [
+      { "internalType": "address", "name": "_savingsContract", "type": "address" },
+      { "internalType": "address", "name": "_oooweeeToken", "type": "address" },
+      { "internalType": "address", "name": "_validatorFund", "type": "address" },
+      { "internalType": "address", "name": "_operationsWallet", "type": "address" }
+    ],
+    "name": "updateContracts",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -2205,320 +2349,7 @@ export const OOOWEEERewardsDistributionABI = [
 ];
 
 // ============================================
-// SavingsPriceOracle ABI - UPDATED WITH VIEW FUNCTIONS
-// ============================================
-export const SavingsPriceOracleABI = [
-  // Constructor
-  {
-    "inputs": [
-      { "internalType": "address", "name": "_uniswapRouter", "type": "address" }
-    ],
-    "stateMutability": "nonpayable",
-    "type": "constructor"
-  },
-  // Events
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": false, "internalType": "enum SavingsPriceOracle.Currency", "name": "currency", "type": "uint8" },
-      { "indexed": false, "internalType": "address", "name": "feed", "type": "address" }
-    ],
-    "name": "PriceFeedUpdated",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": false, "internalType": "enum SavingsPriceOracle.PriceSource", "name": "oldSource", "type": "uint8" },
-      { "indexed": false, "internalType": "enum SavingsPriceOracle.PriceSource", "name": "newSource", "type": "uint8" }
-    ],
-    "name": "PriceSourceChanged",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": false, "internalType": "string", "name": "reason", "type": "string" }
-    ],
-    "name": "EmergencyPriceModeActivated",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": false, "internalType": "enum SavingsPriceOracle.Currency", "name": "currency", "type": "uint8" },
-      { "indexed": false, "internalType": "uint256", "name": "price", "type": "uint256" }
-    ],
-    "name": "ManualPriceSet",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": false, "internalType": "address", "name": "pool", "type": "address" },
-      { "indexed": false, "internalType": "uint256", "name": "weight", "type": "uint256" }
-    ],
-    "name": "PoolAdded",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": false, "internalType": "address", "name": "pool", "type": "address" },
-      { "indexed": false, "internalType": "string", "name": "reason", "type": "string" }
-    ],
-    "name": "PoolDeactivated",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "address", "name": "pool", "type": "address" }
-    ],
-    "name": "PoolAddressSet",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "address", "name": "previousOwner", "type": "address" },
-      { "indexed": true, "internalType": "address", "name": "newOwner", "type": "address" }
-    ],
-    "name": "OwnershipTransferred",
-    "type": "event"
-  },
-  // Constants
-  {
-    "inputs": [],
-    "name": "PRICE_STALENESS_THRESHOLD",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  // NEW: Chainlink decimals constant
-  {
-    "inputs": [],
-    "name": "CHAINLINK_DECIMALS",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  // State Variables
-  {
-    "inputs": [],
-    "name": "uniswapRouter",
-    "outputs": [{ "internalType": "contract IUniswapV2Router02", "name": "", "type": "address" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "oooweeePool",
-    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "activePriceSource",
-    "outputs": [{ "internalType": "enum SavingsPriceOracle.PriceSource", "name": "", "type": "uint8" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "emergencyPriceMode",
-    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "enum SavingsPriceOracle.Currency", "name": "", "type": "uint8" }],
-    "name": "priceFeeds",
-    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "enum SavingsPriceOracle.Currency", "name": "", "type": "uint8" }],
-    "name": "currencyDecimals",
-    "outputs": [{ "internalType": "uint8", "name": "", "type": "uint8" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "enum SavingsPriceOracle.Currency", "name": "", "type": "uint8" }],
-    "name": "defaultPrices",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "enum SavingsPriceOracle.Currency", "name": "", "type": "uint8" }],
-    "name": "emergencyFixedRates",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "name": "liquidityPools",
-    "outputs": [
-      { "internalType": "address", "name": "pool", "type": "address" },
-      { "internalType": "uint256", "name": "weight", "type": "uint256" },
-      { "internalType": "uint256", "name": "lastValidPrice", "type": "uint256" },
-      { "internalType": "uint256", "name": "lastValidTimestamp", "type": "uint256" }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  // Ownable
-  {
-    "inputs": [],
-    "name": "owner",
-    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "renounceOwnership",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "newOwner", "type": "address" }],
-    "name": "transferOwnership",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  // Price Functions
-  {
-    "inputs": [{ "internalType": "enum SavingsPriceOracle.Currency", "name": "currency", "type": "uint8" }],
-    "name": "getETHPrice",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "enum SavingsPriceOracle.Currency", "name": "currency", "type": "uint8" }],
-    "name": "getOooweeePrice",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  // NEW: View version of getOooweeePrice for frontend
-  {
-    "inputs": [{ "internalType": "enum SavingsPriceOracle.Currency", "name": "currency", "type": "uint8" }],
-    "name": "getOooweeePriceView",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  // NEW: Helper view functions
-  {
-    "inputs": [],
-    "name": "getLiquidityPoolCount",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "enum SavingsPriceOracle.Currency", "name": "currency", "type": "uint8" }],
-    "name": "getCurrencyDecimals",
-    "outputs": [{ "internalType": "uint8", "name": "", "type": "uint8" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  // Admin Functions
-  {
-    "inputs": [{ "internalType": "address", "name": "_pool", "type": "address" }],
-    "name": "setOooweeePool",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "enum SavingsPriceOracle.Currency", "name": "currency", "type": "uint8" },
-      { "internalType": "address", "name": "feed", "type": "address" }
-    ],
-    "name": "setPriceFeed",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "enum SavingsPriceOracle.Currency", "name": "currency", "type": "uint8" },
-      { "internalType": "uint256", "name": "price", "type": "uint256" }
-    ],
-    "name": "setDefaultPrice",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "enum SavingsPriceOracle.Currency", "name": "currency", "type": "uint8" },
-      { "internalType": "uint256", "name": "rate", "type": "uint256" }
-    ],
-    "name": "setEmergencyFixedRate",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "enum SavingsPriceOracle.Currency", "name": "currency", "type": "uint8" },
-      { "internalType": "uint8", "name": "decimals_", "type": "uint8" }
-    ],
-    "name": "setCurrencyDecimals",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "enum SavingsPriceOracle.PriceSource", "name": "source", "type": "uint8" }],
-    "name": "setActivePriceSource",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "bool", "name": "enabled", "type": "bool" },
-      { "internalType": "string", "name": "reason", "type": "string" }
-    ],
-    "name": "setEmergencyMode",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "address", "name": "pool", "type": "address" },
-      { "internalType": "uint256", "name": "weight", "type": "uint256" }
-    ],
-    "name": "addLiquidityPool",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  // NEW: Remove liquidity pool
-  {
-    "inputs": [{ "internalType": "uint256", "name": "index", "type": "uint256" }],
-    "name": "removeLiquidityPool",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  }
-];
-
-// ============================================
-// ValidatorCollector ABI (L1 Contract)
+// ValidatorCollector ABI (L1)
 // ============================================
 export const ValidatorCollectorABI = [
   // Constructor
