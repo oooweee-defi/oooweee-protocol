@@ -916,12 +916,21 @@ function App() {
           // Calculate progress using FRESH price values
           accData.progress = calculateProgress(accData, freshOooweeePrice, freshEthPrice);
           
-          // Calculate current fiat value for display using FRESH prices
+
+         // Calculate current fiat value using CONTRACT's oracle (ensures match)
           if (accData.isFiatTarget) {
-            const currencyCode = getCurrencyFromCode(accData.targetCurrency);
-            const ethPriceForCurrency = freshEthPrice?.[currencyCode.toLowerCase()] || freshEthPrice?.eur || 1850;
-            const tokenValueInEth = parseFloat(accData.balance) * freshOooweeePrice;
-            accData.currentFiatValue = Math.floor(tokenValueInEth * ethPriceForCurrency * 100); // In cents
+            try {
+              const balanceWei = ethers.utils.parseUnits(accData.balance, 18);
+              const contractFiatValue = await savingsContractInstance.getBalanceInFiatView(balanceWei, accData.targetCurrency);
+              accData.currentFiatValue = contractFiatValue.toNumber();
+            } catch (e) {
+              console.error('Error getting contract fiat value:', e);
+              // Fallback to frontend calculation with 4 decimals
+              const currencyCode = getCurrencyFromCode(accData.targetCurrency);
+              const ethPriceForCurrency = freshEthPrice?.[currencyCode.toLowerCase()] || freshEthPrice?.eur || 1850;
+              const tokenValueInEth = parseFloat(accData.balance) * freshOooweeePrice;
+              accData.currentFiatValue = Math.floor(tokenValueInEth * ethPriceForCurrency * 10000); // 4 decimals
+            }
           } else {
             accData.currentFiatValue = 0;
           }

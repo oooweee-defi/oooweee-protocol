@@ -1,36 +1,31 @@
-// scripts/debug-price.js
-const { ethers } = require("hardhat");
-const fs = require("fs");
+const hre = require("hardhat");
 
 async function main() {
-  const deployment = JSON.parse(fs.readFileSync("deployment-sepolia.json", "utf8"));
-  
-  const pair = await ethers.getContractAt(
-    ["function token0() view returns (address)", "function token1() view returns (address)", "function getReserves() view returns (uint112, uint112, uint32)"],
-    deployment.uniswapPair
+  const savings = await hre.ethers.getContractAt(
+    "OOOWEEESavings",
+    "0xaABe5E9510157AFf6fb02Bd7D65ED4E093Cda863"
   );
   
-  const token0 = await pair.token0();
-  const token1 = await pair.token1();
-  const reserves = await pair.getReserves();
-  
-  console.log("Token0:", token0);
-  console.log("Token1:", token1);
-  console.log("OOOWEEE:", deployment.contracts.token);
-  console.log("\nReserve0:", ethers.utils.formatEther(reserves[0]));
-  console.log("Reserve1:", ethers.utils.formatEther(reserves[1]));
-  
-  // Calculate price manually
-  const oooweeeIsToken0 = token0.toLowerCase() === deployment.contracts.token.toLowerCase();
-  console.log("\nOOOWEEE is token0?", oooweeeIsToken0);
-  
-  if (oooweeeIsToken0) {
-    const price = reserves[1].mul(ethers.utils.parseEther("1")).div(reserves[0]);
-    console.log("Price (ETH per OOOWEEE):", ethers.utils.formatEther(price));
-  } else {
-    const price = reserves[0].mul(ethers.utils.parseEther("1")).div(reserves[1]);
-    console.log("Price (ETH per OOOWEEE):", ethers.utils.formatEther(price));
-  }
+  const oracle = await hre.ethers.getContractAt(
+    "SavingsPriceOracle",
+    "0xD0E81C3a5cb59f58133Ae2573F89ff7A08448d38"
+  );
+
+  console.log("=== Oracle Check ===");
+  const price = await oracle.getOooweeePriceView(1); // EUR
+  console.log("Oracle price (raw):", price.toString());
+  console.log("Per token: €" + (price.toNumber() / 10000).toFixed(6));
+
+  console.log("\n=== Savings Contract Check ===");
+  const tokens = hre.ethers.utils.parseEther("15024");
+  const fiatValue = await savings.getBalanceInFiatView(tokens, 1);
+  console.log("15024 tokens fiat value (raw):", fiatValue.toString());
+  console.log("Divided by 10000 (4 dec): €" + (fiatValue.toNumber() / 10000).toFixed(4));
+  console.log("Divided by 100 (2 dec): €" + (fiatValue.toNumber() / 100).toFixed(2));
+
+  console.log("\n=== Expected ===");
+  const expected = 15024 * price.toNumber();
+  console.log("Expected raw (tokens × price):", expected);
 }
 
 main().catch(console.error);
