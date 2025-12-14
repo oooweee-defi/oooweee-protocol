@@ -56,17 +56,19 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
         uniswapRouter = IUniswapV2Router02(_uniswapRouter);
         
         // Initialize currency decimals (smallest unit representation)
-        // 2 decimals = cents/pence, 0 decimals = whole units (yen/won)
-        currencyDecimals[Currency.USD] = 2;
-        currencyDecimals[Currency.EUR] = 2;
-        currencyDecimals[Currency.GBP] = 2;
-        currencyDecimals[Currency.JPY] = 0; // Yen has no decimal subdivision
-        currencyDecimals[Currency.CNY] = 2;
-        currencyDecimals[Currency.CAD] = 2;
-        currencyDecimals[Currency.AUD] = 2;
-        currencyDecimals[Currency.CHF] = 2;
-        currencyDecimals[Currency.INR] = 2;
-        currencyDecimals[Currency.KRW] = 0; // Won has no decimal subdivision
+        // UPDATED: Using 4 decimals for sub-cent precision
+        // This allows prices like 0.33 cents (33 in 4-decimal format) to be represented
+        // Without this, sub-cent prices round to 0 and break the oracle
+        currencyDecimals[Currency.USD] = 4;  // 10000 = $1.00
+        currencyDecimals[Currency.EUR] = 4;  // 10000 = €1.00
+        currencyDecimals[Currency.GBP] = 4;  // 10000 = £1.00
+        currencyDecimals[Currency.JPY] = 2;  // 100 = ¥1 (Yen has no subdivision, but use 2 for sub-yen)
+        currencyDecimals[Currency.CNY] = 4;  // 10000 = ¥1.00
+        currencyDecimals[Currency.CAD] = 4;  // 10000 = C$1.00
+        currencyDecimals[Currency.AUD] = 4;  // 10000 = A$1.00
+        currencyDecimals[Currency.CHF] = 4;  // 10000 = CHF1.00
+        currencyDecimals[Currency.INR] = 4;  // 10000 = ₹1.00
+        currencyDecimals[Currency.KRW] = 2;  // 100 = ₩1 (Won has no subdivision)
     }
 
     // ===== Core price accessors =====
@@ -107,7 +109,7 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
      * @notice Get OOOWEEE price in fiat (state-changing version)
      * @dev Updates lastValidPrice cache - use for contract logic
      * @param currency The target currency
-     * @return Price in smallest currency unit (e.g., cents for USD/EUR)
+     * @return Price in smallest currency unit (4 decimals: 10000 = $1.00)
      */
     function getOooweeePrice(Currency currency) public returns (uint256) {
         (bool success, uint256 primaryPrice) = _tryPriceSource(activePriceSource, currency);
@@ -134,7 +136,7 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
      * @notice Get OOOWEEE price in fiat (view version for frontend)
      * @dev Does NOT update lastValidPrice cache - safe for read-only calls
      * @param currency The target currency
-     * @return Price in smallest currency unit (e.g., cents for USD/EUR)
+     * @return Price in smallest currency unit (4 decimals: 10000 = $1.00)
      */
     function getOooweeePriceView(Currency currency) public view returns (uint256) {
         (bool success, uint256 primaryPrice) = _tryPriceSourceView(activePriceSource, currency);
@@ -182,11 +184,10 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
     /**
      * @notice Calculate OOOWEEE price using Chainlink ETH price and Uniswap reserves
      * @dev FIXED: Removed staleness check for Uniswap reserves - they are always current state
-     *      Unlike Chainlink feeds that can stop updating, Uniswap reserves always reflect
-     *      the actual pool state regardless of when the last trade occurred.
+     *      Using 4 decimal precision to capture sub-cent prices accurately
      * @param currency The target currency
      * @return success Whether price was successfully retrieved
-     * @return price Price in smallest currency unit (e.g., cents)
+     * @return price Price in smallest currency unit (4 decimals for most currencies)
      */
     function _getChainlinkUniswapPrice(Currency currency)
         internal view returns (bool success, uint256 price)
@@ -202,9 +203,6 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
         ) {
             // NOTE: No staleness check for Uniswap reserves!
             // Uniswap reserves are ALWAYS the current state of the pool.
-            // The lastUpdate timestamp only indicates when the last swap occurred,
-            // NOT when the data became invalid. A pool with no trades still has
-            // valid, current reserves.
             
             if (reserve0 == 0 || reserve1 == 0) return (false, 0);
 
@@ -224,14 +222,14 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
             // Calculate final price in currency's smallest unit
             // priceInEth has 18 decimals
             // ethPrice has 8 decimals (Chainlink standard)
-            // We want result in currencyDecimals (typically 2 for cents)
+            // We want result in currencyDecimals (now 4 for most currencies)
             //
             // Formula: (priceInEth * ethPrice) / 10^(18 + 8 - targetDecimals)
             
             uint8 targetDecimals = currencyDecimals[currency];
             // Safety: ensure we have valid decimals
-            if (targetDecimals == 0 && currency != Currency.JPY && currency != Currency.KRW) {
-                targetDecimals = 2; // Default fallback for uninitialized
+            if (targetDecimals == 0) {
+                targetDecimals = 4; // Default to 4 decimals
             }
             
             // divisor = 10^(18 + 8 - targetDecimals) = 10^(26 - targetDecimals)
@@ -308,10 +306,9 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
                 uint256 ethPrice = getETHPrice(currency);
                 if (ethPrice == 0) continue;
 
-                // Apply same decimal fix as _getChainlinkUniswapPrice
                 uint8 targetDecimals = currencyDecimals[currency];
-                if (targetDecimals == 0 && currency != Currency.JPY && currency != Currency.KRW) {
-                    targetDecimals = 2;
+                if (targetDecimals == 0) {
+                    targetDecimals = 4;
                 }
                 uint256 divisor = 10 ** (18 + CHAINLINK_DECIMALS - targetDecimals);
                 uint256 poolPrice = (priceInEth * ethPrice) / divisor;
@@ -333,20 +330,20 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
         if (price == 0) return false;
         
         uint8 decimals = currencyDecimals[currency];
-        if (decimals == 0 && currency != Currency.JPY && currency != Currency.KRW) {
-            decimals = 2; // Default
+        if (decimals == 0) {
+            decimals = 4; // Default
         }
         
-        // For currencies with 0 decimals (JPY, KRW), allow broader range
-        if (decimals == 0) {
-            // Price should be between 0.0001 and 1000 units
+        // For currencies with 2 decimals (JPY, KRW), allow broader range
+        if (decimals == 2) {
+            // Price should be between 0.01 and 10000 units
             return price >= 1 && price <= 1000000;
         }
         
-        // For currencies with 2 decimals
-        // Price should be between 0.0001 cents and 1000 dollars worth
-        uint256 minPrice = 1; // 0.01 cents minimum
-        uint256 maxPrice = 100000 * (10 ** decimals); // $1000 maximum per token
+        // For currencies with 4 decimals
+        // Price should be between 0.0001 (1 unit) and $1000 (10000000 units) per token
+        uint256 minPrice = 1; // 0.0001 of currency unit
+        uint256 maxPrice = 1000 * (10 ** decimals); // $1000 maximum per token
         
         return price >= minPrice && price <= maxPrice;
     }
@@ -369,12 +366,12 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
 
         // Last resort: return a very small default price
         uint8 decimals = currencyDecimals[currency];
-        if (decimals == 0 && currency != Currency.JPY && currency != Currency.KRW) {
-            decimals = 2;
+        if (decimals == 0) {
+            decimals = 4;
         }
         
-        // Return ~$0.01 equivalent in smallest units
-        return 10 ** decimals / 100;
+        // Return ~$0.001 equivalent in smallest units (10 for 4 decimals = $0.001)
+        return 10;
     }
 
     // ===== Admin setters =====

@@ -25,16 +25,16 @@ const ADMIN_WALLET = "0xB05F42B174E5152d34431eE4504210932ddfE715";
 
 // Currency configuration
 const CURRENCIES = {
-  USD: { code: 0, symbol: '$', name: 'US Dollar', decimals: 2, locale: 'en-US' },
-  EUR: { code: 1, symbol: '€', name: 'Euro', decimals: 2, locale: 'en-IE' },
-  GBP: { code: 2, symbol: '£', name: 'British Pound', decimals: 2, locale: 'en-GB' },
-  JPY: { code: 3, symbol: '¥', name: 'Japanese Yen', decimals: 0, locale: 'ja-JP' },
-  CNY: { code: 4, symbol: '¥', name: 'Chinese Yuan', decimals: 2, locale: 'zh-CN' },
-  CAD: { code: 5, symbol: 'C$', name: 'Canadian Dollar', decimals: 2, locale: 'en-CA' },
-  AUD: { code: 6, symbol: 'A$', name: 'Australian Dollar', decimals: 2, locale: 'en-AU' },
-  CHF: { code: 7, symbol: 'CHF', name: 'Swiss Franc', decimals: 2, locale: 'de-CH' },
-  INR: { code: 8, symbol: '₹', name: 'Indian Rupee', decimals: 2, locale: 'en-IN' },
-  KRW: { code: 9, symbol: '₩', name: 'Korean Won', decimals: 0, locale: 'ko-KR' }
+  USD: { code: 0, symbol: '$', name: 'US Dollar', decimals: 4, locale: 'en-US' },
+  EUR: { code: 1, symbol: '€', name: 'Euro', decimals: 4, locale: 'en-IE' },
+  GBP: { code: 2, symbol: '£', name: 'British Pound', decimals: 4, locale: 'en-GB' },
+  JPY: { code: 3, symbol: '¥', name: 'Japanese Yen', decimals: 2, locale: 'ja-JP' },
+  CNY: { code: 4, symbol: '¥', name: 'Chinese Yuan', decimals: 4, locale: 'zh-CN' },
+  CAD: { code: 5, symbol: 'C$', name: 'Canadian Dollar', decimals: 4, locale: 'en-CA' },
+  AUD: { code: 6, symbol: 'A$', name: 'Australian Dollar', decimals: 4, locale: 'en-AU' },
+  CHF: { code: 7, symbol: 'CHF', name: 'Swiss Franc', decimals: 4, locale: 'de-CH' },
+  INR: { code: 8, symbol: '₹', name: 'Indian Rupee', decimals: 4, locale: 'en-IN' },
+  KRW: { code: 9, symbol: '₩', name: 'Korean Won', decimals: 2, locale: 'ko-KR' }
 };
 
 // Web3Modal provider options
