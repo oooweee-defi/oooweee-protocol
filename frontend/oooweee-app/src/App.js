@@ -449,13 +449,6 @@ function App() {
     return Math.floor(oooweeeAmount);
   };
 
-  // Convert OOOWEEE to fiat
-  const convertOooweeeToFiat = (oooweeeAmount, currency = 'eur') => {
-    if (!ethPrice || !oooweeeAmount) return 0;
-    const ethValue = parseFloat(oooweeeAmount) * oooweeePrice;
-    return ethValue * (ethPrice[currency.toLowerCase()] || ethPrice.eur);
-  };
-
   // Open buy modal with a specific amount pre-filled
   const openBuyModalWithAmount = async (neededOooweee) => {
     setRequiredOooweeeForPurchase(neededOooweee);
