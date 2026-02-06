@@ -150,12 +150,13 @@ function App() {
     if (!stabilityContract || !savingsContract || !provider) return;
     
     try {
-      const [stabilityInfo, marketConditions, circuitBreaker, statsView, blockNumber] = await Promise.all([
+      const [stabilityInfo, marketConditions, circuitBreaker, statsView, blockNumber, checksEnabled] = await Promise.all([
         stabilityContract.getStabilityInfo(),
         stabilityContract.getMarketConditions(),
         stabilityContract.getCircuitBreakerStatus(),
         savingsContract.getStatsView(),
-        provider.getBlockNumber()
+        provider.getBlockNumber(),
+        stabilityContract.systemChecksEnabled()
       ]);
       
       const block = await provider.getBlock(blockNumber);
@@ -185,7 +186,8 @@ function App() {
         blockNumber: blockNumber,
         lastBlockTime: block.timestamp,
         isSequencerHealthy: true,
-        isPriceOracleHealthy: stabilityInfo[0].gt(0)
+        isPriceOracleHealthy: stabilityInfo[0].gt(0),
+        systemChecksEnabled: checksEnabled
       });
     } catch (error) {
       console.error('Error loading admin stats:', error);
@@ -200,6 +202,43 @@ function App() {
       return () => clearInterval(interval);
     }
   }, [account, activeTab, loadAdminStats]);
+
+  // Stability event alerting — listen for circuit breaker and interventions
+  useEffect(() => {
+    if (!stabilityContract || !account) return;
+    const isAdmin = account.toLowerCase() === ADMIN_WALLET.toLowerCase();
+
+    const onCircuitBreakerTripped = (reason) => {
+      toast.error(`Circuit breaker tripped: ${reason}`, { duration: 10000 });
+      if (isAdmin) loadAdminStats();
+    };
+
+    const onIntervention = (tokensInjected, ethCaptured) => {
+      if (isAdmin) {
+        const tokens = parseFloat(ethers.utils.formatUnits(tokensInjected, 18)).toLocaleString();
+        const eth = parseFloat(ethers.utils.formatEther(ethCaptured)).toFixed(4);
+        toast(`Stability intervention: ${tokens} tokens sold for ${eth} ETH`, { duration: 8000 });
+        loadAdminStats();
+      }
+    };
+
+    const onCircuitBreakerReset = () => {
+      if (isAdmin) {
+        toast.success('Circuit breaker reset', { duration: 5000 });
+        loadAdminStats();
+      }
+    };
+
+    stabilityContract.on('CircuitBreakerTripped', onCircuitBreakerTripped);
+    stabilityContract.on('StabilityIntervention', onIntervention);
+    stabilityContract.on('CircuitBreakerReset', onCircuitBreakerReset);
+
+    return () => {
+      stabilityContract.off('CircuitBreakerTripped', onCircuitBreakerTripped);
+      stabilityContract.off('StabilityIntervention', onIntervention);
+      stabilityContract.off('CircuitBreakerReset', onCircuitBreakerReset);
+    };
+  }, [stabilityContract, account, loadAdminStats]);
 
   // Admin functions
   const resetCircuitBreaker = async () => {
@@ -223,10 +262,11 @@ function App() {
   const toggleSystemChecks = async () => {
     try {
       setLoading(true);
-      const tx = await stabilityContract.toggleSystemChecks();
+      const newState = !adminStats.systemChecksEnabled;
+      const tx = await stabilityContract.setChecksEnabled(newState);
       await toast.promise(tx.wait(), {
-        loading: '🔧 Toggling system checks...',
-        success: '✅ System checks toggled!',
+        loading: newState ? '▶️ Resuming checks...' : '⏸️ Pausing checks...',
+        success: newState ? '✅ Checks resumed!' : '✅ Checks paused!',
         error: '❌ Failed to toggle'
       });
       await loadAdminStats();
@@ -258,41 +298,6 @@ function App() {
     }
   };
   
-  const updateBaselinePrice = async () => {
-    try {
-      setLoading(true);
-      const tx = await stabilityContract.updateBaselinePrice();
-      await toast.promise(tx.wait(), {
-        loading: '📊 Updating baseline price...',
-        success: '✅ Baseline price updated!',
-        error: '❌ Failed to update baseline'
-      });
-      await loadAdminStats();
-    } catch (error) {
-      console.error(error);
-      toast.error('Failed to update baseline: ' + (error.reason || error.message));
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  const triggerSystemCheck = async () => {
-    try {
-      setLoading(true);
-      const tx = await stabilityContract.systemStabilityCheck();
-      await toast.promise(tx.wait(), {
-        loading: '⚡ Triggering system stability check...',
-        success: '✅ System check triggered!',
-        error: '❌ Check failed'
-      });
-      await loadAdminStats();
-    } catch (error) {
-      console.error(error);
-      toast.error('Failed to trigger system check: ' + (error.reason || error.message));
-    } finally {
-      setLoading(false);
-    }
-  };
   
   // Initialize on load
   useEffect(() => {
@@ -1573,42 +1578,28 @@ function App() {
         
         {/* Emergency Controls */}
         <div className="emergency-controls-section">
-          <h3>Admin Controls</h3>
+          <h3>Emergency Controls</h3>
           <div className="control-buttons-grid">
-            <button 
-              className="admin-btn primary"
-              onClick={updateBaselinePrice}
-              disabled={loading}
-            >
-              📊 Update Baseline Price
-            </button>
-            <button 
-              className="admin-btn primary"
-              onClick={triggerSystemCheck}
-              disabled={loading}
-            >
-              ⚡ Trigger System Check
-            </button>
-            <button 
+            <button
               className="admin-btn secondary"
               onClick={manualStabilityCheck}
               disabled={loading}
             >
-              🔍 Manual Check (0.01 ETH)
+              Manual Check (0.01 ETH)
             </button>
-            <button 
+            <button
               className="admin-btn warning"
               onClick={resetCircuitBreaker}
               disabled={loading || !adminStats.circuitBreakerTripped}
             >
               Reset Circuit Breaker
             </button>
-            <button 
+            <button
               className="admin-btn secondary"
               onClick={toggleSystemChecks}
               disabled={loading}
             >
-              {adminStats.systemChecksEnabled ? '⏸️ Pause' : '▶️ Resume'} Checks
+              {adminStats.systemChecksEnabled ? 'Pause Checks' : 'Resume Checks'}
             </button>
           </div>
         </div>
