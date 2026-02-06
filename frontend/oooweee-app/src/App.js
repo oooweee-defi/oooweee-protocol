@@ -145,15 +145,6 @@ function App() {
     priceIncreasePercent: 0
   });
   
-  // Admin refresh interval
-  useEffect(() => {
-    if (account?.toLowerCase() === ADMIN_WALLET.toLowerCase() && activeTab === 'admin') {
-      loadAdminStats();
-      const interval = setInterval(loadAdminStats, 5000);
-      return () => clearInterval(interval);
-    }
-  }, [account, activeTab, stabilityContract, savingsContract, provider]);
-  
   // Load admin statistics
   const loadAdminStats = useCallback(async () => {
     if (!stabilityContract || !savingsContract || !provider) return;
@@ -200,7 +191,16 @@ function App() {
       console.error('Error loading admin stats:', error);
     }
   }, [stabilityContract, savingsContract, provider]);
-  
+
+  // Admin refresh interval
+  useEffect(() => {
+    if (account?.toLowerCase() === ADMIN_WALLET.toLowerCase() && activeTab === 'admin') {
+      loadAdminStats();
+      const interval = setInterval(loadAdminStats, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [account, activeTab, loadAdminStats]);
+
   // Admin functions
   const resetCircuitBreaker = async () => {
     try {
@@ -326,6 +326,7 @@ function App() {
     if (web3Modal && web3Modal.cachedProvider && !account && !isConnecting) {
       connectWallet();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [web3Modal]);
   
   // Format currency
@@ -455,12 +456,6 @@ function App() {
     return ethValue * (ethPrice[currency.toLowerCase()] || ethPrice.eur);
   };
 
-  // Check if deposit meets minimum €10 requirement
-  const checkMinimumDeposit = (oooweeeAmount) => {
-    const fiatValue = convertOooweeeToFiat(oooweeeAmount, 'eur');
-    return fiatValue >= 10; // €10 minimum
-  };
-
   // Open buy modal with a specific amount pre-filled
   const openBuyModalWithAmount = async (neededOooweee) => {
     setRequiredOooweeeForPurchase(neededOooweee);
@@ -577,49 +572,6 @@ function App() {
     } finally {
       setLoading(false);
     }
-  };
-
-  // Buy and create account - FIXED: Buy exactly the needed amount
-  const buyAndCreateAccount = async (requiredOooweee) => {
-    const result = await toast.promise(
-      new Promise(async (resolve, reject) => {
-        try {
-          setLoading(true);
-          
-          // Calculate exact tokens needed (rounded up)
-          const tokensNeeded = ethers.utils.parseUnits(Math.ceil(requiredOooweee).toString(), 18);
-          const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.OOOWEEEToken];
-          const deadline = Math.floor(Date.now() / 1000) + 3600;
-          
-          // Get ETH needed for exact token amount using getAmountsIn
-          const amountsIn = await routerContract.getAmountsIn(tokensNeeded, path);
-          // Add 5% buffer for price movement
-          const ethWithBuffer = amountsIn[0].mul(105).div(100);
-          
-          // Use swapETHForExactTokens to get EXACTLY the tokens we need
-          const tx = await routerContract.swapETHForExactTokens(
-            tokensNeeded,
-            path,
-            account,
-            deadline,
-            { value: ethWithBuffer }
-          );
-          
-          await tx.wait();
-          await loadBalances(account, provider, tokenContract);
-          resolve(true);
-        } catch (error) {
-          reject(error);
-        }
-      }),
-      {
-        loading: `🔄 Buying ${Math.ceil(requiredOooweee).toLocaleString()} OOOWEEE...`,
-        success: '✅ OOOWEEE purchased! Creating account...',
-        error: '❌ Failed to buy OOOWEEE'
-      }
-    );
-    
-    return result;
   };
 
   // Connect wallet - FIX: Prevent duplicate connections
@@ -890,7 +842,7 @@ function App() {
       }
       
       // Use getUserAccountCount to get TOTAL accounts (not just active ones)
-      const [totalCount, activeCount] = await savingsContractInstance.getUserAccountCount(userAccount);
+      const [totalCount] = await savingsContractInstance.getUserAccountCount(userAccount);
       const accountDetails = [];
       
       // Loop through ALL account IDs from 0 to total-1
@@ -945,27 +897,6 @@ function App() {
       setAccounts(accountDetails);
     } catch (error) {
       console.error('Error loading accounts:', error);
-    }
-  };
-
-  const claimRewards = async (accountId) => {
-    try {
-      setLoading(true);
-      const tx = await savingsContract.claimRewards(accountId);
-      
-      await toast.promise(tx.wait(), {
-        loading: '🎁 Claiming rewards...',
-        success: '✅ Rewards claimed!',
-        error: '❌ Failed to claim rewards'
-      });
-      
-      await loadSavingsAccounts(account, savingsContract, provider, routerContract, ethPrice);
-      
-    } catch (error) {
-      console.error(error);
-      toast.error('Failed to claim rewards');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -2347,7 +2278,6 @@ function App() {
                               <div className="deposit-section">
                                 {(() => {
                                   const currency = acc.isFiatTarget ? getCurrencyFromCode(acc.targetCurrency) : 'EUR';
-                                  const currencySymbol = CURRENCIES[currency.toUpperCase()]?.symbol || '€';
                                   return (
                                     <>
                                       <label className="deposit-label">Deposit ({currency})</label>
