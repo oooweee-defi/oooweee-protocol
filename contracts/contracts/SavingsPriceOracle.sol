@@ -118,7 +118,8 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
             return primaryPrice;
         }
 
-        (success, uint256 fallbackPrice) = _tryPriceSource(PriceSource.FIXED_RATE, currency);
+        uint256 fallbackPrice;
+        (success, fallbackPrice) = _tryPriceSource(PriceSource.FIXED_RATE, currency);
         if (success && _isPriceReasonable(fallbackPrice, currency)) {
             return fallbackPrice;
         }
@@ -136,7 +137,8 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
             return primaryPrice;
         }
 
-        (success, uint256 fallbackPrice) = _tryPriceSource(PriceSource.FIXED_RATE, currency);
+        uint256 fallbackPrice;
+        (success, fallbackPrice) = _tryPriceSource(PriceSource.FIXED_RATE, currency);
         if (success && _isPriceReasonable(fallbackPrice, currency)) {
             return fallbackPrice;
         }
