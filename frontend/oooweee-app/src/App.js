@@ -145,15 +145,6 @@ function App() {
     priceIncreasePercent: 0
   });
   
-  // Admin refresh interval
-  useEffect(() => {
-    if (account?.toLowerCase() === ADMIN_WALLET.toLowerCase() && activeTab === 'admin') {
-      loadAdminStats();
-      const interval = setInterval(loadAdminStats, 5000);
-      return () => clearInterval(interval);
-    }
-  }, [account, activeTab, stabilityContract, savingsContract, provider]);
-  
   // Load admin statistics
   const loadAdminStats = useCallback(async () => {
     if (!stabilityContract || !savingsContract || !provider) return;
@@ -200,7 +191,16 @@ function App() {
       console.error('Error loading admin stats:', error);
     }
   }, [stabilityContract, savingsContract, provider]);
-  
+
+  // Admin refresh interval
+  useEffect(() => {
+    if (account?.toLowerCase() === ADMIN_WALLET.toLowerCase() && activeTab === 'admin') {
+      loadAdminStats();
+      const interval = setInterval(loadAdminStats, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [account, activeTab, loadAdminStats]);
+
   // Admin functions
   const resetCircuitBreaker = async () => {
     try {
@@ -326,6 +326,7 @@ function App() {
     if (web3Modal && web3Modal.cachedProvider && !account && !isConnecting) {
       connectWallet();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [web3Modal]);
   
   // Format currency
@@ -455,12 +456,6 @@ function App() {
     return ethValue * (ethPrice[currency.toLowerCase()] || ethPrice.eur);
   };
 
-  // Check if deposit meets minimum €10 requirement
-  const checkMinimumDeposit = (oooweeeAmount) => {
-    const fiatValue = convertOooweeeToFiat(oooweeeAmount, 'eur');
-    return fiatValue >= 10; // €10 minimum
-  };
-
   // Open buy modal with a specific amount pre-filled
   const openBuyModalWithAmount = async (neededOooweee) => {
     setRequiredOooweeeForPurchase(neededOooweee);
@@ -577,49 +572,6 @@ function App() {
     } finally {
       setLoading(false);
     }
-  };
-
-  // Buy and create account - FIXED: Buy exactly the needed amount
-  const buyAndCreateAccount = async (requiredOooweee) => {
-    const result = await toast.promise(
-      new Promise(async (resolve, reject) => {
-        try {
-          setLoading(true);
-          
-          // Calculate exact tokens needed (rounded up)
-          const tokensNeeded = ethers.utils.parseUnits(Math.ceil(requiredOooweee).toString(), 18);
-          const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.OOOWEEEToken];
-          const deadline = Math.floor(Date.now() / 1000) + 3600;
-          
-          // Get ETH needed for exact token amount using getAmountsIn
-          const amountsIn = await routerContract.getAmountsIn(tokensNeeded, path);
-          // Add 5% buffer for price movement
-          const ethWithBuffer = amountsIn[0].mul(105).div(100);
-          
-          // Use swapETHForExactTokens to get EXACTLY the tokens we need
-          const tx = await routerContract.swapETHForExactTokens(
-            tokensNeeded,
-            path,
-            account,
-            deadline,
-            { value: ethWithBuffer }
-          );
-          
-          await tx.wait();
-          await loadBalances(account, provider, tokenContract);
-          resolve(true);
-        } catch (error) {
-          reject(error);
-        }
-      }),
-      {
-        loading: `🔄 Buying ${Math.ceil(requiredOooweee).toLocaleString()} OOOWEEE...`,
-        success: '✅ OOOWEEE purchased! Creating account...',
-        error: '❌ Failed to buy OOOWEEE'
-      }
-    );
-    
-    return result;
   };
 
   // Connect wallet - FIX: Prevent duplicate connections
@@ -890,7 +842,7 @@ function App() {
       }
       
       // Use getUserAccountCount to get TOTAL accounts (not just active ones)
-      const [totalCount, activeCount] = await savingsContractInstance.getUserAccountCount(userAccount);
+      const [totalCount] = await savingsContractInstance.getUserAccountCount(userAccount);
       const accountDetails = [];
       
       // Loop through ALL account IDs from 0 to total-1
@@ -945,27 +897,6 @@ function App() {
       setAccounts(accountDetails);
     } catch (error) {
       console.error('Error loading accounts:', error);
-    }
-  };
-
-  const claimRewards = async (accountId) => {
-    try {
-      setLoading(true);
-      const tx = await savingsContract.claimRewards(accountId);
-      
-      await toast.promise(tx.wait(), {
-        loading: '🎁 Claiming rewards...',
-        success: '✅ Rewards claimed!',
-        error: '❌ Failed to claim rewards'
-      });
-      
-      await loadSavingsAccounts(account, savingsContract, provider, routerContract, ethPrice);
-      
-    } catch (error) {
-      console.error(error);
-      toast.error('Failed to claim rewards');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -1302,17 +1233,17 @@ function App() {
       </div>
 
       <div className="about-section">
-        <h2>🎯 The Problem</h2>
+        <h2>The Problem</h2>
         <p>Traditional banks make it too easy to break your savings goals. That "7-day cooling period"? You can still break it. Those withdrawal fees? They're not enough to stop impulsive spending.</p>
       </div>
 
       <div className="about-section">
-        <h2>💡 The Solution</h2>
+        <h2>The Solution</h2>
         <p>OOOWEEE creates truly immutable savings accounts using smart contracts. When you lock your funds, they're REALLY locked - no bank manager can override it, no "forgot password" backdoor. Your future self will thank you.</p>
       </div>
 
       <div className="value-flow">
-        <h2>🔄 How It Works</h2>
+        <h2>How It Works</h2>
         <div className="flow-diagram">
           <div className="flow-step">
             <span className="step-icon">📈</span>
@@ -1341,7 +1272,7 @@ function App() {
       </div>
 
       <div className="tokenomics-section">
-        <h2>📊 Tokenomics</h2>
+        <h2>Tokenomics</h2>
         <div className="tokenomics-grid">
           <div className="token-stat">
             <h4>Total Supply</h4>
@@ -1363,7 +1294,7 @@ function App() {
       </div>
 
       <div className="cta-section">
-        <h2>🚀 Join the Revolution</h2>
+        <h2>Join the Revolution</h2>
         <p>Take control of your financial future. Start saving with OOOWEEE today.</p>
         <button onClick={() => setActiveTab('dashboard')} className="cta-button rainbow-btn">
           Start Saving Now
@@ -1376,13 +1307,13 @@ function App() {
   const renderCommunityPage = () => (
     <div className="community-page">
       <div className="community-header">
-        <h1>🌟 OOOWEEE Community</h1>
+        <h1>OOOWEEE Community</h1>
         <p>Supporting the network, together!</p>
       </div>
 
       {/* Validator Network Stats */}
       <div className="community-card validator-stats-card">
-        <h2>🔐 Validator Network</h2>
+        <h2>Validator Network</h2>
         <div className="validator-metrics">
           <div className="metric-item">
             <span className="metric-icon">🖥️</span>
@@ -1426,7 +1357,7 @@ function App() {
         </div>
         
         <div className="donation-stats">
-          <p>💝 Total Community Donations: {parseFloat(validatorStats.totalDonations).toFixed(4)} ETH</p>
+          <p>Total Community Donations: {parseFloat(validatorStats.totalDonations).toFixed(4)} ETH</p>
           <p>👥 Total Donors: {validatorStats.donors}</p>
         </div>
         
@@ -1440,7 +1371,7 @@ function App() {
       {/* Donor Leaderboard */}
       {donorLeaderboard.length > 0 && (
         <div className="community-card leaderboard-card">
-          <h2>🏆 Top Donors</h2>
+          <h2>Top Donors</h2>
           <div className="leaderboard-list">
             {donorLeaderboard.map((donor, index) => (
               <div key={index} className={`leaderboard-entry ${index === 0 ? 'gold' : index === 1 ? 'silver' : 'bronze'}`}>
@@ -1461,7 +1392,7 @@ function App() {
       {/* Community Shoutout */}
       {donorShoutout && (
         <div className="community-card shoutout-card">
-          <h2>📣 Community Message</h2>
+          <h2>Community Message</h2>
           <div className="shoutout-content-wrapper">
             <div className="shoutout-icon">💖</div>
             <div className="shoutout-content">
@@ -1478,7 +1409,7 @@ function App() {
 
       {/* How to Support */}
       <div className="community-card support-card">
-        <h2>💪 How You Can Support</h2>
+        <h2>How You Can Support</h2>
         <div className="support-methods">
           <div className="support-item">
             <span className="support-icon">💝</span>
@@ -1501,7 +1432,7 @@ function App() {
       {!account && (
         <div className="community-cta">
           <button onClick={connectWallet} className="connect-btn rainbow-btn" disabled={isConnecting}>
-            <span>🔗</span> Connect Wallet to Participate
+            Connect Wallet to Participate
           </button>
         </div>
       )}
@@ -1512,13 +1443,13 @@ function App() {
   const renderAdminDashboard = () => (
     <div className="admin-dashboard">
       <div className="admin-header">
-        <h1>🔧 Protocol Admin Dashboard</h1>
+        <h1>Protocol Admin Dashboard</h1>
         <p className="admin-address">Connected: {account.slice(0, 6)}...{account.slice(-4)}</p>
       </div>
       
       {/* System Health Overview */}
       <div className="admin-section">
-        <h2>🟢 System Health</h2>
+        <h2>System Health</h2>
         <div className="admin-grid-4">
           <div className="admin-card">
             <div className="admin-card-icon">{adminStats.isSequencerHealthy ? '✅' : '🔴'}</div>
@@ -1553,7 +1484,7 @@ function App() {
       
       {/* Protocol Metrics */}
       <div className="admin-section">
-        <h2>📊 Protocol Metrics</h2>
+        <h2>Protocol Metrics</h2>
         <div className="admin-grid-4">
           <div className="admin-card metric">
             <h4>Total Value Locked</h4>
@@ -1581,7 +1512,7 @@ function App() {
       
       {/* Stability Mechanism */}
       <div className="admin-section">
-        <h2>🛡️ Stability Mechanism (SSA)</h2>
+        <h2>Stability Mechanism (SSA)</h2>
         
         <div className="stability-info-banner">
           <div className="stability-price-info">
@@ -1642,7 +1573,7 @@ function App() {
         
         {/* Emergency Controls */}
         <div className="emergency-controls-section">
-          <h3>⚠️ Admin Controls</h3>
+          <h3>Admin Controls</h3>
           <div className="control-buttons-grid">
             <button 
               className="admin-btn primary"
@@ -1670,7 +1601,7 @@ function App() {
               onClick={resetCircuitBreaker}
               disabled={loading || !adminStats.circuitBreakerTripped}
             >
-              🔧 Reset Circuit Breaker
+              Reset Circuit Breaker
             </button>
             <button 
               className="admin-btn secondary"
@@ -1685,7 +1616,7 @@ function App() {
       
       {/* Validator Network */}
       <div className="admin-section">
-        <h2>🔐 Validator Network</h2>
+        <h2>Validator Network</h2>
         <div className="admin-grid-4">
           <div className="admin-card">
             <h4>Active Validators</h4>
@@ -1719,7 +1650,7 @@ function App() {
       
       {/* Quick Actions */}
       <div className="admin-section">
-        <h2>⚡ Quick Actions</h2>
+        <h2>Quick Actions</h2>
         <div className="action-buttons-grid">
           <button className="action-btn" onClick={() => window.location.reload()}>
             🔄 Refresh Dashboard
@@ -1755,7 +1686,7 @@ function App() {
       {showBuyModal && (
         <div className="modal-overlay" onClick={() => { setShowBuyModal(false); setRequiredOooweeeForPurchase(null); }}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h2>🛒 Buy $OOOWEEE</h2>
+            <h2>Buy $OOOWEEE</h2>
             <button className="close-modal" onClick={() => { setShowBuyModal(false); setRequiredOooweeeForPurchase(null); }}>✕</button>
             
             <div className="buy-form">
@@ -1834,7 +1765,7 @@ function App() {
       {showDonateModal && (
         <div className="modal-overlay" onClick={() => { setShowDonateModal(false); setDonorMessage(''); setDonorName(''); setDonorLocation(''); }}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h2>💝 Donate to Validators</h2>
+            <h2>Donate to Validators</h2>
             <button className="close-modal" onClick={() => { setShowDonateModal(false); setDonorMessage(''); setDonorName(''); setDonorLocation(''); }}>✕</button>
             
             <div className="buy-form">
@@ -1919,26 +1850,26 @@ function App() {
       {showCreateModal && (
         <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
           <div className="modal-content create-modal" onClick={(e) => e.stopPropagation()}>
-            <h2>🎮 Start New Savings Quest</h2>
+            <h2>New Savings Account</h2>
             <button className="close-modal" onClick={() => setShowCreateModal(false)}>✕</button>
             
             <div className="buy-form">
               <div className="form-group">
-                <label>Quest Type:</label>
+                <label>Account Type:</label>
                 <select 
                   id="accountType" 
                   value={accountType}
                   onChange={(e) => setAccountType(e.target.value)}
                   className="select-input"
                 >
-                  <option value="time">⏰ Time Quest - Lock until date</option>
-                  <option value="growth">🌱 Growth Quest - Grow to target</option>
-                  <option value="balance">⚖️ Balance Quest - Send at target</option>
+                  <option value="time">Time Lock - Lock until date</option>
+                  <option value="growth">Growth Goal - Grow to target</option>
+                  <option value="balance">Transfer Goal - Send at target</option>
                 </select>
               </div>
               
               <div className="form-group">
-                <label>💱 Display Currency:</label>
+                <label>Display Currency:</label>
                 <select 
                   value={accountCurrency}
                   onChange={(e) => setAccountCurrency(e.target.value)}
@@ -1951,7 +1882,7 @@ function App() {
               </div>
               
               <div className="form-group">
-                <label>Quest Name:</label>
+                <label>Account Name:</label>
                 <input 
                   type="text" 
                   placeholder="e.g., Epic Vacation" 
@@ -1961,7 +1892,7 @@ function App() {
               </div>
               
               <div className="form-group">
-                <label>💰 Initial Deposit ({CURRENCIES[accountCurrency].symbol}):</label>
+                <label>Initial Deposit ({CURRENCIES[accountCurrency].symbol}):</label>
                 <input 
                   type="number" 
                   placeholder={`Deposit in ${CURRENCIES[accountCurrency].name}`}
@@ -1977,7 +1908,7 @@ function App() {
                     ≈ {convertFiatToOooweee(initialDepositInput, accountCurrency.toLowerCase()).toLocaleString()} $OOOWEEE at current rate
                   </p>
                 )}
-                <p className="fee-note">💡 1% creation fee from initial deposit</p>
+                <p className="fee-note">1% creation fee from initial deposit</p>
                 <p className="fee-note">📋 Minimum deposit: €10 equivalent</p>
                 {initialDepositInput && parseFloat(initialDepositInput) < 10 && accountCurrency === 'EUR' && (
                   <p className="error-note">⚠️ Minimum deposit is €10</p>
@@ -2056,48 +1987,32 @@ function App() {
         </div>
       )}
       
-      <div className="floating-coins">
-        {[...Array(10)].map((_, i) => (
-          <div
-            key={i}
-            className="coin"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 3}s`
-            }}
-          >
-            🪙
-          </div>
-        ))}
-      </div>
-      
       <header className="App-header">
         <div className="tab-navigation">
           <button 
             className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
             onClick={() => setActiveTab('dashboard')}
           >
-            🎮 Dashboard
+            Dashboard
           </button>
           <button 
             className={`tab-btn ${activeTab === 'community' ? 'active' : ''}`}
             onClick={() => setActiveTab('community')}
           >
-            🌟 Community
+            Community
           </button>
           <button 
             className={`tab-btn ${activeTab === 'about' ? 'active' : ''}`}
             onClick={() => setActiveTab('about')}
           >
-            📖 About
+            About
           </button>
           {account?.toLowerCase() === ADMIN_WALLET.toLowerCase() && (
             <button 
               className={`tab-btn admin-tab ${activeTab === 'admin' ? 'active' : ''}`}
               onClick={() => setActiveTab('admin')}
             >
-              🔧 Admin
+              Admin
             </button>
           )}
         </div>
@@ -2134,7 +2049,7 @@ function App() {
             {!account ? (
               <div className="connect-section">
                 <div className="welcome-card">
-                  <h3>🎮 Welcome to Digital Savings!</h3>
+                  <h3>Welcome to OOOWEEE</h3>
                   <div className="feature-grid">
                     <div className="feature">
                       <span className="icon">🏦</span>
@@ -2154,17 +2069,17 @@ function App() {
                   </div>
                 </div>
                 <button onClick={connectWallet} className="connect-btn rainbow-btn" disabled={isConnecting}>
-                  <span>🔗</span> {isConnecting ? 'Connecting...' : 'Connect Wallet'}
+                  {isConnecting ? 'Connecting...' : 'Connect Wallet'}
                 </button>
                 <p className="info-text">Works with MetaMask, Trust Wallet, and more!</p>
-                <p className="disclaimer">💡 Values shown in your selected currency are estimates based on current market rates</p>
+                <p className="disclaimer">Values shown in your selected currency are estimates based on current market rates</p>
               </div>
             ) : (
               <div className="dashboard">
                 <div className="wallet-info">
                   <div className="wallet-card">
                     <div className="wallet-header">
-                      <h3>💰 Wallet Status</h3>
+                      <h3>Wallet</h3>
                       <span className="address">{account.slice(0, 6)}...{account.slice(-4)}</span>
                       <button onClick={disconnectWallet} className="disconnect-btn">Disconnect</button>
                     </div>
@@ -2174,13 +2089,13 @@ function App() {
                         className={`toggle-btn ${displayCurrency === 'crypto' ? 'active' : ''}`}
                         onClick={() => setDisplayCurrency('crypto')}
                       >
-                        🪙 Crypto
+                        Crypto
                       </button>
                       <button 
                         className={`toggle-btn ${displayCurrency === 'fiat' ? 'active' : ''}`}
                         onClick={() => setDisplayCurrency('fiat')}
                       >
-                        💶 EUR
+                        EUR
                       </button>
                     </div>
                     
@@ -2204,7 +2119,7 @@ function App() {
                     
                     {parseFloat(balance) === 0 && (
                       <div className="zero-balance-notice">
-                        <p>👋 No OOOWEEE yet? Get started!</p>
+                        <p>No OOOWEEE yet? Get started!</p>
                       </div>
                     )}
                     
@@ -2212,14 +2127,14 @@ function App() {
                       className="add-oooweee-btn rainbow-btn"
                       onClick={() => setShowBuyModal(true)}
                     >
-                      🛒 Buy $OOOWEEE
+                      Buy $OOOWEEE
                     </button>
                     
                     <button 
                       className="create-savings-btn"
                       onClick={() => setShowCreateModal(true)}
                     >
-                      🎮 New Savings Quest
+                      New Savings Account
                     </button>
                   </div>
                 </div>
@@ -2228,10 +2143,10 @@ function App() {
                   {activeAccounts.length > 0 && (
                     <>
                       <div className="section-header">
-                        <h2>🎮 Your Active Quests</h2>
+                        <h2>Your Accounts</h2>
                         {activeAccounts.some(acc => parseFloat(acc.pendingRewards) > 0) && (
                           <button className="claim-all-btn" onClick={claimAllRewards} disabled={loading}>
-                            🎁 Claim All Rewards
+                            Claim All Rewards
                           </button>
                         )}
                       </div>
@@ -2329,7 +2244,7 @@ function App() {
                                       <span>To:</span>
                                       <span className="value address">{acc.recipient.slice(0, 6)}...{acc.recipient.slice(-4)}</span>
                                     </div>
-                                    <p className="info-note">📝 Need 101% for auto-transfer</p>
+                                    <p className="info-note">Need 101% for auto-transfer</p>
                                   </>
                                 )}
                                 
@@ -2347,7 +2262,6 @@ function App() {
                               <div className="deposit-section">
                                 {(() => {
                                   const currency = acc.isFiatTarget ? getCurrencyFromCode(acc.targetCurrency) : 'EUR';
-                                  const currencySymbol = CURRENCIES[currency.toUpperCase()]?.symbol || '€';
                                   return (
                                     <>
                                       <label className="deposit-label">Deposit ({currency})</label>
@@ -2391,7 +2305,7 @@ function App() {
                                   disabled={loading}
                                   className="deposit-btn"
                                 >
-                                  💰 DEPOSIT
+                                  DEPOSIT
                                 </button>
                               </div>
                             </div>
@@ -2412,7 +2326,7 @@ function App() {
                     
                     {showCompleted && (
                       <div className="completed-section">
-                        <h3>✅ Completed Quests</h3>
+                        <h3>Completed Accounts</h3>
                         <div className="accounts-grid">
                           {completedAccounts.map(acc => {
                             const currency = getCurrencyFromCode(acc.targetCurrency);
@@ -2424,14 +2338,14 @@ function App() {
                                   <h3>{acc.goalName}</h3>
                                   <div className="header-badges">
                                     <span className={`account-type ${acc.type.toLowerCase()}`}>
-                                      {acc.type === 'Time' ? '⏰' : acc.type === 'Growth' ? '🌱' : '⚖️'} {acc.type}
+                                      {acc.type}
                                     </span>
                                     <span className="currency-badge">{currency}</span>
                                   </div>
                                 </div>
                                 
                                 <div className="account-details">
-                                  <p className="completed-text">🏆 Quest Complete!</p>
+                                  <p className="completed-text">Goal Complete!</p>
                                   
                                   {acc.isFiatTarget ? (
                                     <>
