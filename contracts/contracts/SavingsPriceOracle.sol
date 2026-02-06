@@ -12,7 +12,7 @@ import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
  * @notice Provides OOOWEEE price in USD/EUR/GBP using Chainlink + Uniswap reserves
  * @dev Two-step price calculation:
  *      1. Get ETH/USD (or EUR/GBP) from Chainlink (trusted, 8 decimals)
- *      2. Get OOOWEEE/ETH from Uniswap V2 pool reserves (real-time market price)
+ *      2. Get OOOWEEE/ETH from Uniswap V2 pool reserves (spot or TWAP)
  *      3. Multiply to get OOOWEEE/USD (or EUR/GBP)
  *
  * Chainlink mainnet feeds:
@@ -22,6 +22,8 @@ import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
  *
  * For EUR and GBP, we use cross-rates:
  *   OOOWEEE/EUR = (OOOWEEE/ETH * ETH/USD) / EUR/USD
+ *
+ * TWAP is used for withdrawal validation to prevent flash loan manipulation.
  */
 contract SavingsPriceOracle is Ownable, ReentrancyGuard {
 
@@ -30,16 +32,7 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
     enum PriceSource {
         CHAINLINK_UNISWAP,
         UNISWAP_TWAP,
-        MANUAL_ORACLE,
-        FIXED_RATE,
-        MULTI_POOL_AVERAGE
-    }
-
-    struct LiquidityPoolInfo {
-        address pool;
-        uint256 weight;
-        uint256 lastValidPrice;
-        uint256 lastValidTimestamp;
+        FIXED_RATE
     }
 
     uint256 public constant PRICE_STALENESS_THRESHOLD = 1 hours;
@@ -56,15 +49,27 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
     PriceSource public activePriceSource = PriceSource.CHAINLINK_UNISWAP;
     bool public emergencyPriceMode;
 
-    LiquidityPoolInfo[] public liquidityPools;
+    // ============ Price Cache ============
+
+    uint256 public lastValidPrice;
+    uint256 public lastValidPriceTimestamp;
+
+    // ============ TWAP State ============
+
+    uint256 public twapPrice0CumulativeLast;
+    uint256 public twapPrice1CumulativeLast;
+    uint32 public twapTimestampLast;
+    uint256 public twapPriceAverage;           // OOOWEEE price in ETH, scaled by 1e18
+    uint256 public constant TWAP_PERIOD = 30 minutes;
+
+    // ============ Events ============
 
     event PriceFeedUpdated(Currency currency, address feed);
     event PriceSourceChanged(PriceSource oldSource, PriceSource newSource);
     event EmergencyPriceModeActivated(string reason);
     event ManualPriceSet(Currency currency, uint256 price);
-    event PoolAdded(address pool, uint256 weight);
-    event PoolDeactivated(address pool, string reason);
     event PoolAddressSet(address indexed pool);
+    event TWAPUpdated(uint256 twapPriceAverage, uint32 timestamp);
 
     constructor(address _uniswapRouter) Ownable() {
         uniswapRouter = IUniswapV2Router02(_uniswapRouter);
@@ -111,10 +116,8 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
         (bool success, uint256 primaryPrice) = _tryPriceSource(activePriceSource, currency);
 
         if (success && _isPriceReasonable(primaryPrice, currency)) {
-            if (liquidityPools.length > 0) {
-                liquidityPools[0].lastValidPrice = primaryPrice;
-                liquidityPools[0].lastValidTimestamp = block.timestamp;
-            }
+            lastValidPrice = primaryPrice;
+            lastValidPriceTimestamp = block.timestamp;
             return primaryPrice;
         }
 
@@ -146,6 +149,109 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
         return _getEmergencyPrice(currency);
     }
 
+    /**
+     * @notice Get OOOWEEE price validated against TWAP to prevent flash loan manipulation
+     * @dev Returns the lower of spot and TWAP, or TWAP alone if >10% divergence.
+     *      Used by OOOWEEESavings for withdrawal checks.
+     * @param currency Target currency
+     * @return Price in smallest currency unit
+     */
+    function getValidatedOooweeePrice(Currency currency) public returns (uint256) {
+        updateTWAP();
+
+        (bool spotSuccess, uint256 spotPrice) = _getChainlinkUniswapPrice(currency);
+        (bool twapSuccess, uint256 twapPrice) = _getUniswapTWAPPrice(currency);
+
+        if (spotSuccess && twapSuccess) {
+            uint256 lower = spotPrice < twapPrice ? spotPrice : twapPrice;
+            uint256 higher = spotPrice >= twapPrice ? spotPrice : twapPrice;
+
+            // If divergence > 10%, use TWAP (more manipulation-resistant)
+            if (higher > (lower * 110) / 100) {
+                return twapPrice;
+            }
+            return lower;
+        }
+
+        if (twapSuccess) return twapPrice;
+        if (spotSuccess) return spotPrice;
+
+        return _getEmergencyPrice(currency);
+    }
+
+    /**
+     * @notice View version of getValidatedOooweeePrice
+     */
+    function getValidatedOooweeePriceView(Currency currency) public view returns (uint256) {
+        (bool spotSuccess, uint256 spotPrice) = _getChainlinkUniswapPrice(currency);
+        (bool twapSuccess, uint256 twapPrice) = _getUniswapTWAPPrice(currency);
+
+        if (spotSuccess && twapSuccess) {
+            uint256 lower = spotPrice < twapPrice ? spotPrice : twapPrice;
+            uint256 higher = spotPrice >= twapPrice ? spotPrice : twapPrice;
+
+            if (higher > (lower * 110) / 100) {
+                return twapPrice;
+            }
+            return lower;
+        }
+
+        if (twapSuccess) return twapPrice;
+        if (spotSuccess) return spotPrice;
+
+        return _getEmergencyPrice(currency);
+    }
+
+    // ============ TWAP ============
+
+    /**
+     * @notice Update the TWAP accumulator snapshot
+     * @dev Uses Uniswap V2's built-in price0CumulativeLast/price1CumulativeLast.
+     *      Can be called by anyone. Must be called at least every TWAP_PERIOD
+     *      for the TWAP to remain fresh.
+     *
+     *      Uniswap V2 cumulative prices use intentional uint256 overflow,
+     *      so subtraction is done in an unchecked block (correct modulo 2^256).
+     */
+    function updateTWAP() public {
+        if (oooweeePool == address(0)) return;
+
+        IUniswapV2Pair pair = IUniswapV2Pair(oooweeePool);
+
+        uint256 price0Cumulative = pair.price0CumulativeLast();
+        uint256 price1Cumulative = pair.price1CumulativeLast();
+        (, , uint32 blockTimestampLast) = pair.getReserves();
+
+        // Use pair's last sync timestamp for accuracy
+        uint32 timeElapsed = blockTimestampLast - twapTimestampLast;
+        if (timeElapsed < uint32(TWAP_PERIOD) && twapTimestampLast != 0) return;
+
+        if (twapTimestampLast != 0 && timeElapsed > 0) {
+            address token0 = pair.token0();
+
+            // Uniswap V2 cumulative prices overflow intentionally — unchecked is correct
+            unchecked {
+                if (token0 == uniswapRouter.WETH()) {
+                    // token0 = WETH, token1 = OOOWEEE
+                    // price1CumulativeLast = cumulative(reserve0 / reserve1) = cumulative(WETH/OOOWEEE)
+                    uint256 delta = price1Cumulative - twapPrice1CumulativeLast;
+                    twapPriceAverage = (delta * 1e18) / (uint256(timeElapsed) << 112);
+                } else {
+                    // token0 = OOOWEEE, token1 = WETH
+                    // price0CumulativeLast = cumulative(reserve1 / reserve0) = cumulative(WETH/OOOWEEE)
+                    uint256 delta = price0Cumulative - twapPrice0CumulativeLast;
+                    twapPriceAverage = (delta * 1e18) / (uint256(timeElapsed) << 112);
+                }
+            }
+
+            emit TWAPUpdated(twapPriceAverage, blockTimestampLast);
+        }
+
+        twapPrice0CumulativeLast = price0Cumulative;
+        twapPrice1CumulativeLast = price1Cumulative;
+        twapTimestampLast = blockTimestampLast;
+    }
+
     // ============ Internal Price Sources ============
 
     function _tryPriceSource(PriceSource source, Currency currency)
@@ -155,18 +261,14 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
             return _getChainlinkUniswapPrice(currency);
         } else if (source == PriceSource.UNISWAP_TWAP) {
             return _getUniswapTWAPPrice(currency);
-        } else if (source == PriceSource.MANUAL_ORACLE) {
-            return _getManualPrice(currency);
         } else if (source == PriceSource.FIXED_RATE) {
             return _getFixedRate(currency);
-        } else if (source == PriceSource.MULTI_POOL_AVERAGE) {
-            return _getMultiPoolAverage(currency);
         }
         return (false, 0);
     }
 
     /**
-     * @notice OOOWEEE price via Chainlink ETH/fiat + Uniswap OOOWEEE/ETH
+     * @notice OOOWEEE price via Chainlink ETH/fiat + Uniswap OOOWEEE/ETH spot
      */
     function _getChainlinkUniswapPrice(Currency currency)
         internal view returns (bool success, uint256 price)
@@ -201,19 +303,31 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
         }
     }
 
-    function _getUniswapTWAPPrice(Currency /* currency */)
+    /**
+     * @notice OOOWEEE price via Chainlink ETH/fiat + Uniswap V2 TWAP
+     */
+    function _getUniswapTWAPPrice(Currency currency)
         internal view returns (bool, uint256)
     {
-        // TWAP placeholder — implement if needed for additional resilience
-        return (false, 0);
-    }
+        if (twapPriceAverage == 0) return (false, 0);
 
-    function _getManualPrice(Currency currency)
-        internal view returns (bool, uint256)
-    {
-        uint256 price = defaultPrices[currency];
-        if (price == 0) return (false, 0);
-        return (true, price);
+        // Check TWAP freshness
+        uint32 currentTimestamp = uint32(block.timestamp % 2**32);
+        uint32 twapAge = currentTimestamp - twapTimestampLast;
+        if (twapAge > uint32(PRICE_STALENESS_THRESHOLD)) {
+            return (false, 0);
+        }
+
+        uint256 ethPrice = getETHPrice(currency);
+        if (ethPrice == 0) return (false, 0);
+
+        uint8 targetDecimals = currencyDecimals[currency];
+        if (targetDecimals == 0) targetDecimals = 4;
+
+        uint256 divisor = 10 ** (18 + CHAINLINK_DECIMALS - targetDecimals);
+        uint256 twapFiatPrice = (twapPriceAverage * ethPrice) / divisor;
+
+        return (true, twapFiatPrice);
     }
 
     function _getFixedRate(Currency currency)
@@ -222,51 +336,6 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
         uint256 price = emergencyFixedRates[currency];
         if (price == 0) return (false, 0);
         return (true, price);
-    }
-
-    function _getMultiPoolAverage(Currency currency)
-        internal view returns (bool, uint256)
-    {
-        if (liquidityPools.length == 0) return (false, 0);
-
-        uint256 totalWeightedPrice;
-        uint256 totalWeight;
-
-        for (uint256 i = 0; i < liquidityPools.length; i++) {
-            LiquidityPoolInfo storage poolInfo = liquidityPools[i];
-            if (poolInfo.pool == address(0) || poolInfo.weight == 0) continue;
-
-            try IUniswapV2Pair(poolInfo.pool).getReserves() returns (
-                uint112 reserve0, uint112 reserve1, uint32
-            ) {
-                if (reserve0 == 0 || reserve1 == 0) continue;
-
-                address token0 = IUniswapV2Pair(poolInfo.pool).token0();
-                uint256 priceInEth;
-                if (token0 == uniswapRouter.WETH()) {
-                    priceInEth = (uint256(reserve0) * 1e18) / uint256(reserve1);
-                } else {
-                    priceInEth = (uint256(reserve1) * 1e18) / uint256(reserve0);
-                }
-
-                uint256 ethPrice = getETHPrice(currency);
-                if (ethPrice == 0) continue;
-
-                uint8 targetDecimals = currencyDecimals[currency];
-                if (targetDecimals == 0) targetDecimals = 4;
-
-                uint256 divisor = 10 ** (18 + CHAINLINK_DECIMALS - targetDecimals);
-                uint256 poolPrice = (priceInEth * ethPrice) / divisor;
-
-                totalWeightedPrice += poolPrice * poolInfo.weight;
-                totalWeight += poolInfo.weight;
-            } catch {
-                continue;
-            }
-        }
-
-        if (totalWeight == 0) return (false, 0);
-        return (true, totalWeightedPrice / totalWeight);
     }
 
     function _isPriceReasonable(uint256 price, Currency currency)
@@ -282,11 +351,8 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
     }
 
     function _getEmergencyPrice(Currency currency) internal view returns (uint256) {
-        if (liquidityPools.length > 0) {
-            uint256 lastGood = liquidityPools[0].lastValidPrice;
-            if (lastGood > 0 && block.timestamp < liquidityPools[0].lastValidTimestamp + 24 hours) {
-                return lastGood;
-            }
+        if (lastValidPrice > 0 && block.timestamp < lastValidPriceTimestamp + 24 hours) {
+            return lastValidPrice;
         }
 
         uint256 fixedRate = emergencyFixedRates[currency];
@@ -331,29 +397,7 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
         if (enabled) emit EmergencyPriceModeActivated(reason);
     }
 
-    function addLiquidityPool(address pool, uint256 weight) external onlyOwner {
-        liquidityPools.push(LiquidityPoolInfo({
-            pool: pool,
-            weight: weight,
-            lastValidPrice: 0,
-            lastValidTimestamp: 0
-        }));
-        emit PoolAdded(pool, weight);
-    }
-
-    function removeLiquidityPool(uint256 index) external onlyOwner {
-        require(index < liquidityPools.length, "Invalid index");
-        address pool = liquidityPools[index].pool;
-        liquidityPools[index] = liquidityPools[liquidityPools.length - 1];
-        liquidityPools.pop();
-        emit PoolDeactivated(pool, "Removed");
-    }
-
     // ============ View ============
-
-    function getLiquidityPoolCount() external view returns (uint256) {
-        return liquidityPools.length;
-    }
 
     function getCurrencyDecimals(Currency currency) external view returns (uint8) {
         return currencyDecimals[currency];

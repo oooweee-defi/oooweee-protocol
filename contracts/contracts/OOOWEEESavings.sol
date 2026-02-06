@@ -23,6 +23,8 @@ import "./SavingsPriceOracle.sol";
  * No automation needed. The frontend shows users their current fiat value.
  * When they see it's hit target, they submit the withdrawal transaction.
  * The contract checks the oracle on-chain and either releases or reverts.
+ *
+ * Withdrawal checks use TWAP-validated prices to prevent flash loan manipulation.
  */
 contract OOOWEEESavings is ReentrancyGuard, Ownable {
     IERC20 public immutable oooweeeToken;
@@ -40,11 +42,12 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
         bool isFiatTarget;                              // 1 byte
         uint32 createdAt;                               // 4 bytes
         uint32 completedAt;                             // 4 bytes
-        // Slot 2: 32 bytes
+        // Slot 2: 24 bytes used
         address recipient;                              // 20 bytes
         uint32 unlockTime;                              // 4 bytes
-        uint64 lastRewardUpdate;                        // 8 bytes
-        // Slot 3-6: 32 bytes each
+        // Slot 3: 32 bytes (was uint64, now uint256 to prevent truncation)
+        uint256 lastRewardUpdate;
+        // Slot 4-7: 32 bytes each
         uint256 balance;
         uint256 targetAmount;
         uint256 targetFiat;
@@ -97,6 +100,7 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
         address indexed owner,
         uint256 indexed accountId,
         uint256 tokensAdded,
+        uint256 depositFee,
         uint256 newBalance
     );
     event GoalCompleted(
@@ -228,7 +232,7 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
             completedAt: 0,
             recipient: address(0),
             unlockTime: uint32(unlockTime),
-            lastRewardUpdate: uint64(globalRewardPerToken),
+            lastRewardUpdate: globalRewardPerToken,
             balance: depositAfterFee,
             targetAmount: 0,
             targetFiat: 0,
@@ -275,7 +279,7 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
             completedAt: 0,
             recipient: address(0),
             unlockTime: 0,
-            lastRewardUpdate: uint64(globalRewardPerToken),
+            lastRewardUpdate: globalRewardPerToken,
             balance: depositAfterFee,
             targetAmount: 0,
             targetFiat: targetFiatAmount,
@@ -323,7 +327,7 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
             completedAt: 0,
             recipient: recipient,
             unlockTime: 0,
-            lastRewardUpdate: uint64(globalRewardPerToken),
+            lastRewardUpdate: globalRewardPerToken,
             balance: depositAfterFee,
             targetAmount: 0,
             targetFiat: targetFiatAmount,
@@ -350,13 +354,22 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
 
         _updateAccountRewards(msg.sender, accountId);
 
+        // Charge the same fee rate as account creation to prevent bypass
+        uint256 depositFee = (amount * creationFeeRate) / FEE_DIVISOR;
+        uint256 depositAfterFee = amount - depositFee;
+
         require(oooweeeToken.transferFrom(msg.sender, address(this), amount), "Transfer failed");
 
-        account.balance += amount;
-        totalValueLocked += amount;
-        totalActiveBalance += amount;
+        if (depositFee > 0) {
+            oooweeeToken.transfer(feeCollector, depositFee);
+            totalFeesCollected += depositFee;
+        }
 
-        emit Deposited(msg.sender, accountId, amount, account.balance);
+        account.balance += depositAfterFee;
+        totalValueLocked += depositAfterFee;
+        totalActiveBalance += depositAfterFee;
+
+        emit Deposited(msg.sender, accountId, depositAfterFee, depositFee, account.balance);
     }
 
     // ============ Withdrawal (User-Initiated, Self-Paid Gas) ============
@@ -366,7 +379,7 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
      * @dev The frontend shows the user their fiat value. When they believe
      *      their target is met, they call this. The contract verifies on-chain:
      *      - Time accounts: checks block.timestamp >= unlockTime
-     *      - Growth accounts: checks fiat value >= targetFiat via oracle
+     *      - Growth accounts: checks fiat value >= targetFiat via TWAP-validated oracle
      *      - Balance accounts: checks fiat value >= targetFiat + 1% buffer,
      *        then sends target amount to recipient, remainder back to owner
      *
@@ -475,6 +488,34 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
         _updateAccountRewards(msg.sender, accountId);
     }
 
+    /**
+     * @notice Claim rewards for multiple accounts with pagination
+     * @param startIndex First account index to process
+     * @param count Maximum number of accounts to process (capped at 20 per call)
+     * @dev Call multiple times with different startIndex values to claim all rewards
+     *      when the user has more than 20 accounts.
+     */
+    function claimAllRewards(uint256 startIndex, uint256 count) external nonReentrant {
+        uint256 accountCount = userAccounts[msg.sender].length;
+        require(accountCount > 0, "No accounts");
+        require(startIndex < accountCount, "Start index out of bounds");
+
+        // Cap at 20 per call to prevent gas limit issues
+        if (count > 20) count = 20;
+        uint256 endIndex = startIndex + count;
+        if (endIndex > accountCount) endIndex = accountCount;
+
+        for (uint256 i = startIndex; i < endIndex; i++) {
+            if (userAccounts[msg.sender][i].isActive) {
+                _updateAccountRewards(msg.sender, i);
+            }
+        }
+    }
+
+    /**
+     * @notice Convenience: claim rewards for first 20 accounts
+     * @dev For users with more than 20 accounts, use claimAllRewards(startIndex, count)
+     */
     function claimAllRewards() external nonReentrant {
         uint256 accountCount = userAccounts[msg.sender].length;
         require(accountCount > 0, "No accounts");
@@ -511,16 +552,21 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
                 totalActiveBalance += earned;
                 emit RewardsClaimed(owner, accountId, earned);
             }
-            account.lastRewardUpdate = uint64(currentGlobalReward);
+            account.lastRewardUpdate = currentGlobalReward;
         }
     }
 
+    /**
+     * @notice Check fiat target using TWAP-validated price to prevent flash loan manipulation
+     */
     function _checkFiatTarget(
         uint256 balance,
         uint256 targetFiat,
         SavingsPriceOracle.Currency currency
     ) internal returns (bool) {
-        uint256 currentValue = getBalanceInFiat(balance, currency);
+        // Use TWAP-validated price: returns min(spot, TWAP) or TWAP if >10% divergence
+        uint256 pricePerToken = priceOracle.getValidatedOooweeePrice(currency);
+        uint256 currentValue = (balance * pricePerToken) / 1e18;
         return currentValue >= targetFiat;
     }
 
@@ -555,7 +601,8 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
 
     /**
      * @notice Transfer OOOWEEE to recipient (Balance accounts)
-     * @dev Sends target amount to recipient, remainder back to owner
+     * @dev Fee is charged on the full balance for consistency with Time/Growth accounts.
+     *      After fee, the target amount goes to recipient and any remainder back to owner.
      */
     function _executeBalanceTransfer(address owner, uint256 accountId) private {
         SavingsAccount storage account = userAccounts[owner][accountId];
@@ -563,24 +610,27 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
         // Cache full balance before any modifications
         uint256 fullBalance = account.balance;
 
+        // Charge fee on full balance for consistency with Time/Growth accounts
+        uint256 fee = (fullBalance * withdrawalFeeRate) / FEE_DIVISOR;
+        uint256 balanceAfterFee = fullBalance - fee;
+
         uint256 transferAmount = account.isFiatTarget
             ? getFiatToTokens(account.targetFiat, account.targetCurrency)
             : account.targetAmount;
 
-        if (transferAmount > fullBalance) {
-            transferAmount = fullBalance;
+        // From the after-fee balance, send the target amount to recipient
+        uint256 amountToRecipient = transferAmount;
+        if (amountToRecipient > balanceAfterFee) {
+            amountToRecipient = balanceAfterFee;
         }
-
-        uint256 fee = (transferAmount * withdrawalFeeRate) / FEE_DIVISOR;
-        uint256 amountAfterFee = transferAmount - fee;
-        uint256 remainder = fullBalance - transferAmount;
+        uint256 remainder = balanceAfterFee - amountToRecipient;
 
         // Close account
         account.balance = 0;
         account.isActive = false;
         account.completedAt = uint32(block.timestamp);
 
-        // Subtract the FULL original balance from trackers (not just transferAmount)
+        // Subtract the FULL original balance from trackers
         totalValueLocked -= fullBalance;
         totalActiveBalance -= fullBalance;
         totalFeesCollected += fee;
@@ -591,14 +641,14 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
         }
 
         // Send target to recipient
-        require(oooweeeToken.transfer(account.recipient, amountAfterFee), "Transfer to recipient failed");
+        require(oooweeeToken.transfer(account.recipient, amountToRecipient), "Transfer to recipient failed");
 
         // Return remainder to owner
         if (remainder > 0) {
             oooweeeToken.transfer(owner, remainder);
         }
 
-        emit BalanceTransferred(owner, account.recipient, amountAfterFee, account.goalName);
+        emit BalanceTransferred(owner, account.recipient, amountToRecipient, account.goalName);
     }
 
     // ============ View Functions ============
