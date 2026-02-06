@@ -39,6 +39,10 @@ typechain-types/
 coverage/
 coverage.json
 
+# Generated/flattened contracts
+flattened.sol
+**/flattened.sol
+
 # Misc
 *.swp
 *.swo

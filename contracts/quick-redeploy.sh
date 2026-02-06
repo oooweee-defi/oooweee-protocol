@@ -15,12 +15,12 @@ NC='\033[0m' # No Color
 
 # Step 1: Backup check
 echo -e "${YELLOW}Step 1: Backing up current deployment...${NC}"
-if [ -f "deployed-addresses.json" ]; then
-    BACKUP_NAME="deployed-addresses-backup-$(date +%Y%m%d-%H%M%S).json"
-    cp deployed-addresses.json $BACKUP_NAME
+if [ -f "deployment-sepolia.json" ]; then
+    BACKUP_NAME="deployment-sepolia-backup-$(date +%Y%m%d-%H%M%S).json"
+    cp deployment-sepolia.json $BACKUP_NAME
     echo -e "${GREEN}✅ Backed up to: $BACKUP_NAME${NC}"
 else
-    echo -e "${YELLOW}⚠️  No existing deployed-addresses.json found${NC}"
+    echo -e "${YELLOW}⚠️  No existing deployment-sepolia.json found${NC}"
 fi
 
 # Step 2: Check .env exists
@@ -127,7 +127,7 @@ echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}🎉 REDEPLOYMENT COMPLETE!${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
-echo "📋 New contract addresses saved to: deployed-addresses.json"
+echo "📋 New contract addresses saved to: deployment-sepolia.json"
 echo ""
 echo "📝 Next steps:"
 echo "  1. Update your frontend with new addresses"
@@ -135,57 +135,3 @@ echo "  2. Test all contract functions"
 echo "  3. If you skipped liquidity: npm run setup"
 echo ""
 echo -e "${GREEN}Happy testing with OOOWEEE v2! 🚀${NC}"
-```
-
-### 7️⃣ **.gitignore** (copy to root `/.gitignore`)
-```
-# Hardhat files
-cache/
-artifacts/
-typechain/
-typechain-types/
-
-# Environment files - NEVER commit these!
-.env
-.env.local
-.env.production
-.env.test
-
-# Keep example files
-!.env.example
-
-# Node modules
-node_modules/
-package-lock.json
-yarn.lock
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-.DS_Store
-
-# Coverage
-coverage/
-coverage.json
-
-# Deployment backups (keep local only)
-deployed-addresses-backup-*.json
-deployed-addresses-old.json
-
-# Test files
-test-results/
-*.log
-
-# Build files
-build/
-dist/
-
-# Private keys - CRITICAL
-*.pem
-*.key
-private-key.txt
-
-# Keep deployment info
-!deployed-addresses.json
