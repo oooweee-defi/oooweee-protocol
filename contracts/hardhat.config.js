@@ -1,12 +1,12 @@
 const path = require("path");
 require("@nomiclabs/hardhat-waffle");
-require("@nomiclabs/hardhat-etherscan");
+require("@nomicfoundation/hardhat-verify");
+require("@openzeppelin/hardhat-upgrades");
 require("dotenv").config({ path: path.resolve(__dirname, ".env") });
 
-// Ensure we have required environment variables
+// Warn if no PRIVATE_KEY (required for deployment, not for compilation)
 if (!process.env.PRIVATE_KEY) {
-  console.error("Please set PRIVATE_KEY in your .env file");
-  process.exit(1);
+  console.warn("⚠️  No PRIVATE_KEY set - deployment will not work, but compilation is fine");
 }
 
 // Default to public RPC if not specified
@@ -25,14 +25,15 @@ module.exports = {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 200
-      }
+        runs: 1
+      },
+      viaIR: true
     }
   },
   networks: {
     sepolia: {
       url: SEPOLIA_RPC_URL,
-      accounts: [process.env.PRIVATE_KEY],
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       chainId: 11155111,
       gasPrice: "auto",
       timeout: 60000
@@ -42,7 +43,23 @@ module.exports = {
     }
   },
   etherscan: {
-    apiKey: ETHERSCAN_API_KEY
+    apiKey: {
+      sepolia: ETHERSCAN_API_KEY
+    },
+    customChains: [
+      {
+        network: "sepolia",
+        chainId: 11155111,
+        urls: {
+          apiURL: "https://api.etherscan.io/v2/api?chainid=11155111",
+          browserURL: "https://sepolia.etherscan.io"
+        }
+      }
+    ],
+    enabled: true
+  },
+  sourcify: {
+    enabled: false
   },
   paths: {
     sources: "./contracts",

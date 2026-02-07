@@ -10,12 +10,25 @@ module.exports = function override(config) {
     "https": require.resolve("https-browserify"),
     "os": require.resolve("os-browserify"),
     "url": require.resolve("url"),
-    "util": require.resolve("util/")
+    "util": require.resolve("util/"),
+    "zlib": false,
+    "net": false,
+    "tls": false,
+    "fs": false
   });
   config.resolve.fallback = fallback;
+
+  // Fix ESM module resolution for Web3Auth dependencies
+  config.module.rules.push({
+    test: /\.m?js$/,
+    resolve: {
+      fullySpecified: false,
+    },
+  });
+
   config.plugins = (config.plugins || []).concat([
     new webpack.ProvidePlugin({
-      process: 'process/browser',
+      process: 'process/browser.js',
       Buffer: ['buffer', 'Buffer']
     })
   ]);

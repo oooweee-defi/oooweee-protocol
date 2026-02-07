@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "@chainlink/contracts/src/v0.8/automation/AutomationCompatible.sol";
@@ -12,36 +15,41 @@ import "@chainlink/contracts/src/v0.8/automation/AutomationCompatible.sol";
  * @title OOOWEEEStability
  * @notice L1 stability mechanism — suppresses price spikes to protect savers
  * @dev Uses Chainlink Automation for periodic checks, deterministic capture rates,
- *      and an EMA baseline that allows gradual organic growth while blocking pumps.
+ *      and a time-weighted baseline that allows gradual organic growth while blocking pumps.
  *
  * How it works:
  * 1. Chainlink Automation calls checkUpkeep() every block (off-chain, free)
- * 2. If price is >10% above EMA baseline, checkUpkeep returns true
+ * 2. If price is >10% above the weighted baseline, checkUpkeep returns true
  * 3. Chainlink calls performUpkeep() on-chain (gas paid from LINK balance)
  * 4. Contract sells tokens from 80M reserve into Uniswap, pushing price back down
  * 5. ETH captured from the swap is sent to ValidatorFund
  * 6. Capture rate scales with spike severity: 60% for small spikes, 85% for large
  *
- * The EMA baseline drifts upward over time, allowing sustainable price growth.
+ * The baseline drifts upward over time, allowing sustainable price growth.
  * A 20% spike gets 70% captured. A 50% spike gets 85% captured.
  * The rules are public and deterministic — no randomness to manipulate.
  */
-contract OOOWEEEStability is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
-    IERC20 public immutable oooweeeToken;
-    IUniswapV2Router02 public immutable uniswapRouter;
+contract OOOWEEEStability is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable, AutomationCompatibleInterface {
+    IERC20 public oooweeeToken;
+    IUniswapV2Router02 public uniswapRouter;
     IUniswapV2Pair public liquidityPair;
 
     address public validatorFundWallet;
 
-    // ============ Baseline (EMA) ============
+    // ============ Baseline (Time-Weighted) ============
 
     uint256 public baselinePrice;
     uint256 public baselineTimestamp;
 
-    // EMA: 80% old price, 20% new price after intervention
+    // Smoothing: 80% old price, 20% new price after intervention
     uint256 public constant BASELINE_SMOOTHING = 80;
     // Baseline drifts to current price over this period if no intervention
     uint256 public constant BASELINE_DECAY_PERIOD = 48 hours;
+
+    // Rate-of-change limit after full baseline decay
+    uint256 public decayedBaselinePrice;
+    uint256 public decayedBaselineTimestamp;
+    uint256 public constant MAX_BASELINE_DRIFT_PER_HOUR = 5; // 5% per hour max drift
 
     // ============ Deterministic Capture Rates ============
     //
@@ -84,7 +92,7 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard, AutomationCompatibleInter
     // ============ State ============
 
     bool public circuitBreakerTripped;
-    bool public systemChecksEnabled = true;
+    bool public systemChecksEnabled;
 
     // Chainlink Automation registry (restrict performUpkeep caller)
     address public chainlinkRegistry;
@@ -106,6 +114,7 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard, AutomationCompatibleInter
     }
     InterventionRecord[] public interventionHistory;
     uint256 public constant MAX_HISTORY = 50;
+    uint256 public historyIndex;
 
     // ============ Events ============
 
@@ -123,19 +132,29 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard, AutomationCompatibleInter
     event DailyLimitsReset(uint256 timestamp);
     event ETHSentToValidators(uint256 amount, uint256 timestamp);
 
-    constructor(
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(
         address _oooweeeToken,
         address _uniswapRouter,
         address _validatorFund
-    ) {
+    ) public initializer {
         require(_oooweeeToken != address(0), "Invalid token");
         require(_uniswapRouter != address(0), "Invalid router");
         require(_validatorFund != address(0), "Invalid fund");
+
+        __Ownable_init();
+        __ReentrancyGuard_init();
+        __UUPSUpgradeable_init();
 
         oooweeeToken = IERC20(_oooweeeToken);
         uniswapRouter = IUniswapV2Router02(_uniswapRouter);
         validatorFundWallet = _validatorFund;
         lastDayReset = block.timestamp;
+        systemChecksEnabled = true;
     }
 
     receive() external payable {}
@@ -162,7 +181,7 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard, AutomationCompatibleInter
         // Check if daily limits need resetting
         bool needsReset = block.timestamp >= lastDayReset + MEASUREMENT_WINDOW;
 
-        // Calculate spike against EMA baseline
+        // Calculate spike against time-weighted baseline
         uint256 effectiveBaseline = _getEffectiveBaseline();
         uint256 priceIncrease = _calculatePriceIncreaseFrom(currentPrice, effectiveBaseline);
 
@@ -189,6 +208,8 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard, AutomationCompatibleInter
         if (currentPrice == 0) return;
 
         uint256 effectiveBaseline = _getEffectiveBaseline();
+        _updateDecayedBaseline();
+
         uint256 priceIncrease = _calculatePriceIncreaseFrom(currentPrice, effectiveBaseline);
 
         bool intervened = false;
@@ -218,6 +239,8 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard, AutomationCompatibleInter
         require(currentPrice > 0, "Cannot get price");
 
         uint256 effectiveBaseline = _getEffectiveBaseline();
+        _updateDecayedBaseline();
+
         uint256 priceIncrease = _calculatePriceIncreaseFrom(currentPrice, effectiveBaseline);
         bool intervened = false;
 
@@ -235,13 +258,16 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard, AutomationCompatibleInter
         }
     }
 
-    // ============ EMA Baseline ============
+    // ============ Baseline ============
 
     /**
      * @notice Get the effective baseline price, accounting for time decay
      * @dev If no intervention has happened for BASELINE_DECAY_PERIOD, the baseline
-     *      drifts fully to current price. This prevents stale baselines from
-     *      triggering interventions on legitimate organic growth.
+     *      drifts toward current price but is capped at a maximum drift rate
+     *      of MAX_BASELINE_DRIFT_PER_HOUR to prevent slow-pump-then-spike attacks.
+     *
+     *      Within the decay period, time-weighted linear interpolation is used
+     *      to gradually blend toward the current price.
      *
      *      Example: Price doubles over 3 months with no spikes. The baseline
      *      gradually follows it up. No interventions triggered.
@@ -251,23 +277,51 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard, AutomationCompatibleInter
     function _getEffectiveBaseline() internal view returns (uint256) {
         if (baselinePrice == 0) return 0;
 
-        uint256 elapsed = block.timestamp - baselineTimestamp;
-        if (elapsed >= BASELINE_DECAY_PERIOD) {
-            // Baseline fully caught up — use current price as baseline
-            // This means no intervention triggers on gradual growth
-            return getCurrentPrice();
-        }
-
-        // Linear interpolation toward current price
         uint256 currentPrice = getCurrentPrice();
         if (currentPrice == 0) return baselinePrice;
 
+        uint256 elapsed = block.timestamp - baselineTimestamp;
+        if (elapsed >= BASELINE_DECAY_PERIOD) {
+            // Baseline fully decayed — cap drift rate to prevent slow-pump attacks.
+            // Use the price at decay completion as anchor.
+            uint256 anchor = decayedBaselinePrice > 0 ? decayedBaselinePrice : baselinePrice;
+            uint256 anchorTime = decayedBaselineTimestamp > 0
+                ? decayedBaselineTimestamp
+                : baselineTimestamp + BASELINE_DECAY_PERIOD;
+
+            uint256 hoursSinceAnchor = (block.timestamp - anchorTime) / 1 hours;
+            if (hoursSinceAnchor == 0) hoursSinceAnchor = 1;
+
+            // Max allowed baseline = anchor * (1 + maxRate * hours)
+            uint256 maxAllowed = anchor + (anchor * MAX_BASELINE_DRIFT_PER_HOUR * hoursSinceAnchor) / 100;
+
+            if (currentPrice <= maxAllowed) {
+                return currentPrice;
+            }
+            return maxAllowed;
+        }
+
+        // Time-weighted linear interpolation toward current price
         uint256 weight = (elapsed * 100) / BASELINE_DECAY_PERIOD;
         return (baselinePrice * (100 - weight) + currentPrice * weight) / 100;
     }
 
     /**
-     * @notice Update baseline using EMA after intervention
+     * @notice Record the price when full baseline decay is first detected
+     * @dev Called from performUpkeep and manualStabilityCheck. Captures
+     *      the anchor point for rate-of-change limiting.
+     */
+    function _updateDecayedBaseline() internal {
+        if (baselinePrice > 0 &&
+            block.timestamp - baselineTimestamp >= BASELINE_DECAY_PERIOD &&
+            decayedBaselinePrice == 0) {
+            decayedBaselinePrice = getCurrentPrice();
+            decayedBaselineTimestamp = block.timestamp;
+        }
+    }
+
+    /**
+     * @notice Update baseline using weighted smoothing after intervention
      * @dev 80% old baseline + 20% new price. This allows the baseline to
      *      ratchet upward gradually with sustained demand.
      */
@@ -281,6 +335,11 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard, AutomationCompatibleInter
         }
 
         baselineTimestamp = block.timestamp;
+
+        // Reset decay tracking since we just did an intervention
+        decayedBaselinePrice = 0;
+        decayedBaselineTimestamp = 0;
+
         emit BaselineUpdated(oldBaseline, baselinePrice);
     }
 
@@ -290,7 +349,7 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard, AutomationCompatibleInter
      * @notice Get capture rate based on spike severity
      * @dev Deterministic — no randomness. The rules are public:
      *      - 10-19% spike: 60% captured
-     *      - 20-29% spike: 70% captured  
+     *      - 20-29% spike: 70% captured
      *      - 30-49% spike: 75% captured
      *      - 50%+ spike:   85% captured
      *
@@ -427,7 +486,7 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard, AutomationCompatibleInter
 
         _recordIntervention(currentPrice, newPrice, tokensToSell, ethCaptured);
 
-        // Update baseline using EMA (gradual shift, not instant reset)
+        // Update baseline using weighted smoothing (gradual shift, not instant reset)
         if (newPrice > 0) {
             _updateBaseline(newPrice);
         }
@@ -447,6 +506,9 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard, AutomationCompatibleInter
      * - targetPrice = k / targetReserveToken²
      * - targetReserveToken = sqrt(k / targetPrice)
      * - tokensToSell = targetReserveToken - currentReserveToken
+     *
+     * Uses Math.mulDiv for overflow-safe multiplication and Math.sqrt
+     * for the square root. Accounts for Uniswap V2's 0.3% swap fee.
      */
     function _calculateTokensForSpikeReduction(
         uint256 currentPrice,
@@ -483,26 +545,20 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard, AutomationCompatibleInter
         }
 
         // Constant product: k = reserveToken * reserveETH
-        uint256 k = reserveToken * reserveETH;
-
         // targetReserveToken = sqrt(k * 1e18 / targetPrice)
-        uint256 targetReserveTokenSquared = (k * 1e18) / targetPrice;
-        uint256 targetReserveToken = sqrt(targetReserveTokenSquared);
+        // Use Math.mulDiv for overflow-safe (reserveToken * reserveETH * 1e18) / targetPrice
+        uint256 targetReserveTokenSquared = Math.mulDiv(reserveToken * reserveETH, 1e18, targetPrice);
+        uint256 targetReserveToken = Math.sqrt(targetReserveTokenSquared);
 
         if (targetReserveToken <= reserveToken) return 0;
 
-        return targetReserveToken - reserveToken;
-    }
+        uint256 tokensNeeded = targetReserveToken - reserveToken;
 
-    function sqrt(uint256 x) internal pure returns (uint256) {
-        if (x == 0) return 0;
-        uint256 z = (x + 1) / 2;
-        uint256 y = x;
-        while (z < y) {
-            y = z;
-            z = (x / z + z) / 2;
-        }
-        return y;
+        // Account for Uniswap V2 0.3% fee: actual output is 99.7% of ideal.
+        // Sell slightly more tokens to compensate and hit the target capture rate.
+        tokensNeeded = (tokensNeeded * 1000) / 997;
+
+        return tokensNeeded;
     }
 
     function _recordIntervention(
@@ -511,20 +567,20 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard, AutomationCompatibleInter
         uint256 tokensInjected,
         uint256 ethCaptured
     ) internal {
-        if (interventionHistory.length >= MAX_HISTORY) {
-            for (uint256 i = 0; i < interventionHistory.length - 1; i++) {
-                interventionHistory[i] = interventionHistory[i + 1];
-            }
-            interventionHistory.pop();
-        }
-
-        interventionHistory.push(InterventionRecord({
+        InterventionRecord memory record = InterventionRecord({
             timestamp: uint64(block.timestamp),
             priceBefore: priceBefore,
             priceAfter: priceAfter,
             tokensInjected: tokensInjected,
             ethCaptured: ethCaptured
-        }));
+        });
+
+        if (interventionHistory.length < MAX_HISTORY) {
+            interventionHistory.push(record);
+        } else {
+            interventionHistory[historyIndex] = record;
+            historyIndex = (historyIndex + 1) % MAX_HISTORY;
+        }
     }
 
     function _swapTokensForETH(uint256 tokenAmount) internal returns (uint256) {
@@ -653,15 +709,39 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard, AutomationCompatibleInter
     }
 
     function getInterventionHistory() external view returns (InterventionRecord[] memory) {
-        return interventionHistory;
+        uint256 len = interventionHistory.length;
+        InterventionRecord[] memory ordered = new InterventionRecord[](len);
+
+        if (len < MAX_HISTORY) {
+            // Array not yet full — already in chronological order
+            for (uint256 i = 0; i < len; i++) {
+                ordered[i] = interventionHistory[i];
+            }
+        } else {
+            // Ring buffer — reorder from oldest to newest
+            for (uint256 i = 0; i < len; i++) {
+                ordered[i] = interventionHistory[(historyIndex + i) % MAX_HISTORY];
+            }
+        }
+        return ordered;
     }
 
     function getRecentInterventions(uint256 count) external view returns (InterventionRecord[] memory) {
         uint256 len = interventionHistory.length;
         if (count > len) count = len;
         InterventionRecord[] memory recent = new InterventionRecord[](count);
-        for (uint256 i = 0; i < count; i++) {
-            recent[i] = interventionHistory[len - count + i];
+
+        if (len < MAX_HISTORY) {
+            // Array not yet full — simple tail read
+            for (uint256 i = 0; i < count; i++) {
+                recent[i] = interventionHistory[len - count + i];
+            }
+        } else {
+            // Ring buffer — read backwards from most recent entry
+            for (uint256 i = 0; i < count; i++) {
+                uint256 idx = (historyIndex + MAX_HISTORY - count + i) % MAX_HISTORY;
+                recent[i] = interventionHistory[idx];
+            }
         }
         return recent;
     }
@@ -710,6 +790,11 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard, AutomationCompatibleInter
         uint256 oldBaseline = baselinePrice;
         baselinePrice = currentPrice;
         baselineTimestamp = block.timestamp;
+
+        // Reset decay tracking
+        decayedBaselinePrice = 0;
+        decayedBaselineTimestamp = 0;
+
         emit BaselineUpdated(oldBaseline, baselinePrice);
     }
 
@@ -751,4 +836,6 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard, AutomationCompatibleInter
         require(balance > 0, "No ETH");
         payable(owner()).transfer(balance);
     }
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 }

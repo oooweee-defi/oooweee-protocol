@@ -3,9 +3,12 @@ import { ethers } from 'ethers';
 import toast, { Toaster } from 'react-hot-toast';
 import './App.css';
 import oooweeLogo from './assets/oooweee-logo.png';
-import { OOOWEEETokenABI, OOOWEEESavingsABI, OOOWEEEValidatorFundABI, OOOWEEEStabilityABI, CONTRACT_ADDRESSES } from './contracts/abis';
+import { OOOWEEETokenABI, OOOWEEESavingsABI, OOOWEEEValidatorFundABI, OOOWEEEStabilityABI, DonorRegistryABI, CONTRACT_ADDRESSES } from './contracts/abis';
 import Web3Modal from "web3modal";
 import WalletConnectProvider from "@walletconnect/web3-provider";
+import { Web3Auth } from "@web3auth/modal";
+import { EthereumPrivateKeyProvider } from "@web3auth/ethereum-provider";
+import { CHAIN_NAMESPACES, WEB3AUTH_NETWORK } from "@web3auth/base";
 
 // Uniswap Router ABI (minimal)
 const UNISWAP_ROUTER_ABI = [
@@ -23,11 +26,28 @@ const WETH_ADDRESS = "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14";
 // ADMIN WALLET - Update this to your operations wallet address
 const ADMIN_WALLET = "0xB05F42B174E5152d34431eE4504210932ddfE715";
 
+// Web3Auth configuration
+const WEB3AUTH_CLIENT_ID = "BBELIcLUxA8LFzE-ux8CxUpyKoojLwasmixNSEtqLcPFv7KUnRWKmM-C0PQFtWXy-cv8iHxDebZ4uiJkHEnBLSs";
+
+// Transak fiat onramp configuration
+const TRANSAK_API_KEY = "5606035c-b59a-4c73-80f0-b9930cdfd9f9";
+const SEPOLIA_CHAIN_CONFIG = {
+  chainNamespace: CHAIN_NAMESPACES.EIP155,
+  chainId: "0xaa36a7",
+  rpcTarget: "https://ethereum-sepolia-rpc.publicnode.com",
+  displayName: "Ethereum Sepolia",
+  blockExplorerUrl: "https://sepolia.etherscan.io",
+  ticker: "ETH",
+  tickerName: "Ethereum",
+  decimals: 18,
+  isTestnet: true,
+};
+
 // Currency configuration - USD/EUR/GBP only
 const CURRENCIES = {
-  USD: { code: 0, symbol: '$', name: 'US Dollar', decimals: 4, locale: 'en-US' },
-  EUR: { code: 1, symbol: '€', name: 'Euro', decimals: 4, locale: 'en-IE' },
-  GBP: { code: 2, symbol: '£', name: 'British Pound', decimals: 4, locale: 'en-GB' }
+  USD: { code: 0, symbol: '$', name: 'US Dollar', decimals: 8, locale: 'en-US' },
+  EUR: { code: 1, symbol: '€', name: 'Euro', decimals: 8, locale: 'en-IE' },
+  GBP: { code: 2, symbol: '£', name: 'British Pound', decimals: 8, locale: 'en-GB' }
 };
 
 // Web3Modal provider options
@@ -36,9 +56,8 @@ const providerOptions = {
     package: WalletConnectProvider,
     options: {
       projectId: "084d65a488f56065ea7a901e023a8b3e",
-      infuraId: "9aa3d95b3bc440fa88ea12eaa4456161",
       rpc: {
-        11155111: "https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161"
+        11155111: "https://ethereum-sepolia-rpc.publicnode.com"
       },
       chainId: 11155111,
       bridge: "https://bridge.walletconnect.org",
@@ -63,6 +82,7 @@ function App() {
   const [tokenContract, setTokenContract] = useState(null);
   const [savingsContract, setSavingsContract] = useState(null);
   const [validatorFundContract, setValidatorFundContract] = useState(null);
+  const [donorRegistryContract, setDonorRegistryContract] = useState(null);
   const [stabilityContract, setStabilityContract] = useState(null);
   const [routerContract, setRouterContract] = useState(null);
   const [balance, setBalance] = useState('0');
@@ -72,8 +92,13 @@ function App() {
   const [accountType, setAccountType] = useState('time');
   const [showCompleted, setShowCompleted] = useState(false);
   const [isAppLoading, setIsAppLoading] = useState(true);
+  const [web3auth, setWeb3auth] = useState(null);
+  const [loginMethod, setLoginMethod] = useState(null); // 'wallet' | 'social' | null
   const [ethPrice, setEthPrice] = useState(null);
-  const [displayCurrency, setDisplayCurrency] = useState('fiat');
+  const [showFiat, setShowFiat] = useState(true);
+  const [selectedCurrency, setSelectedCurrency] = useState(() => {
+    return localStorage.getItem('oooweee_currency') || 'EUR';
+  });
   const [web3Modal, setWeb3Modal] = useState(null);
   const [targetAmountInput, setTargetAmountInput] = useState('');
   const [initialDepositInput, setInitialDepositInput] = useState('');
@@ -82,11 +107,27 @@ function App() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [ethToBuy, setEthToBuy] = useState('0.01');
   const [estimatedOooweee, setEstimatedOooweee] = useState('0');
-  const [accountCurrency, setAccountCurrency] = useState('EUR');
+  const [accountCurrency, setAccountCurrency] = useState(() => {
+    return localStorage.getItem('oooweee_currency') || 'EUR';
+  });
   const [isConnecting, setIsConnecting] = useState(false);
   const [requiredOooweeeForPurchase, setRequiredOooweeeForPurchase] = useState(null);
   const hasAutoReconnected = useRef(false);
   
+  // Send modal state
+  const [showSendModal, setShowSendModal] = useState(false);
+  const [sendRecipient, setSendRecipient] = useState('');
+  const [sendAmount, setSendAmount] = useState('');
+
+  // Group savings state
+  const [userGroups, setUserGroups] = useState([]);
+  const [showGroupDetail, setShowGroupDetail] = useState(null);
+  const [groupInviteAddress, setGroupInviteAddress] = useState('');
+  const [groupDepositAmount, setGroupDepositAmount] = useState('');
+  const [pendingInvitations, setPendingInvitations] = useState([]);
+  const [groupSubType, setGroupSubType] = useState('time');
+  const [groupDestination, setGroupDestination] = useState('');
+
   // Donate modal state
   const [showDonateModal, setShowDonateModal] = useState(false);
   const [donateAmount, setDonateAmount] = useState('0.05');
@@ -113,12 +154,17 @@ function App() {
     totalDonations: '0',
     donors: 0,
     fromStability: '0',
-    fromRewards: '0'
+    fromRewards: '0',
+    topDonor: null,
+    topDonorAmount: '0'
   });
   
   // Price tracking
   const [oooweeePrice, setOooweeePrice] = useState(0.00001);
-  
+  const [priceFlash, setPriceFlash] = useState(null); // 'up' | 'down' | null
+  const prevOooweeePriceRef = useRef(0.00001);
+  const [priceFeedStatus, setPriceFeedStatus] = useState({ source: 'live', cachedAt: null, error: null });
+
   // Admin Dashboard State
   const [adminStats, setAdminStats] = useState({
     totalValueLocked: '0',
@@ -151,12 +197,13 @@ function App() {
     if (!stabilityContract || !savingsContract || !provider) return;
 
     try {
-      const [stabilityInfo, marketConditions, circuitBreaker, statsView, blockNumber] = await Promise.all([
+      const [stabilityInfo, marketConditions, circuitBreaker, statsView, blockNumber, checksEnabled] = await Promise.all([
         stabilityContract.getStabilityInfo(),
         stabilityContract.getMarketConditions(),
         stabilityContract.getCircuitBreakerStatus(),
         savingsContract.getStatsView(),
-        provider.getBlockNumber()
+        provider.getBlockNumber(),
+        stabilityContract.systemChecksEnabled()
       ]);
 
       const block = await provider.getBlock(blockNumber);
@@ -186,7 +233,8 @@ function App() {
         blockNumber: blockNumber,
         lastBlockTime: block.timestamp,
         isSequencerHealthy: true,
-        isPriceOracleHealthy: stabilityInfo[0].gt(0)
+        isPriceOracleHealthy: stabilityInfo[0].gt(0),
+        systemChecksEnabled: checksEnabled
       });
     } catch (error) {
       console.error('Error loading admin stats:', error);
@@ -201,7 +249,44 @@ function App() {
       return () => clearInterval(interval);
     }
   }, [account, activeTab, stabilityContract, savingsContract, provider, loadAdminStats]);
-  
+
+  // Stability event alerting — listen for circuit breaker and interventions
+  useEffect(() => {
+    if (!stabilityContract || !account) return;
+    const isAdmin = account.toLowerCase() === ADMIN_WALLET.toLowerCase();
+
+    const onCircuitBreakerTripped = (reason) => {
+      toast.error(`Circuit breaker tripped: ${reason}`, { duration: 10000 });
+      if (isAdmin) loadAdminStats();
+    };
+
+    const onIntervention = (tokensInjected, ethCaptured) => {
+      if (isAdmin) {
+        const tokens = parseFloat(ethers.utils.formatUnits(tokensInjected, 18)).toLocaleString();
+        const eth = parseFloat(ethers.utils.formatEther(ethCaptured)).toFixed(4);
+        toast(`Stability intervention: ${tokens} tokens sold for ${eth} ETH`, { duration: 8000 });
+        loadAdminStats();
+      }
+    };
+
+    const onCircuitBreakerReset = () => {
+      if (isAdmin) {
+        toast.success('Circuit breaker reset', { duration: 5000 });
+        loadAdminStats();
+      }
+    };
+
+    stabilityContract.on('CircuitBreakerTripped', onCircuitBreakerTripped);
+    stabilityContract.on('StabilityIntervention', onIntervention);
+    stabilityContract.on('CircuitBreakerReset', onCircuitBreakerReset);
+
+    return () => {
+      stabilityContract.off('CircuitBreakerTripped', onCircuitBreakerTripped);
+      stabilityContract.off('StabilityIntervention', onIntervention);
+      stabilityContract.off('CircuitBreakerReset', onCircuitBreakerReset);
+    };
+  }, [stabilityContract, account, loadAdminStats]);
+
   // Admin functions
   const resetCircuitBreaker = async () => {
     try {
@@ -224,10 +309,11 @@ function App() {
   const toggleSystemChecks = async () => {
     try {
       setLoading(true);
-      const tx = await stabilityContract.toggleSystemChecks();
+      const newState = !adminStats.systemChecksEnabled;
+      const tx = await stabilityContract.setChecksEnabled(newState);
       await toast.promise(tx.wait(), {
-        loading: '🔧 Toggling system checks...',
-        success: '✅ System checks toggled!',
+        loading: newState ? '▶️ Resuming checks...' : '⏸️ Pausing checks...',
+        success: newState ? '✅ Checks resumed!' : '✅ Checks paused!',
         error: '❌ Failed to toggle'
       });
       await loadAdminStats();
@@ -259,61 +345,119 @@ function App() {
     }
   };
   
-  const updateBaselinePrice = async () => {
+  
+  // Send tokens from wallet
+  const sendTokens = async () => {
+    if (!tokenContract || !sendRecipient || !sendAmount) return;
     try {
       setLoading(true);
-      const tx = await stabilityContract.updateBaselinePrice();
+      if (!ethers.utils.isAddress(sendRecipient)) {
+        toast.error('Invalid recipient address');
+        return;
+      }
+      const amount = ethers.utils.parseUnits(sendAmount, 18);
+      const tx = await tokenContract.transfer(sendRecipient, amount);
       await toast.promise(tx.wait(), {
-        loading: '📊 Updating baseline price...',
-        success: '✅ Baseline price updated!',
-        error: '❌ Failed to update baseline'
+        loading: 'Sending OOOWEEE...',
+        success: 'Sent successfully!',
+        error: 'Transfer failed'
       });
-      await loadAdminStats();
+      setShowSendModal(false);
+      setSendRecipient('');
+      setSendAmount('');
+      await loadBalances(account, provider, tokenContract);
     } catch (error) {
       console.error(error);
-      toast.error('Failed to update baseline: ' + (error.reason || error.message));
+      toast.error('Send failed: ' + (error.reason || error.message));
     } finally {
       setLoading(false);
     }
   };
-  
-  const triggerSystemCheck = async () => {
-    try {
-      setLoading(true);
-      const tx = await stabilityContract.systemStabilityCheck();
-      await toast.promise(tx.wait(), {
-        loading: '⚡ Triggering system stability check...',
-        success: '✅ System check triggered!',
-        error: '❌ Check failed'
-      });
-      await loadAdminStats();
-    } catch (error) {
-      console.error(error);
-      toast.error('Failed to trigger system check: ' + (error.reason || error.message));
-    } finally {
-      setLoading(false);
-    }
-  };
-  
+
   // Initialize on load
   useEffect(() => {
     const init = async () => {
       setIsAppLoading(true);
-      
+
       const web3ModalInstance = new Web3Modal({
         cacheProvider: true,
         providerOptions
       });
-      
+
       setWeb3Modal(web3ModalInstance);
-      
+
+      // Initialize Web3Auth
       try {
-        const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd,eur,gbp');
+        const privateKeyProvider = new EthereumPrivateKeyProvider({
+          config: { chainConfig: SEPOLIA_CHAIN_CONFIG },
+        });
+
+        const web3authInstance = new Web3Auth({
+          clientId: WEB3AUTH_CLIENT_ID,
+          web3AuthNetwork: WEB3AUTH_NETWORK.SAPPHIRE_DEVNET,
+          privateKeyProvider,
+          uiConfig: {
+            appName: "OOOWEEE Protocol",
+            mode: "dark",
+            loginMethodsOrder: ["google", "email_passwordless"],
+            defaultLanguage: "en",
+            theme: { primary: "#7B68EE" },
+          },
+        });
+
+        await web3authInstance.initModal();
+        setWeb3auth(web3authInstance);
+
+        // Auto-reconnect if Web3Auth has an active session
+        if (web3authInstance.connected && web3authInstance.provider) {
+          const web3Provider = new ethers.providers.Web3Provider(web3authInstance.provider);
+          const signer = web3Provider.getSigner();
+          const address = await signer.getAddress();
+
+          const token = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEToken, OOOWEEETokenABI, signer);
+          const savings = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEESavings, OOOWEEESavingsABI, signer);
+          const validatorFund = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEValidatorFund, OOOWEEEValidatorFundABI, signer);
+          const stability = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEStability, OOOWEEEStabilityABI, signer);
+          const donorRegistry = new ethers.Contract(CONTRACT_ADDRESSES.DonorRegistry, DonorRegistryABI, signer);
+          const router = new ethers.Contract(UNISWAP_ROUTER, UNISWAP_ROUTER_ABI, signer);
+
+          setAccount(address);
+          setProvider(web3Provider);
+          setTokenContract(token);
+          setSavingsContract(savings);
+          setValidatorFundContract(validatorFund);
+          setDonorRegistryContract(donorRegistry);
+          setStabilityContract(stability);
+          setRouterContract(router);
+          setLoginMethod('social');
+        }
+      } catch (error) {
+        console.error('Web3Auth init error:', error);
+        // Non-fatal — wallet login still works
+      }
+
+      try {
+        const response = await fetch('/api/eth-price');
         const data = await response.json();
         setEthPrice(data.ethereum);
+        if (data._meta) {
+          setPriceFeedStatus(data._meta);
+          if (data._meta.source === 'live') {
+            localStorage.setItem('oooweee_eth_price_cache', JSON.stringify({ prices: data.ethereum, at: Date.now() }));
+          }
+        }
       } catch (error) {
         console.error('Error fetching ETH price:', error);
-        setEthPrice({ usd: 2000, eur: 1850, gbp: 1600 });
+        // Try localStorage cache before hardcoded fallback
+        const cached = localStorage.getItem('oooweee_eth_price_cache');
+        if (cached) {
+          const { prices } = JSON.parse(cached);
+          setEthPrice(prices);
+          setPriceFeedStatus({ source: 'cached', error: 'Proxy unreachable', downSince: Date.now() });
+        } else {
+          setEthPrice({ usd: 2000, eur: 1850, gbp: 1600 });
+          setPriceFeedStatus({ source: 'fallback', error: 'No cache available', downSince: Date.now() });
+        }
       }
       
       setTimeout(() => setIsAppLoading(false), 1500);
@@ -321,6 +465,47 @@ function App() {
     
     init();
   }, []);
+
+  // Persist selected currency
+  useEffect(() => {
+    localStorage.setItem('oooweee_currency', selectedCurrency);
+  }, [selectedCurrency]);
+
+  // Refresh ETH/fiat prices every 60s (CoinGecko free tier safe)
+  useEffect(() => {
+    const refreshEthPrice = async () => {
+      try {
+        const response = await fetch('/api/eth-price');
+        const data = await response.json();
+        if (data.ethereum) {
+          setEthPrice(data.ethereum);
+          if (data._meta) {
+            setPriceFeedStatus(data._meta);
+            if (data._meta.source === 'live') {
+              localStorage.setItem('oooweee_eth_price_cache', JSON.stringify({ prices: data.ethereum, at: Date.now() }));
+            }
+          }
+        }
+      } catch (error) {
+        console.error('ETH price refresh failed:', error);
+        setPriceFeedStatus(prev => ({ ...prev, source: prev.source === 'live' ? 'cached' : prev.source, error: 'Refresh failed' }));
+      }
+    };
+
+    const interval = setInterval(refreshEthPrice, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Price flash animation on OOOWEEE price change
+  useEffect(() => {
+    if (prevOooweeePriceRef.current !== oooweeePrice && oooweeePrice > 0 && prevOooweeePriceRef.current > 0) {
+      setPriceFlash(oooweeePrice > prevOooweeePriceRef.current ? 'up' : 'down');
+      prevOooweeePriceRef.current = oooweeePrice;
+      const timeout = setTimeout(() => setPriceFlash(null), 1500);
+      return () => clearTimeout(timeout);
+    }
+    prevOooweeePriceRef.current = oooweeePrice;
+  }, [oooweeePrice]);
 
   // Format currency for user display (2 decimal places)
   const formatCurrency = (amount, currency = 'eur') => {
@@ -380,6 +565,7 @@ function App() {
     return () => clearTimeout(timeoutId);
   }, [ethToBuy, routerContract]);
 
+
   // Load validator stats - with error handling
   const loadValidatorStats = useCallback(async () => {
     if (!validatorFundContract) return;
@@ -390,27 +576,83 @@ function App() {
         validatorFundContract.ethUntilNextValidator(),
         validatorFundContract.progressToNextValidator()
       ]);
-      
-      let totalRewards = ethers.BigNumber.from(0);
-      try {
-        totalRewards = await validatorFundContract.totalValidatorRewards();
-      } catch (e) {
-        // totalValidatorRewards might not be accessible
+
+      // getStats() returns 10 values:
+      // [0] totalETHReceived, [1] fromStability, [2] fromDonations,
+      // [3] fromRewards, [4] pendingRewards, [5] availableForValidators,
+      // [6] validatorsProvisioned, [7] validatorsActive,
+      // [8] totalDistributions, [9] donorCount
+
+      // Build on-chain leaderboard by iterating the donors array
+      let topDonor = null;
+      let topDonorAmount = ethers.BigNumber.from(0);
+      const donorCount = stats[9].toNumber();
+      const onChainDonors = [];
+
+      if (donorCount > 0 && donorCount <= 100) {
+        for (let i = 0; i < donorCount; i++) {
+          try {
+            const donorAddr = await validatorFundContract.donors(i);
+            const donorAmt = await validatorFundContract.donations(donorAddr);
+            onChainDonors.push({ address: donorAddr, amount: donorAmt });
+            if (donorAmt.gt(topDonorAmount)) {
+              topDonor = donorAddr;
+              topDonorAmount = donorAmt;
+            }
+          } catch (e) {
+            break;
+          }
+        }
       }
 
-      const totalETHReceived = stats[3];
-      const totalDonations = stats[4];
-      const fromStability = totalETHReceived.sub(totalDonations);
-      
+      // Build leaderboard — merge on-chain amounts with DonorRegistry names
+      // Create a read-only DonorRegistry instance for fetching metadata
+      const registryRead = new ethers.Contract(
+        CONTRACT_ADDRESSES.DonorRegistry,
+        DonorRegistryABI,
+        validatorFundContract.provider
+      );
+
+      const sortedDonors = onChainDonors
+        .sort((a, b) => (b.amount.gt(a.amount) ? 1 : b.amount.lt(a.amount) ? -1 : 0))
+        .slice(0, 10);
+
+      const leaderboard = await Promise.all(
+        sortedDonors.map(async (d) => {
+          let name = null, message = null, location = null;
+          try {
+            const info = await registryRead.getDonorInfo(d.address);
+            if (info.timestamp && info.timestamp.toNumber() > 0) {
+              name = info.name || null;
+              message = info.message || null;
+              location = info.location || null;
+            }
+          } catch (e) {
+            // DonorRegistry might not have this donor
+          }
+          return {
+            address: d.address,
+            shortAddress: `${d.address.slice(0, 6)}...${d.address.slice(-4)}`,
+            name,
+            message,
+            location,
+            amount: parseFloat(ethers.utils.formatEther(d.amount)).toFixed(4)
+          };
+        })
+      );
+      setDonorLeaderboard(leaderboard);
+
       setValidatorStats({
-        validators: stats[0].toString(),
+        validators: stats[7].toString(),
         nextValidatorIn: ethers.utils.formatEther(ethNeeded),
         progress: (parseFloat(ethers.utils.formatEther(progressData[0])) / 32) * 100,
-        pendingETH: ethers.utils.formatEther(stats[1]),
-        totalDonations: ethers.utils.formatEther(totalDonations),
-        donors: stats[5].toString(),
-        fromStability: ethers.utils.formatEther(fromStability),
-        fromRewards: ethers.utils.formatEther(totalRewards)
+        pendingETH: ethers.utils.formatEther(progressData[0]),
+        totalDonations: ethers.utils.formatEther(stats[2]),
+        donors: stats[9].toString(),
+        fromStability: ethers.utils.formatEther(stats[1]),
+        fromRewards: ethers.utils.formatEther(stats[3]),
+        topDonor: topDonor,
+        topDonorAmount: ethers.utils.formatEther(topDonorAmount)
       });
     } catch (error) {
       console.error('Error loading validator stats:', error);
@@ -457,6 +699,20 @@ function App() {
       console.error('Oracle fiat→token conversion failed, using frontend estimate:', e);
       return convertFiatToOooweee(fiatAmount, currency);
     }
+  };
+
+  // Convert OOOWEEE to fiat
+  const convertOooweeeToFiat = (oooweeeAmount, currency = 'eur') => {
+    if (!ethPrice || !oooweeeAmount) return 0;
+    const ethValue = parseFloat(oooweeeAmount) * oooweeePrice;
+    return ethValue * (ethPrice[currency.toLowerCase()] || ethPrice.eur);
+  };
+
+  // Check if deposit meets minimum €10 requirement
+  // eslint-disable-next-line no-unused-vars
+  const checkMinimumDeposit = (oooweeeAmount) => {
+    const fiatValue = convertOooweeeToFiat(oooweeeAmount, 'eur');
+    return fiatValue >= 10; // €10 minimum
   };
 
   // Open buy modal with a specific amount pre-filled
@@ -652,7 +908,7 @@ function App() {
       let freshEthPrice = currentEthPrice;
       if (!freshEthPrice) {
         try {
-          const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd,eur,gbp,jpy,cny,cad,aud,chf,inr,krw');
+          const response = await fetch('/api/eth-price');
           const data = await response.json();
           freshEthPrice = data.ethereum;
           setEthPrice(freshEthPrice);
@@ -729,6 +985,50 @@ function App() {
     window.location.reload();
   }, []);
 
+  // Buy and create account - FIXED: Buy exactly the needed amount
+  // eslint-disable-next-line no-unused-vars
+  const buyAndCreateAccount = async (requiredOooweee) => {
+    const result = await toast.promise(
+      new Promise(async (resolve, reject) => {
+        try {
+          setLoading(true);
+
+          // Calculate exact tokens needed (rounded up)
+          const tokensNeeded = ethers.utils.parseUnits(Math.ceil(requiredOooweee).toString(), 18);
+          const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.OOOWEEEToken];
+          const deadline = Math.floor(Date.now() / 1000) + 3600;
+
+          // Get ETH needed for exact token amount using getAmountsIn
+          const amountsIn = await routerContract.getAmountsIn(tokensNeeded, path);
+          // Add 5% buffer for price movement
+          const ethWithBuffer = amountsIn[0].mul(105).div(100);
+
+          // Use swapETHForExactTokens to get EXACTLY the tokens we need
+          const tx = await routerContract.swapETHForExactTokens(
+            tokensNeeded,
+            path,
+            account,
+            deadline,
+            { value: ethWithBuffer }
+          );
+
+          await tx.wait();
+          await loadBalances(account, provider, tokenContract);
+          resolve(true);
+        } catch (error) {
+          reject(error);
+        }
+      }),
+      {
+        loading: `🔄 Buying ${Math.ceil(requiredOooweee).toLocaleString()} OOOWEEE...`,
+        success: '✅ OOOWEEE purchased! Creating account...',
+        error: '❌ Failed to buy OOOWEEE'
+      }
+    );
+
+    return result;
+  };
+
   // Connect wallet - FIX: Prevent duplicate connections
   const connectWallet = useCallback(async () => {
     if (isConnecting) return;
@@ -760,6 +1060,7 @@ function App() {
       const savings = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEESavings, OOOWEEESavingsABI, signer);
       const validatorFund = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEValidatorFund, OOOWEEEValidatorFundABI, signer);
       const stability = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEStability, OOOWEEEStabilityABI, signer);
+      const donorRegistry = new ethers.Contract(CONTRACT_ADDRESSES.DonorRegistry, DonorRegistryABI, signer);
       const router = new ethers.Contract(UNISWAP_ROUTER, UNISWAP_ROUTER_ABI, signer);
 
       setAccount(address);
@@ -767,12 +1068,14 @@ function App() {
       setTokenContract(token);
       setSavingsContract(savings);
       setValidatorFundContract(validatorFund);
+      setDonorRegistryContract(donorRegistry);
       setStabilityContract(stability);
       setRouterContract(router);
 
       // Load user data (read-only operations)
       await loadBalances(address, web3Provider, token);
       await loadSavingsAccounts(address, savings, web3Provider, router, ethPrice);
+      await loadGroupAccounts(address, savings);
 
       // Subscribe to events
       if (instance.on) {
@@ -780,6 +1083,7 @@ function App() {
         instance.on("chainChanged", handleChainChanged);
       }
 
+      setLoginMethod('wallet');
       toast.success('Wallet connected!');
     } catch (error) {
       console.error(error);
@@ -791,6 +1095,57 @@ function App() {
       setIsConnecting(false);
     }
   }, [web3Modal, isConnecting, ethPrice, handleAccountsChanged, handleChainChanged, loadBalances, loadSavingsAccounts]);
+
+  // Social login via Web3Auth (Google / Email)
+  const connectSocialLogin = async () => {
+    if (isConnecting || !web3auth) return;
+
+    try {
+      setIsConnecting(true);
+      setLoading(true);
+
+      const web3authProvider = await web3auth.connect();
+
+      if (!web3authProvider) {
+        throw new Error('No provider returned from Web3Auth');
+      }
+
+      const web3Provider = new ethers.providers.Web3Provider(web3authProvider);
+      const signer = web3Provider.getSigner();
+      const address = await signer.getAddress();
+
+      // Initialize contracts (same as wallet flow)
+      const token = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEToken, OOOWEEETokenABI, signer);
+      const savings = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEESavings, OOOWEEESavingsABI, signer);
+      const validatorFund = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEValidatorFund, OOOWEEEValidatorFundABI, signer);
+      const stability = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEStability, OOOWEEEStabilityABI, signer);
+      const donorRegistry = new ethers.Contract(CONTRACT_ADDRESSES.DonorRegistry, DonorRegistryABI, signer);
+      const router = new ethers.Contract(UNISWAP_ROUTER, UNISWAP_ROUTER_ABI, signer);
+
+      setAccount(address);
+      setProvider(web3Provider);
+      setTokenContract(token);
+      setSavingsContract(savings);
+      setValidatorFundContract(validatorFund);
+      setDonorRegistryContract(donorRegistry);
+      setStabilityContract(stability);
+      setRouterContract(router);
+      setLoginMethod('social');
+
+      await loadBalances(address, web3Provider, token);
+      await loadSavingsAccounts(address, savings, web3Provider, router, ethPrice);
+
+      toast.success('Signed in successfully!');
+    } catch (error) {
+      console.error('Social login error:', error);
+      if (error.message !== 'User closed popup' && error.message !== 'user closed popup') {
+        toast.error('Failed to sign in');
+      }
+    } finally {
+      setLoading(false);
+      setIsConnecting(false);
+    }
+  };
 
   // Auto-reconnect wallet if cached - one-shot on mount
   useEffect(() => {
@@ -804,7 +1159,52 @@ function App() {
   const donateToValidators = async () => {
     setShowDonateModal(true);
   };
-  
+
+  // Fiat onramp — buy ETH with card / Google Pay / Apple Pay
+  const openFiatOnramp = () => {
+    if (!account) {
+      toast.error('Please connect your wallet first');
+      return;
+    }
+
+    const transakUrl = new URL('https://global-stg.transak.com');
+    transakUrl.searchParams.set('apiKey', TRANSAK_API_KEY);
+    transakUrl.searchParams.set('environment', 'STAGING');
+    transakUrl.searchParams.set('cryptoCurrencyCode', 'ETH');
+    transakUrl.searchParams.set('network', 'ethereum');
+    transakUrl.searchParams.set('defaultCryptoCurrency', 'ETH');
+    transakUrl.searchParams.set('walletAddress', account);
+    transakUrl.searchParams.set('fiatCurrency', selectedCurrency);
+    transakUrl.searchParams.set('defaultFiatAmount', '50');
+    transakUrl.searchParams.set('themeColor', '7B68EE');
+    transakUrl.searchParams.set('disableWalletAddressForm', 'true');
+
+    // Open in a popup window
+    const width = 450;
+    const height = 700;
+    const left = (window.innerWidth - width) / 2 + window.screenX;
+    const top = (window.innerHeight - height) / 2 + window.screenY;
+    window.open(
+      transakUrl.toString(),
+      'transak_widget',
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+    );
+
+    toast('ETH purchase window opened! Your balance will update after the purchase completes.', { icon: '💳', duration: 5000 });
+
+    // Poll for balance changes after opening widget
+    // eslint-disable-next-line no-unused-vars
+    const startBalance = ethBalance;
+    const pollInterval = setInterval(async () => {
+      if (provider && tokenContract && account) {
+        await loadBalances(account, provider, tokenContract);
+      }
+    }, 15000);
+
+    // Stop polling after 10 minutes
+    setTimeout(() => clearInterval(pollInterval), 600000);
+  };
+
   const handleDonateSubmit = async () => {
     if (!donateAmount || parseFloat(donateAmount) <= 0) {
       toast.error('Enter a valid ETH amount');
@@ -814,35 +1214,68 @@ function App() {
     try {
       setLoading(true);
       const amount = parseFloat(donateAmount);
-      const tx = await validatorFundContract.donate({ 
-        value: ethers.utils.parseEther(donateAmount) 
-      });
-      
+      const isSponsor = amount >= 0.05;
+      const hasMetadata = isSponsor && (donorName.trim() || donorMessage.trim() || donorLocation.trim());
+      let donationWei = ethers.utils.parseEther(donateAmount);
+      let registrationCostWei = ethers.BigNumber.from(0);
+
+      // Sponsor tier (0.05+ ETH): estimate registration gas cost
+      // and subtract it from the donation so total spend = donateAmount
+      if (donorRegistryContract && hasMetadata) {
+        try {
+          const gasEstimate = await donorRegistryContract.estimateGas.registerDonation(
+            donorName.trim().slice(0, 50) || 'Anonymous',
+            donorMessage.trim().slice(0, 180),
+            donorLocation.trim().slice(0, 50)
+          );
+          const gasPrice = await provider.getGasPrice();
+          registrationCostWei = gasEstimate.mul(gasPrice).mul(120).div(100); // 20% buffer
+          donationWei = donationWei.sub(registrationCostWei);
+          if (donationWei.lte(0)) {
+            toast.error('Donation amount too small to cover registration gas');
+            setLoading(false);
+            return;
+          }
+        } catch (e) {
+          // Can't estimate — just send full amount as donation, skip registration
+          console.warn('Could not estimate registration gas:', e);
+          registrationCostWei = ethers.BigNumber.from(0);
+          donationWei = ethers.utils.parseEther(donateAmount);
+        }
+      }
+
+      const actualDonation = ethers.utils.formatEther(donationWei);
+      const tx = await validatorFundContract.donate({ value: donationWei });
+
       await toast.promise(tx.wait(), {
         loading: '💰 Sending donation...',
-        success: `🎉 Donated ${donateAmount} ETH to validator fund!`,
+        success: `🎉 Donated ${parseFloat(actualDonation).toFixed(4)} ETH to validator fund!`,
         error: '❌ Donation failed'
       });
-      
-      // Create donor entry for leaderboard
-      const donorEntry = {
-        amount: amount,
-        name: donorName.trim().slice(0, 50) || 'Anonymous',
-        location: donorLocation.trim().slice(0, 50) || '',
-        sender: `${account.slice(0, 6)}...${account.slice(-4)}`,
-        message: donorMessage.trim().slice(0, 180),
-        timestamp: Date.now()
-      };
-      
-      // Update leaderboard (top 3 biggest donations)
-      const updatedLeaderboard = [...donorLeaderboard, donorEntry]
-        .sort((a, b) => b.amount - a.amount)
-        .slice(0, 3);
-      setDonorLeaderboard(updatedLeaderboard);
-      localStorage.setItem('oooweee_donor_leaderboard', JSON.stringify(updatedLeaderboard));
-      
-      // If donation > 0.1 ETH and has a message, save shoutout
-      if (amount >= 0.1 && donorMessage.trim()) {
+
+      // Register donor metadata on-chain (gas already budgeted from donation amount)
+      if (donorRegistryContract && hasMetadata) {
+        try {
+          const regTx = await donorRegistryContract.registerDonation(
+            donorName.trim().slice(0, 50) || 'Anonymous',
+            donorMessage.trim().slice(0, 180),
+            donorLocation.trim().slice(0, 50)
+          );
+          await toast.promise(regTx.wait(), {
+            loading: '📝 Saving your name on-chain...',
+            success: '✅ Name & message saved!',
+            error: '⚠️ Name save failed'
+          });
+        } catch (regError) {
+          console.error('Donor registration failed:', regError);
+          if (regError.code !== 'ACTION_REJECTED') {
+            toast('Donation sent! Name save failed — try again next time', { icon: '⚠️' });
+          }
+        }
+      }
+
+      // Save shoutout locally for immediate display
+      if (donorMessage.trim()) {
         const newShoutout = {
           message: donorMessage.trim().slice(0, 180),
           amount: donateAmount,
@@ -874,25 +1307,58 @@ function App() {
   };
 
   const disconnectWallet = async () => {
+    // Logout from Web3Auth if social login
+    if (loginMethod === 'social' && web3auth) {
+      try {
+        await web3auth.logout();
+      } catch (e) {
+        console.error('Web3Auth logout error:', e);
+      }
+    }
+
     if (web3Modal) {
       web3Modal.clearCachedProvider();
     }
-    
+
     if (window.ethereum) {
       window.ethereum.removeAllListeners('accountsChanged');
       window.ethereum.removeAllListeners('chainChanged');
     }
-    
+
     setAccount(null);
     setProvider(null);
     setTokenContract(null);
     setSavingsContract(null);
     setValidatorFundContract(null);
+    setDonorRegistryContract(null);
     setStabilityContract(null);
     setRouterContract(null);
     setBalance('0');
     setEthBalance('0');
     setAccounts([]);
+    setLoginMethod(null);
+  };
+
+  // eslint-disable-next-line no-unused-vars
+  const claimRewards = async (accountId) => {
+    try {
+      setLoading(true);
+      const tx = await savingsContract.claimRewards(accountId);
+
+      await toast.promise(tx.wait(), {
+        loading: '🎁 Claiming rewards...',
+        success: '✅ Rewards claimed!',
+        error: '❌ Failed to claim rewards'
+      });
+
+      await loadSavingsAccounts(account, savingsContract, provider, routerContract, ethPrice);
+
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to claim rewards');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const claimAllRewards = async () => {
@@ -911,6 +1377,158 @@ function App() {
     } catch (error) {
       console.error(error);
       toast.error('Failed to claim rewards');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============ Group Savings Functions ============
+
+  const loadGroupAccounts = async (userAccount, contract) => {
+    try {
+      const count = await contract.groupCount();
+      const groupsList = [];
+      for (let i = 0; i < count.toNumber(); i++) {
+        try {
+          const memberCheck = await contract.isGroupMember(i, userAccount);
+          const inviteCheck = await contract.isGroupInvited(i, userAccount);
+          if (memberCheck || inviteCheck) {
+            const details = await contract.getGroupDetails(i);
+            const members = await contract.getGroupMembers(i);
+            const myContribution = memberCheck
+              ? await contract.getGroupContribution(i, userAccount)
+              : ethers.BigNumber.from(0);
+            // Sum all member contributions (shows total even after completion)
+            let totalContributions = ethers.BigNumber.from(0);
+            for (const member of members) {
+              try {
+                const contrib = await contract.getGroupContribution(i, member);
+                totalContributions = totalContributions.add(contrib);
+              } catch (e) {}
+            }
+            const TYPES = ['Time', 'Balance', 'Growth'];
+            const displayBalance = details.isActive
+              ? ethers.utils.formatUnits(details.totalBalance, 18)
+              : ethers.utils.formatUnits(totalContributions, 18);
+            groupsList.push({
+              id: i,
+              creator: details.creator,
+              destinationWallet: details.destinationWallet,
+              accountType: TYPES[details.accountType] || 'Time',
+              isActive: details.isActive,
+              totalBalance: ethers.utils.formatUnits(details.totalBalance, 18),
+              totalContributions: ethers.utils.formatUnits(totalContributions, 18),
+              displayBalance: displayBalance,
+              targetFiat: details.targetFiat.toString(),
+              targetCurrency: details.targetCurrency,
+              unlockTime: details.unlockTime,
+              goalName: details.goalName,
+              memberCount: details.memberCount.toNumber(),
+              members: members,
+              myContribution: ethers.utils.formatUnits(myContribution, 18),
+              isMember: memberCheck,
+              isInvited: inviteCheck && !memberCheck
+            });
+          }
+        } catch (e) {
+          console.error('Error loading group', i, e);
+        }
+      }
+      setUserGroups(groupsList);
+      setPendingInvitations(groupsList.filter(g => g.isInvited));
+    } catch (error) {
+      console.error('Error loading groups:', error);
+    }
+  };
+
+  const inviteMemberToGroup = async (groupId, memberAddress) => {
+    try {
+      setLoading(true);
+      if (!ethers.utils.isAddress(memberAddress)) {
+        toast.error('Invalid address');
+        return;
+      }
+      const tx = await savingsContract.inviteMember(groupId, memberAddress);
+      await toast.promise(tx.wait(), {
+        loading: '📨 Sending invitation...',
+        success: '✅ Member invited!',
+        error: '❌ Failed to invite'
+      });
+      setGroupInviteAddress('');
+      await loadGroupAccounts(account, savingsContract);
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to invite: ' + (error.reason || error.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const acceptGroupInvitation = async (groupId) => {
+    try {
+      setLoading(true);
+      const tx = await savingsContract.acceptInvitation(groupId);
+      await toast.promise(tx.wait(), {
+        loading: '🤝 Accepting invitation...',
+        success: '✅ You joined the group!',
+        error: '❌ Failed to accept'
+      });
+      await loadGroupAccounts(account, savingsContract);
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to accept: ' + (error.reason || error.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const depositToGroupAccount = async (groupId, oooweeeAmount) => {
+    try {
+      setLoading(true);
+      const depositAmount = ethers.utils.parseUnits(Math.floor(parseFloat(oooweeeAmount)).toString(), 18);
+
+      const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
+      await toast.promise(approveTx.wait(), {
+        loading: '🔓 Approving tokens...',
+        success: '✅ Tokens approved!',
+        error: '❌ Failed to approve'
+      });
+
+      const tx = await savingsContract.depositToGroup(groupId, depositAmount);
+      await toast.promise(tx.wait(), {
+        loading: '💰 Depositing to group...',
+        success: '✅ Deposit successful!',
+        error: '❌ Failed to deposit'
+      });
+
+      setGroupDepositAmount('');
+      await loadGroupAccounts(account, savingsContract);
+      await loadBalances(account, provider, tokenContract);
+    } catch (error) {
+      console.error(error);
+      if (error.code === 'ACTION_REJECTED') {
+        toast.error('Transaction cancelled');
+      } else {
+        toast.error('Failed to deposit: ' + (error.reason || error.message));
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const processGroup = async (groupId) => {
+    try {
+      setLoading(true);
+      const tx = await savingsContract.processGroupAccount(groupId);
+      await toast.promise(tx.wait(), {
+        loading: '🏁 Completing group account...',
+        success: '🎉 Group account completed! Funds sent to destination.',
+        error: '❌ Conditions not met yet'
+      });
+      await loadGroupAccounts(account, savingsContract);
+    } catch (error) {
+      console.error(error);
+      toast.error('Cannot complete: ' + (error.reason || error.message));
     } finally {
       setLoading(false);
     }
@@ -1086,7 +1704,7 @@ function App() {
     const initialDepositFiat = document.getElementById('initialDeposit').value;
     
     if (!goalName) {
-      toast.error('Please enter a quest name');
+      toast.error('Please enter an account name');
       return;
     }
     
@@ -1144,41 +1762,123 @@ function App() {
         return;
       }
       createBalanceAccount(targetAmount, recipientAddress, goalName, initialDepositOooweee, accountCurrency);
+    } else if (accountType === 'group') {
+      if (!groupDestination || !ethers.utils.isAddress(groupDestination)) {
+        toast.error('Please enter a valid destination wallet address');
+        return;
+      }
+      const ACCOUNT_TYPE_MAP = { time: 0, balance: 1, growth: 2 };
+      const CURRENCY_MAP = { USD: 0, EUR: 1, GBP: 2 };
+      const typeEnum = ACCOUNT_TYPE_MAP[groupSubType] || 0;
+      const currencyEnum = CURRENCY_MAP[accountCurrency] || 1;
+
+      let unlockTime = 0;
+      let targetFiatSmallest = 0;
+
+      if (groupSubType === 'time') {
+        const unlockDate = document.getElementById('unlockDate')?.value;
+        if (!unlockDate) {
+          toast.error('Please select an unlock date');
+          return;
+        }
+        unlockTime = Math.floor(new Date(unlockDate).getTime() / 1000);
+      } else {
+        const targetAmount = document.getElementById('targetAmount')?.value;
+        if (!targetAmount || parseFloat(targetAmount) <= 0) {
+          toast.error('Please enter a valid target amount');
+          return;
+        }
+        targetFiatSmallest = Math.round(parseFloat(targetAmount) * Math.pow(10, CURRENCIES[accountCurrency].decimals));
+      }
+
+      createGroupAccountFn(typeEnum, groupDestination, goalName, targetFiatSmallest, currencyEnum, unlockTime, initialDepositOooweee);
+    }
+  };
+
+  const createGroupAccountFn = async (typeEnum, destination, goalName, targetFiat, currencyEnum, unlockTime, initialDeposit) => {
+    try {
+      setLoading(true);
+
+      if (parseFloat(balance) < parseFloat(initialDeposit)) {
+        const needed = parseFloat(initialDeposit) - parseFloat(balance);
+        toast(`You need ${Math.ceil(needed).toLocaleString()} more OOOWEEE`, { icon: '💡' });
+        await openBuyModalWithAmount(needed);
+        setLoading(false);
+        return;
+      }
+
+      const depositAmount = ethers.utils.parseUnits(Math.floor(initialDeposit).toString(), 18);
+
+      const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
+      await toast.promise(approveTx.wait(), {
+        loading: '🔓 Approving tokens...',
+        success: '✅ Tokens approved!',
+        error: '❌ Failed to approve'
+      });
+
+      const createTx = await savingsContract.createGroupAccount(
+        typeEnum,
+        destination,
+        goalName,
+        targetFiat,
+        currencyEnum,
+        unlockTime,
+        depositAmount
+      );
+
+      await toast.promise(createTx.wait(), {
+        loading: '👥 Creating group account...',
+        success: '🎉 Group account created!',
+        error: '❌ Failed to create group account'
+      });
+
+      await loadGroupAccounts(account, savingsContract);
+      await loadBalances(account, provider, tokenContract);
+    } catch (error) {
+      console.error(error);
+      if (error.code === 'ACTION_REJECTED') {
+        toast.error('Transaction cancelled');
+      } else {
+        toast.error('Failed to create group: ' + (error.reason || error.message));
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
   const depositToAccount = async (accountId, amount) => {
     try {
       setLoading(true);
-      
+
       const depositAmountNumber = parseFloat(amount);
       const currentBalance = parseFloat(balance);
-      
+
       if (currentBalance < depositAmountNumber) {
         const needed = depositAmountNumber - currentBalance;
-        
+
         // Open buy modal with exact amount needed
         toast(`You need ${needed.toFixed(0)} more OOOWEEE`, { icon: '💡' });
         await openBuyModalWithAmount(needed);
         setLoading(false);
         return;
       }
-      
+
       const depositAmount = ethers.utils.parseUnits(depositAmountNumber.toString(), 18);
-      
+      const formattedTokens = Number(depositAmountNumber).toLocaleString(undefined, { maximumFractionDigits: 0 });
+
       const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
-      
+
       await toast.promise(approveTx.wait(), {
         loading: '🔓 Approving tokens...',
         success: '✅ Tokens approved!',
         error: '❌ Failed to approve'
       });
-      
+
       const depositTx = await savingsContract.deposit(accountId, depositAmount);
-      
+
       await toast.promise(depositTx.wait(), {
-        loading: `💰 Depositing ${depositAmountNumber} OOOWEEE...`,
-        success: `🎉 Deposited ${depositAmountNumber} $OOOWEEE!`,
+        loading: `💰 Depositing ${formattedTokens} $OOOWEEE...`,
+        success: `🎉 Deposited ${formattedTokens} $OOOWEEE!`,
         error: '❌ Failed to deposit'
       });
       
@@ -1224,58 +1924,94 @@ function App() {
       <div className="about-header">
         <img src={oooweeLogo} alt="OOOWEEE" className="about-logo pixel-art" />
         <h1>The OOOWEEE Protocol</h1>
-        <p className="subtitle">Decentralized Savings Revolution</p>
+        <p className="subtitle">Make your $aving goals non-negotiable</p>
       </div>
 
       <div className="about-section">
-        <h2>🎯 The Problem</h2>
-        <p>Traditional banks make it too easy to break your savings goals. That "7-day cooling period"? You can still break it. Those withdrawal fees? They're not enough to stop impulsive spending.</p>
+        <h2>The Problem</h2>
+        <p>Saving money should be simple. But traditional banks make breaking your goals too easy &mdash; cooling-off periods you can override, penalty fees that barely sting, and no real accountability. 92% of people abandon their savings goals within 6 months.</p>
       </div>
 
       <div className="about-section">
-        <h2>💡 The Solution</h2>
-        <p>OOOWEEE creates truly immutable savings accounts using smart contracts. When you lock your funds, they're REALLY locked - no bank manager can override it, no "forgot password" backdoor. Your future self will thank you.</p>
+        <h2>The Solution</h2>
+        <p>OOOWEEE uses smart contracts to create savings accounts that <strong>cannot be broken early</strong>. No bank manager override. No "forgot password" backdoor. When you set a time lock, balance target, or growth goal &mdash; it's enforced by code, not willpower. Your future self will thank you.</p>
       </div>
 
-      <div className="value-flow">
-        <h2>🔄 How It Works</h2>
+      <div className="about-section features-section">
+        <h2>Key Features</h2>
+        <div className="features-grid">
+          <div className="feature-card">
+            <span className="feature-icon">🔒</span>
+            <h3>Three Lock Types</h3>
+            <p><strong>Time Lock</strong> &mdash; funds release after a set date. <strong>Balance Target</strong> &mdash; unlock when your savings hit a fiat value. <strong>Growth Goal</strong> &mdash; unlock when your tokens grow by a target percentage.</p>
+          </div>
+          <div className="feature-card">
+            <span className="feature-icon">👥</span>
+            <h3>Group Savings</h3>
+            <p>Save together with friends, family, or communities. Create a shared goal, invite members, and watch your collective savings grow. Perfect for holidays, emergency funds, or group investments.</p>
+          </div>
+          <div className="feature-card">
+            <span className="feature-icon">🎁</span>
+            <h3>Passive Rewards</h3>
+            <p>Active savers earn rewards from the protocol's validator staking income. The longer you save, the more you earn &mdash; all distributed automatically in $OOOWEEE.</p>
+          </div>
+          <div className="feature-card">
+            <span className="feature-icon">🛡️</span>
+            <h3>Price Stability</h3>
+            <p>An automated stability mechanism monitors the token price and intervenes during excessive pumps, capturing ETH value and protecting savers from volatile swings.</p>
+          </div>
+          <div className="feature-card">
+            <span className="feature-icon">💸</span>
+            <h3>Multi-Currency Targets</h3>
+            <p>Set your savings goals in USD, EUR, or GBP. Live Chainlink price feeds convert your $OOOWEEE balance to real-world values so you always know where you stand.</p>
+          </div>
+          <div className="feature-card">
+            <span className="feature-icon">⚡</span>
+            <h3>Auto-Unlock</h3>
+            <p>When your savings account matures, Chainlink Automation processes the unlock automatically. No manual claiming needed &mdash; funds return to your wallet on time, every time.</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="about-section">
+        <h2>How the Value Flows</h2>
         <div className="flow-diagram">
           <div className="flow-step">
             <span className="step-icon">📈</span>
-            <h3>Speculation</h3>
-            <p>Traders buy OOOWEEE, price increases</p>
+            <h3>1. Market Activity</h3>
+            <p>Traders buy and sell $OOOWEEE on Uniswap, creating price movement</p>
           </div>
-          <div className="flow-arrow">→</div>
+          <div className="flow-arrow">&#8594;</div>
           <div className="flow-step">
             <span className="step-icon">🛡️</span>
-            <h3>Stability</h3>
-            <p>System sells into pumps, captures ETH</p>
+            <h3>2. Stability</h3>
+            <p>Protocol detects price spikes above 10%, sells reserve tokens, captures ETH</p>
           </div>
-          <div className="flow-arrow">→</div>
+          <div className="flow-arrow">&#8594;</div>
           <div className="flow-step">
             <span className="step-icon">🔐</span>
-            <h3>Validators</h3>
-            <p>ETH funds validators, earns 4% APY</p>
+            <h3>3. Validators</h3>
+            <p>Captured ETH funds Ethereum validators earning ~4% APY staking rewards</p>
           </div>
-          <div className="flow-arrow">→</div>
+          <div className="flow-arrow">&#8594;</div>
           <div className="flow-step">
             <span className="step-icon">🎁</span>
-            <h3>Rewards</h3>
-            <p>Savers earn passive income</p>
+            <h3>4. Rewards</h3>
+            <p>Validator rewards are split: 34% converted to $OOOWEEE for savers</p>
           </div>
         </div>
       </div>
 
       <div className="tokenomics-section">
-        <h2>📊 Tokenomics</h2>
+        <h2>Tokenomics</h2>
         <div className="tokenomics-grid">
           <div className="token-stat">
             <h4>Total Supply</h4>
-            <p>100,000,000 $OOOWEEE</p>
+            <p>100,000,000</p>
           </div>
-          <div className="token-stat">
+          <div className="token-stat highlight">
             <h4>Stability Reserve</h4>
-            <p>89,000,000 (89%)</p>
+            <p>80,000,000 (80%)</p>
           </div>
           <div className="token-stat">
             <h4>Founder Allocation</h4>
@@ -1283,14 +2019,59 @@ function App() {
           </div>
           <div className="token-stat">
             <h4>Initial Liquidity</h4>
-            <p>1,000,000 (1%)</p>
+            <p>10,000,000 (10%)</p>
+          </div>
+        </div>
+        <div className="tokenomics-details">
+          <div className="tokenomics-detail-row">
+            <span>Buy / Sell Tax</span>
+            <span className="value">0%</span>
+          </div>
+          <div className="tokenomics-detail-row">
+            <span>Savings Creation Fee</span>
+            <span className="value">1%</span>
+          </div>
+          <div className="tokenomics-detail-row">
+            <span>Validator Reward Split</span>
+            <span className="value">33% Ops / 33% Validators / 34% Savers</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="about-section">
+        <h2>Smart Contracts</h2>
+        <p style={{ marginBottom: '1rem' }}>All contracts are upgradeable (UUPS proxy pattern), verified on Etherscan, and powered by Chainlink oracles and automation.</p>
+        <div className="contracts-list">
+          <div className="contract-item">
+            <span className="contract-name">$OOOWEEE Token</span>
+            <span className="contract-desc">ERC-20 with stability mechanism integration</span>
+          </div>
+          <div className="contract-item">
+            <span className="contract-name">Savings</span>
+            <span className="contract-desc">Individual &amp; group accounts with auto-unlock</span>
+          </div>
+          <div className="contract-item">
+            <span className="contract-name">Stability</span>
+            <span className="contract-desc">Automated price intervention &amp; ETH capture</span>
+          </div>
+          <div className="contract-item">
+            <span className="contract-name">Validator Fund</span>
+            <span className="contract-desc">ETH staking &amp; 33/33/34 reward distribution</span>
+          </div>
+          <div className="contract-item">
+            <span className="contract-name">Price Oracle</span>
+            <span className="contract-desc">Chainlink feeds for USD, EUR, GBP conversion</span>
+          </div>
+          <div className="contract-item">
+            <span className="contract-name">Donor Registry</span>
+            <span className="contract-desc">On-chain recognition for community contributors</span>
           </div>
         </div>
       </div>
 
       <div className="cta-section">
-        <h2>🚀 Join the Revolution</h2>
-        <p>Take control of your financial future. Start saving with OOOWEEE today.</p>
+        <h2>Ready to start saving?</h2>
+        <p>Take control of your financial future. Create an account that holds you accountable.</p>
         <button onClick={() => setActiveTab('dashboard')} className="cta-button rainbow-btn">
           Start Saving Now
         </button>
@@ -1302,13 +2083,36 @@ function App() {
   const renderCommunityPage = () => (
     <div className="community-page">
       <div className="community-header">
-        <h1>🌟 OOOWEEE Community</h1>
+        <h1>OOOWEEE Community</h1>
         <p>Supporting the network, together!</p>
       </div>
 
+      {/* ATH Donor Banner */}
+      {validatorStats.topDonor && parseFloat(validatorStats.topDonorAmount) > 0 && (
+        <div className="ath-donor-banner">
+          <div className="ath-badge">🏆 TOP SPONSOR</div>
+          <div className="ath-content">
+            <div className="ath-amount">{parseFloat(validatorStats.topDonorAmount).toFixed(4)} ETH</div>
+            {donorLeaderboard.length > 0 && donorLeaderboard[0].name ? (
+              <>
+                <div className="ath-name">{donorLeaderboard[0].name}</div>
+                {donorLeaderboard[0].message && (
+                  <div className="ath-message">"{donorLeaderboard[0].message}"</div>
+                )}
+                {donorLeaderboard[0].location && (
+                  <div className="ath-location">📍 {donorLeaderboard[0].location}</div>
+                )}
+              </>
+            ) : (
+              <div className="ath-address">{validatorStats.topDonor.slice(0, 6)}...{validatorStats.topDonor.slice(-4)}</div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Validator Network Stats */}
       <div className="community-card validator-stats-card">
-        <h2>🔐 Validator Network</h2>
+        <h2>Validator Network</h2>
         <div className="validator-metrics">
           <div className="metric-item">
             <span className="metric-icon">🖥️</span>
@@ -1339,25 +2143,55 @@ function App() {
             </div>
           </div>
         </div>
-        
+
         <div className="validator-progress-section">
           <h3>Progress to Next Validator</h3>
           <div className="progress-bar">
-            <div 
+            <div
               className="progress-fill validator-progress"
               style={{ width: `${validatorStats.progress}%` }}
             />
           </div>
           <p className="progress-text">{parseFloat(validatorStats.pendingETH).toFixed(4)} / 32 ETH ({validatorStats.progress.toFixed(1)}%)</p>
         </div>
-        
-        <div className="donation-stats">
-          <p>💝 Total Community Donations: {parseFloat(validatorStats.totalDonations).toFixed(4)} ETH</p>
-          <p>👥 Total Donors: {validatorStats.donors}</p>
+      </div>
+
+      {/* Community Donations */}
+      <div className="community-card donations-card">
+        <h2>Community Donations</h2>
+        <div className="validator-metrics">
+          <div className="metric-item">
+            <span className="metric-icon">💰</span>
+            <div className="metric-content">
+              <h4>Total Donated</h4>
+              <p className="metric-value">{parseFloat(validatorStats.totalDonations).toFixed(4)} ETH</p>
+            </div>
+          </div>
+          <div className="metric-item">
+            <span className="metric-icon">👥</span>
+            <div className="metric-content">
+              <h4>Total Donors</h4>
+              <p className="metric-value">{validatorStats.donors}</p>
+            </div>
+          </div>
+          <div className="metric-item">
+            <span className="metric-icon">🏆</span>
+            <div className="metric-content">
+              <h4>Top Donor</h4>
+              {validatorStats.topDonor ? (
+                <>
+                  <p className="metric-value">{parseFloat(validatorStats.topDonorAmount).toFixed(4)} ETH</p>
+                  <p className="metric-sub">{validatorStats.topDonor.slice(0, 6)}...{validatorStats.topDonor.slice(-4)}</p>
+                </>
+              ) : (
+                <p className="metric-value">—</p>
+              )}
+            </div>
+          </div>
         </div>
-        
+
         {account && (
-          <button className="donate-btn rainbow-btn" onClick={donateToValidators} disabled={loading}>
+          <button className="donate-btn" onClick={donateToValidators} disabled={loading}>
             💰 Donate to Validators
           </button>
         )}
@@ -1366,16 +2200,18 @@ function App() {
       {/* Donor Leaderboard */}
       {donorLeaderboard.length > 0 && (
         <div className="community-card leaderboard-card">
-          <h2>🏆 Top Donors</h2>
+          <h2>Top Donors</h2>
           <div className="leaderboard-list">
             {donorLeaderboard.map((donor, index) => (
-              <div key={index} className={`leaderboard-entry ${index === 0 ? 'gold' : index === 1 ? 'silver' : 'bronze'}`}>
+              <div key={donor.address || index} className={`leaderboard-entry ${index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : ''}`}>
                 <span className="medal">
-                  {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
+                  {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}
                 </span>
                 <div className="donor-info">
-                  <span className="donor-name">{donor.name}</span>
-                  {donor.location && <span className="donor-location">{donor.location}</span>}
+                  <span className="donor-name">{donor.name || donor.shortAddress}</span>
+                  {donor.name && <span className="donor-address">{donor.shortAddress}</span>}
+                  {donor.message && <span className="donor-message">"{donor.message}"</span>}
+                  {donor.location && <span className="donor-location">📍 {donor.location}</span>}
                 </div>
                 <span className="donor-amount">{donor.amount} ETH</span>
               </div>
@@ -1387,7 +2223,7 @@ function App() {
       {/* Community Shoutout */}
       {donorShoutout && (
         <div className="community-card shoutout-card">
-          <h2>📣 Community Message</h2>
+          <h2>Community Message</h2>
           <div className="shoutout-content-wrapper">
             <div className="shoutout-icon">💖</div>
             <div className="shoutout-content">
@@ -1404,7 +2240,7 @@ function App() {
 
       {/* How to Support */}
       <div className="community-card support-card">
-        <h2>💪 How You Can Support</h2>
+        <h2>How You Can Support</h2>
         <div className="support-methods">
           <div className="support-item">
             <span className="support-icon">💝</span>
@@ -1427,7 +2263,7 @@ function App() {
       {!account && (
         <div className="community-cta">
           <button onClick={connectWallet} className="connect-btn rainbow-btn" disabled={isConnecting}>
-            <span>🔗</span> Connect Wallet to Participate
+            Connect Wallet to Participate
           </button>
         </div>
       )}
@@ -1438,14 +2274,14 @@ function App() {
   const renderAdminDashboard = () => (
     <div className="admin-dashboard">
       <div className="admin-header">
-        <h1>🔧 Protocol Admin Dashboard</h1>
+        <h1>Protocol Admin Dashboard</h1>
         <p className="admin-address">Connected: {account.slice(0, 6)}...{account.slice(-4)}</p>
       </div>
       
       {/* System Health Overview */}
       <div className="admin-section">
-        <h2>🟢 System Health</h2>
-        <div className="admin-grid-4">
+        <h2>System Health</h2>
+        <div className="admin-grid-5">
           <div className="admin-card">
             <div className="admin-card-icon">{adminStats.isSequencerHealthy ? '✅' : '🔴'}</div>
             <div className="admin-card-content">
@@ -1474,18 +2310,33 @@ function App() {
               <p>{adminStats.marketHighVolatility ? 'High Volatility' : 'Normal'}</p>
             </div>
           </div>
+          <div className={`admin-card ${priceFeedStatus.source !== 'live' ? 'admin-card-warning' : ''}`}>
+            <div className="admin-card-icon">
+              {priceFeedStatus.source === 'live' ? '✅' : priceFeedStatus.source === 'cached' ? '⚠️' : '🔴'}
+            </div>
+            <div className="admin-card-content">
+              <h4>CoinGecko Feed</h4>
+              <p>{priceFeedStatus.source === 'live' ? 'Live' : priceFeedStatus.source === 'cached' ? 'Using cached prices' : 'Down — fallback prices'}</p>
+              {priceFeedStatus.source !== 'live' && priceFeedStatus.cachedAt && (
+                <span className="admin-card-detail">Last live: {new Date(priceFeedStatus.cachedAt).toLocaleTimeString()}</span>
+              )}
+              {priceFeedStatus.error && (
+                <span className="admin-card-detail error">{priceFeedStatus.error}</span>
+              )}
+            </div>
+          </div>
         </div>
       </div>
-      
+
       {/* Protocol Metrics */}
       <div className="admin-section">
-        <h2>📊 Protocol Metrics</h2>
+        <h2>Protocol Metrics</h2>
         <div className="admin-grid-4">
           <div className="admin-card metric">
             <h4>Total Value Locked</h4>
             <p className="metric-value">{parseFloat(adminStats.totalValueLocked).toLocaleString()}</p>
             <span className="metric-label">OOOWEEE</span>
-            <span className="metric-usd">≈ {getOooweeeInFiat(adminStats.totalValueLocked, 'eur')}</span>
+            <span className="metric-usd">≈ {getOooweeeInFiat(adminStats.totalValueLocked, selectedCurrency.toLowerCase())}</span>
           </div>
           <div className="admin-card metric">
             <h4>Total Accounts</h4>
@@ -1507,7 +2358,7 @@ function App() {
       
       {/* Stability Mechanism */}
       <div className="admin-section">
-        <h2>🛡️ Stability Mechanism (SSA)</h2>
+        <h2>Stability Mechanism (SSA)</h2>
         
         <div className="stability-info-banner">
           <div className="stability-price-info">
@@ -1568,42 +2419,28 @@ function App() {
         
         {/* Emergency Controls */}
         <div className="emergency-controls-section">
-          <h3>⚠️ Admin Controls</h3>
+          <h3>Emergency Controls</h3>
           <div className="control-buttons-grid">
-            <button 
-              className="admin-btn primary"
-              onClick={updateBaselinePrice}
-              disabled={loading}
-            >
-              📊 Update Baseline Price
-            </button>
-            <button 
-              className="admin-btn primary"
-              onClick={triggerSystemCheck}
-              disabled={loading}
-            >
-              ⚡ Trigger System Check
-            </button>
-            <button 
+            <button
               className="admin-btn secondary"
               onClick={manualStabilityCheck}
               disabled={loading}
             >
-              🔍 Manual Check (0.01 ETH)
+              Manual Check (0.01 ETH)
             </button>
-            <button 
+            <button
               className="admin-btn warning"
               onClick={resetCircuitBreaker}
               disabled={loading || !adminStats.circuitBreakerTripped}
             >
-              🔧 Reset Circuit Breaker
+              Reset Circuit Breaker
             </button>
-            <button 
+            <button
               className="admin-btn secondary"
               onClick={toggleSystemChecks}
               disabled={loading}
             >
-              {adminStats.systemChecksEnabled ? '⏸️ Pause' : '▶️ Resume'} Checks
+              {adminStats.systemChecksEnabled ? 'Pause Checks' : 'Resume Checks'}
             </button>
           </div>
         </div>
@@ -1611,7 +2448,7 @@ function App() {
       
       {/* Validator Network */}
       <div className="admin-section">
-        <h2>🔐 Validator Network</h2>
+        <h2>Validator Network</h2>
         <div className="admin-grid-4">
           <div className="admin-card">
             <h4>Active Validators</h4>
@@ -1645,7 +2482,7 @@ function App() {
       
       {/* Quick Actions */}
       <div className="admin-section">
-        <h2>⚡ Quick Actions</h2>
+        <h2>Quick Actions</h2>
         <div className="action-buttons-grid">
           <button className="action-btn" onClick={() => window.location.reload()}>
             🔄 Refresh Dashboard
@@ -1678,10 +2515,49 @@ function App() {
     <div className="App">
       <Toaster position="top-right" />
       
+      {/* Send Modal */}
+      {showSendModal && (
+        <div className="modal-overlay" onClick={() => setShowSendModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>📤 Send $OOOWEEE</h2>
+            <button className="close-modal" onClick={() => setShowSendModal(false)}>✕</button>
+
+            <div className="form-group">
+              <label>Recipient Address</label>
+              <input
+                type="text"
+                placeholder="0x..."
+                value={sendRecipient}
+                onChange={(e) => setSendRecipient(e.target.value)}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Amount (OOOWEEE)</label>
+              <input
+                type="number"
+                placeholder="0"
+                value={sendAmount}
+                onChange={(e) => setSendAmount(e.target.value)}
+              />
+              <p className="info-text">Available: {parseFloat(balance).toLocaleString()} OOOWEEE</p>
+            </div>
+
+            <button
+              className="cta-button rainbow-btn"
+              onClick={sendTokens}
+              disabled={loading || !sendRecipient || !sendAmount || parseFloat(sendAmount) <= 0}
+            >
+              {loading ? 'Sending...' : 'Send'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {showBuyModal && (
         <div className="modal-overlay" onClick={() => { setShowBuyModal(false); setRequiredOooweeeForPurchase(null); }}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h2>🛒 Buy $OOOWEEE</h2>
+            <h2>Buy $OOOWEEE</h2>
             <button className="close-modal" onClick={() => { setShowBuyModal(false); setRequiredOooweeeForPurchase(null); }}>✕</button>
             
             <div className="buy-form">
@@ -1732,7 +2608,7 @@ function App() {
                     <p>You will receive approximately:</p>
                     <h3>{parseFloat(estimatedOooweee).toLocaleString()} $OOOWEEE</h3>
                     {ethPrice && (
-                      <p className="fiat-value">≈ {getOooweeeInFiat(estimatedOooweee, 'eur')}</p>
+                      <p className="fiat-value">≈ {getOooweeeInFiat(estimatedOooweee, selectedCurrency.toLowerCase())}</p>
                     )}
                   </div>
                   
@@ -1743,12 +2619,23 @@ function App() {
                     <button onClick={() => setEthToBuy('0.5')}>0.5 ETH</button>
                   </div>
                   
-                  <button 
+                  <button
                     className="buy-btn rainbow-btn"
                     onClick={buyOooweee}
                     disabled={loading || parseFloat(ethToBuy) <= 0}
                   >
                     {loading ? '⏳ Processing...' : '🚀 Swap for OOOWEEE'}
+                  </button>
+
+                  <div className="onramp-divider">
+                    <span>or buy ETH directly with</span>
+                  </div>
+
+                  <button
+                    className="fiat-onramp-btn"
+                    onClick={() => { setShowBuyModal(false); openFiatOnramp(); }}
+                  >
+                    💳 Card / Google Pay / Apple Pay
                   </button>
                 </>
               )}
@@ -1760,7 +2647,7 @@ function App() {
       {showDonateModal && (
         <div className="modal-overlay" onClick={() => { setShowDonateModal(false); setDonorMessage(''); setDonorName(''); setDonorLocation(''); }}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h2>💝 Donate to Validators</h2>
+            <h2>Donate to Validators</h2>
             <button className="close-modal" onClick={() => { setShowDonateModal(false); setDonorMessage(''); setDonorName(''); setDonorLocation(''); }}>✕</button>
             
             <div className="buy-form">
@@ -1788,50 +2675,61 @@ function App() {
                 <button onClick={() => setDonateAmount('0.5')}>0.5 ETH</button>
               </div>
               
-              <div className="donor-info-fields">
-                <div className="input-group">
-                  <label>Your Name (optional):</label>
-                  <input
-                    type="text"
-                    value={donorName}
-                    onChange={(e) => setDonorName(e.target.value.slice(0, 50))}
-                    placeholder="Anonymous"
-                    maxLength={50}
-                  />
-                </div>
-                
-                <div className="input-group">
-                  <label>Location (optional):</label>
-                  <input
-                    type="text"
-                    value={donorLocation}
-                    onChange={(e) => setDonorLocation(e.target.value.slice(0, 50))}
-                    placeholder="e.g. Dublin, Ireland"
-                    maxLength={50}
-                  />
-                </div>
-              </div>
-              
-              <div className="shoutout-notice">
-                <p>📣 Donations &gt;0.1 ETH get a shoutout!</p>
-              </div>
-              
-              {parseFloat(donateAmount) >= 0.1 && (
-                <div className="input-group message-group">
-                  <label>Your Message (optional):</label>
-                  <textarea
-                    value={donorMessage}
-                    onChange={(e) => setDonorMessage(e.target.value.slice(0, 180))}
-                    placeholder="Leave a message for the community..."
-                    maxLength={180}
-                    rows={3}
-                  />
-                  <span className="char-count">{donorMessage.length}/180</span>
+              {parseFloat(donateAmount) >= 0.05 ? (
+                <>
+                  <div className="sponsor-tier-notice">
+                    <p>🌟 Sponsor tier! Your name & message will be saved on-chain forever.</p>
+                  </div>
+                  <div className="donor-info-fields">
+                    <div className="input-group">
+                      <label>Your Name (optional):</label>
+                      <input
+                        type="text"
+                        value={donorName}
+                        onChange={(e) => setDonorName(e.target.value.slice(0, 50))}
+                        placeholder="Anonymous"
+                        maxLength={50}
+                      />
+                    </div>
+
+                    <div className="input-group">
+                      <label>Location (optional):</label>
+                      <input
+                        type="text"
+                        value={donorLocation}
+                        onChange={(e) => setDonorLocation(e.target.value.slice(0, 50))}
+                        placeholder="e.g. Dublin, Ireland"
+                        maxLength={50}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="input-group message-group">
+                    <label>Your Message (optional):</label>
+                    <textarea
+                      value={donorMessage}
+                      onChange={(e) => setDonorMessage(e.target.value.slice(0, 180))}
+                      placeholder="Leave a message for the community..."
+                      maxLength={180}
+                      rows={3}
+                    />
+                    <span className="char-count">{donorMessage.length}/180</span>
+                  </div>
+
+                  {(donorName.trim() || donorMessage.trim() || donorLocation.trim()) && (
+                    <div className="info-notice">
+                      <p>ℹ️ Donation includes gas fees for sponsor registration.</p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="info-notice">
+                  <p>💡 Donate 0.05+ ETH to become a sponsor — your name & message saved on-chain forever!</p>
                 </div>
               )}
-              
-              <button 
-                className="buy-btn rainbow-btn"
+
+              <button
+                className="buy-btn"
                 onClick={handleDonateSubmit}
                 disabled={loading || parseFloat(donateAmount) <= 0 || parseFloat(donateAmount) > parseFloat(ethBalance)}
               >
@@ -1845,26 +2743,27 @@ function App() {
       {showCreateModal && (
         <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
           <div className="modal-content create-modal" onClick={(e) => e.stopPropagation()}>
-            <h2>🎮 Start New Savings Quest</h2>
+            <h2>New Savings Account</h2>
             <button className="close-modal" onClick={() => setShowCreateModal(false)}>✕</button>
             
             <div className="buy-form">
               <div className="form-group">
-                <label>Quest Type:</label>
+                <label>Account Type:</label>
                 <select 
                   id="accountType" 
                   value={accountType}
                   onChange={(e) => setAccountType(e.target.value)}
                   className="select-input"
                 >
-                  <option value="time">⏰ Time Quest - Lock until date</option>
-                  <option value="growth">🌱 Growth Quest - Grow to target</option>
-                  <option value="balance">⚖️ Balance Quest - Send at target</option>
+                  <option value="time">Time Lock - Lock until date</option>
+                  <option value="growth">Growth Goal - Grow to target</option>
+                  <option value="balance">Transfer Goal - Send at target</option>
+                  <option value="group">👥 Group Savings - Save together</option>
                 </select>
               </div>
               
               <div className="form-group">
-                <label>💱 Display Currency:</label>
+                <label>Display Currency:</label>
                 <select 
                   value={accountCurrency}
                   onChange={(e) => setAccountCurrency(e.target.value)}
@@ -1877,7 +2776,7 @@ function App() {
               </div>
               
               <div className="form-group">
-                <label>Quest Name:</label>
+                <label>Account Name:</label>
                 <input 
                   type="text" 
                   placeholder="e.g., Epic Vacation" 
@@ -1887,7 +2786,7 @@ function App() {
               </div>
               
               <div className="form-group">
-                <label>💰 Initial Deposit ({CURRENCIES[accountCurrency].symbol}):</label>
+                <label>Initial Deposit ({CURRENCIES[accountCurrency].symbol}):</label>
                 <input 
                   type="number" 
                   placeholder={`Deposit in ${CURRENCIES[accountCurrency].name}`}
@@ -1903,7 +2802,7 @@ function App() {
                     ≈ {convertFiatToOooweee(initialDepositInput, accountCurrency.toLowerCase()).toLocaleString()} $OOOWEEE at current rate
                   </p>
                 )}
-                <p className="fee-note">💡 1% creation fee from initial deposit</p>
+                <p className="fee-note">1% creation fee from initial deposit</p>
                 <p className="fee-note">📋 Minimum deposit: €10 equivalent</p>
                 {initialDepositInput && parseFloat(initialDepositInput) < 10 && accountCurrency === 'EUR' && (
                   <p className="error-note">⚠️ Minimum deposit is €10</p>
@@ -1916,23 +2815,54 @@ function App() {
                 })()}
               </div>
               
-              {accountType === 'time' && (
+              {/* Group-specific: sub-type and destination */}
+              {accountType === 'group' && (
+                <>
+                  <div className="form-group">
+                    <label>Group Type:</label>
+                    <select
+                      value={groupSubType}
+                      onChange={(e) => setGroupSubType(e.target.value)}
+                      className="select-input"
+                    >
+                      <option value="time">Time Lock - Lock until date</option>
+                      <option value="growth">Growth Goal - Grow to target</option>
+                      <option value="balance">Transfer Goal - Send at target</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>📮 Destination Wallet:</label>
+                    <input
+                      type="text"
+                      placeholder="0x... (where funds go on completion)"
+                      value={groupDestination}
+                      onChange={(e) => setGroupDestination(e.target.value)}
+                      className="text-input"
+                    />
+                    <p className="info-note">Funds will be sent here when the group goal is completed</p>
+                  </div>
+                </>
+              )}
+
+              {/* Time: unlock date (individual or group time sub-type) */}
+              {(accountType === 'time' || (accountType === 'group' && groupSubType === 'time')) && (
                 <div className="form-group">
                   <label>🗓️ Unlock Date:</label>
-                  <input 
-                    type="date" 
+                  <input
+                    type="date"
                     id="unlockDate"
                     min={new Date().toISOString().split('T')[0]}
                     className="date-input"
                   />
                 </div>
               )}
-              
-              {(accountType === 'growth' || accountType === 'balance') && (
+
+              {/* Growth/Balance: target amount (individual or group growth/balance sub-type) */}
+              {(accountType === 'growth' || accountType === 'balance' || (accountType === 'group' && (groupSubType === 'growth' || groupSubType === 'balance'))) && (
                 <div className="form-group">
                   <label>🎯 Target Amount ({CURRENCIES[accountCurrency].symbol}):</label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     placeholder={`Target in ${CURRENCIES[accountCurrency].name}`}
                     id="targetAmount"
                     value={targetAmountInput}
@@ -1946,7 +2876,7 @@ function App() {
                       ≈ {convertFiatToOooweee(targetAmountInput, accountCurrency.toLowerCase()).toLocaleString()} $OOOWEEE at current rate
                     </p>
                   )}
-                  {accountType === 'growth' && initialDepositInput && targetAmountInput && (
+                  {(accountType === 'growth' || (accountType === 'group' && groupSubType === 'growth')) && initialDepositInput && targetAmountInput && (
                     (() => {
                       if (parseFloat(initialDepositInput) >= parseFloat(targetAmountInput)) {
                         return <p className="error-note">⚠️ Target must be higher than initial deposit ({CURRENCIES[accountCurrency].symbol}{initialDepositInput})</p>;
@@ -1956,13 +2886,14 @@ function App() {
                   )}
                 </div>
               )}
-              
+
+              {/* Balance: recipient address (individual only — group uses destination wallet) */}
               {accountType === 'balance' && (
                 <div className="form-group">
                   <label>📮 Recipient Address:</label>
-                  <input 
-                    type="text" 
-                    placeholder="0x..." 
+                  <input
+                    type="text"
+                    placeholder="0x..."
                     id="recipientAddress"
                     className="text-input"
                   />
@@ -1982,48 +2913,32 @@ function App() {
         </div>
       )}
       
-      <div className="floating-coins">
-        {[...Array(10)].map((_, i) => (
-          <div
-            key={i}
-            className="coin"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 3}s`
-            }}
-          >
-            🪙
-          </div>
-        ))}
-      </div>
-      
       <header className="App-header">
         <div className="tab-navigation">
           <button 
             className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
             onClick={() => setActiveTab('dashboard')}
           >
-            🎮 Dashboard
+            Dashboard
           </button>
           <button 
             className={`tab-btn ${activeTab === 'community' ? 'active' : ''}`}
             onClick={() => setActiveTab('community')}
           >
-            🌟 Community
+            Community
           </button>
           <button 
             className={`tab-btn ${activeTab === 'about' ? 'active' : ''}`}
             onClick={() => setActiveTab('about')}
           >
-            📖 About
+            About
           </button>
           {account?.toLowerCase() === ADMIN_WALLET.toLowerCase() && (
             <button 
               className={`tab-btn admin-tab ${activeTab === 'admin' ? 'active' : ''}`}
               onClick={() => setActiveTab('admin')}
             >
-              🔧 Admin
+              Admin
             </button>
           )}
         </div>
@@ -2044,15 +2959,25 @@ function App() {
               <div className="price-ticker">
                 <div className="price-item">
                   <span className="price-label">OOOWEEE/ETH</span>
-                  <span className="price-value">{oooweeePrice > 0 ? oooweeePrice.toFixed(10) : '...'}</span>
+                  <span className={`price-value ${priceFlash ? `flash-${priceFlash}` : ''}`}>
+                    {oooweeePrice > 0 ? oooweeePrice.toFixed(10) : '...'}
+                  </span>
                 </div>
                 <div className="price-item">
-                  <span className="price-label">OOOWEEE/EUR</span>
-                  <span className="price-value">€{ethPrice?.eur ? (oooweeePrice * ethPrice.eur).toFixed(6) : '...'}</span>
+                  <span className="price-label">OOOWEEE/{selectedCurrency}</span>
+                  <span className={`price-value ${priceFlash ? `flash-${priceFlash}` : ''}`}>
+                    {ethPrice?.[selectedCurrency.toLowerCase()]
+                      ? formatCurrency(oooweeePrice * ethPrice[selectedCurrency.toLowerCase()], selectedCurrency)
+                      : '...'}
+                  </span>
                 </div>
                 <div className="price-item">
-                  <span className="price-label">ETH/EUR</span>
-                  <span className="price-value">€{ethPrice?.eur ? ethPrice.eur.toLocaleString() : '...'}</span>
+                  <span className="price-label">ETH/{selectedCurrency}</span>
+                  <span className="price-value">
+                    {ethPrice?.[selectedCurrency.toLowerCase()]
+                      ? formatCurrency(ethPrice[selectedCurrency.toLowerCase()], selectedCurrency)
+                      : '...'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -2060,7 +2985,7 @@ function App() {
             {!account ? (
               <div className="connect-section">
                 <div className="welcome-card">
-                  <h3>🎮 Welcome to Digital Savings!</h3>
+                  <h3>Welcome to OOOWEEE</h3>
                   <div className="feature-grid">
                     <div className="feature">
                       <span className="icon">🏦</span>
@@ -2079,35 +3004,61 @@ function App() {
                     </div>
                   </div>
                 </div>
-                <button onClick={connectWallet} className="connect-btn rainbow-btn" disabled={isConnecting}>
-                  <span>🔗</span> {isConnecting ? 'Connecting...' : 'Connect Wallet'}
-                </button>
-                <p className="info-text">Works with MetaMask, Trust Wallet, and more!</p>
-                <p className="disclaimer">💡 Values shown in your selected currency are estimates based on current market rates</p>
+                <div className="connect-options">
+                  <button onClick={connectSocialLogin} className="connect-btn social-btn" disabled={isConnecting || !web3auth}>
+                    {isConnecting ? 'Signing in...' : 'Sign in with Google / Email'}
+                  </button>
+
+                  <div className="divider-text">
+                    <span>or</span>
+                  </div>
+
+                  <button onClick={connectWallet} className="connect-btn wallet-btn" disabled={isConnecting}>
+                    {isConnecting ? 'Connecting...' : 'Connect Wallet'}
+                  </button>
+                  <p className="info-text">Works with MetaMask, Trust Wallet, and more!</p>
+                </div>
+                <p className="disclaimer">Values shown in your selected currency are estimates based on current market rates</p>
               </div>
             ) : (
               <div className="dashboard">
                 <div className="wallet-info">
                   <div className="wallet-card">
                     <div className="wallet-header">
-                      <h3>💰 Wallet Status</h3>
-                      <span className="address">{account.slice(0, 6)}...{account.slice(-4)}</span>
+                      <h3>Wallet</h3>
+                      <span
+                        className="address copyable"
+                        title="Click to copy full address"
+                        onClick={() => {
+                          navigator.clipboard.writeText(account);
+                          toast.success('Wallet address copied!');
+                        }}
+                      >
+                        {account.slice(0, 6)}...{account.slice(-4)} 📋
+                      </span>
                       <button onClick={disconnectWallet} className="disconnect-btn">Disconnect</button>
                     </div>
                     
                     <div className="currency-toggle">
-                      <button 
-                        className={`toggle-btn ${displayCurrency === 'crypto' ? 'active' : ''}`}
-                        onClick={() => setDisplayCurrency('crypto')}
+                      <button
+                        className={`toggle-btn ${!showFiat ? 'active' : ''}`}
+                        onClick={() => setShowFiat(false)}
                       >
-                        🪙 Crypto
+                        Crypto
                       </button>
-                      <button 
-                        className={`toggle-btn ${displayCurrency === 'fiat' ? 'active' : ''}`}
-                        onClick={() => setDisplayCurrency('fiat')}
+                      <select
+                        className={`currency-select ${showFiat ? 'active' : ''}`}
+                        value={selectedCurrency}
+                        onChange={(e) => {
+                          setSelectedCurrency(e.target.value);
+                          setShowFiat(true);
+                        }}
+                        onClick={() => setShowFiat(true)}
                       >
-                        💶 EUR
-                      </button>
+                        {Object.entries(CURRENCIES).map(([code, info]) => (
+                          <option key={code} value={code}>{info.symbol} {code}</option>
+                        ))}
+                      </select>
                     </div>
                     
                     <div className="balance-row">
@@ -2118,34 +3069,43 @@ function App() {
                     <div className="balance-row highlight">
                       <span>$OOOWEEE:</span>
                       <span>
-                        {displayCurrency === 'crypto' 
+                        {!showFiat
                           ? `${parseFloat(balance).toLocaleString()} $OOOWEEE`
-                          : getOooweeeInFiat(balance, 'eur')
+                          : getOooweeeInFiat(balance, selectedCurrency.toLowerCase())
                         }
                       </span>
                     </div>
-                    {displayCurrency === 'fiat' && (
+                    {showFiat && (
                       <p className="conversion-note">≈ {parseFloat(balance).toLocaleString()} $OOOWEEE</p>
                     )}
                     
                     {parseFloat(balance) === 0 && (
                       <div className="zero-balance-notice">
-                        <p>👋 No OOOWEEE yet? Get started!</p>
+                        <p>No OOOWEEE yet? Get started!</p>
                       </div>
                     )}
                     
-                    <button 
+                    <button
                       className="add-oooweee-btn rainbow-btn"
                       onClick={() => setShowBuyModal(true)}
                     >
-                      🛒 Buy $OOOWEEE
+                      Buy $OOOWEEE
                     </button>
-                    
-                    <button 
+
+                    <button
+                      className="add-oooweee-btn"
+                      onClick={() => setShowSendModal(true)}
+                      disabled={parseFloat(balance) === 0}
+                      style={{ marginTop: '8px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
+                    >
+                      📤 Send $OOOWEEE
+                    </button>
+
+                    <button
                       className="create-savings-btn"
                       onClick={() => setShowCreateModal(true)}
                     >
-                      🎮 New Savings Quest
+                      New Savings Account
                     </button>
                   </div>
                 </div>
@@ -2154,10 +3114,10 @@ function App() {
                   {activeAccounts.length > 0 && (
                     <>
                       <div className="section-header">
-                        <h2>🎮 Your Active Quests</h2>
+                        <h2>Your Active Accounts</h2>
                         {activeAccounts.some(acc => parseFloat(acc.pendingRewards) > 0) && (
                           <button className="claim-all-btn" onClick={claimAllRewards} disabled={loading}>
-                            🎁 Claim All Rewards
+                            Claim All Rewards
                           </button>
                         )}
                       </div>
@@ -2167,7 +3127,7 @@ function App() {
                           const currencyInfo = CURRENCIES[currency];
                           
                           return (
-                            <div key={acc.id} className="account-card">
+                            <div key={acc.id} className={`account-card ${acc.type === 'Time' ? 'time-lock' : acc.type === 'Growth' ? 'growth-goal' : 'balance-transfer'}`}>
                               <div className="account-header">
                                 <h3>{acc.goalName}</h3>
                                 <span className={`account-type ${acc.type.toLowerCase()}`}>{acc.type}</span>
@@ -2205,20 +3165,20 @@ function App() {
                                     <div className="detail-row">
                                       <span>Balance:</span>
                                       <span className="primary-amount">
-                                        {displayCurrency === 'crypto'
+                                        {!showFiat
                                           ? `${parseFloat(acc.balance).toLocaleString()} $OOOWEEE`
-                                          : getOooweeeInFiat(acc.balance, 'eur')
+                                          : getOooweeeInFiat(acc.balance, selectedCurrency.toLowerCase())
                                         }
                                       </span>
                                     </div>
-                                    {displayCurrency === 'fiat' && (
+                                    {showFiat && (
                                       <span className="secondary-amount">
                                         ≈ {parseFloat(acc.balance).toLocaleString()} $OOOWEEE
                                       </span>
                                     )}
                                   </div>
                                 )}
-                                
+
                                 {acc.type === 'Time' && (
                                   <div className="detail-row">
                                     <span>Days Remaining:</span>
@@ -2230,9 +3190,9 @@ function App() {
                                   <div className="detail-row">
                                     <span>Target:</span>
                                     <span className="value">
-                                      {displayCurrency === 'crypto'
+                                      {!showFiat
                                         ? `${parseFloat(acc.target).toLocaleString()} $OOOWEEE`
-                                        : getOooweeeInFiat(acc.target, 'eur')
+                                        : getOooweeeInFiat(acc.target, selectedCurrency.toLowerCase())
                                       }
                                     </span>
                                   </div>
@@ -2244,9 +3204,9 @@ function App() {
                                       <div className="detail-row">
                                         <span>Target:</span>
                                         <span className="value">
-                                          {displayCurrency === 'crypto'
+                                          {!showFiat
                                             ? `${parseFloat(acc.target).toLocaleString()} $OOOWEEE`
-                                            : getOooweeeInFiat(acc.target, 'eur')
+                                            : getOooweeeInFiat(acc.target, selectedCurrency.toLowerCase())
                                           }
                                         </span>
                                       </div>
@@ -2255,7 +3215,7 @@ function App() {
                                       <span>To:</span>
                                       <span className="value address">{acc.recipient.slice(0, 6)}...{acc.recipient.slice(-4)}</span>
                                     </div>
-                                    <p className="info-note">📝 Need 101% for auto-transfer</p>
+                                    <p className="info-note">Need 101% for auto-transfer</p>
                                   </>
                                 )}
                                 
@@ -2288,7 +3248,7 @@ function App() {
                                           const oooweeeAmount = convertFiatToOooweee(fiatAmount, currency);
                                           const converter = document.getElementById(`deposit-convert-${acc.id}`);
                                           if (converter) {
-                                            converter.textContent = fiatAmount && fiatAmount > 0 
+                                            converter.textContent = fiatAmount && fiatAmount > 0
                                               ? `≈ ${oooweeeAmount.toLocaleString()} OOOWEEE`
                                               : '';
                                           }
@@ -2316,7 +3276,7 @@ function App() {
                                   disabled={loading}
                                   className="deposit-btn"
                                 >
-                                  💰 DEPOSIT
+                                  DEPOSIT
                                 </button>
                               </div>
                             </div>
@@ -2327,6 +3287,251 @@ function App() {
                   )}
                 </div>
                 
+                {/* Pending Group Invitations */}
+                {pendingInvitations.length > 0 && (
+                  <div className="invitations-banner">
+                    <h3>📨 Pending Group Invitations</h3>
+                    {pendingInvitations.map(group => (
+                      <div key={`inv-${group.id}`} className="invitation-card">
+                        <div className="invitation-info">
+                          <strong>{group.goalName}</strong>
+                          <span className="invitation-meta">
+                            👥 {group.accountType} · {group.memberCount} member{group.memberCount !== 1 ? 's' : ''} · {parseFloat(group.totalBalance).toLocaleString()} $OOOWEEE pooled
+                          </span>
+                          <span className="invitation-creator">
+                            Created by {group.creator.slice(0, 6)}...{group.creator.slice(-4)}
+                          </span>
+                        </div>
+                        <button
+                          className="accept-invite-btn"
+                          onClick={() => acceptGroupInvitation(group.id)}
+                          disabled={loading}
+                        >
+                          🤝 Accept
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Group Accounts Section */}
+                {userGroups.filter(g => g.isMember && g.isActive).length > 0 && (
+                  <div className="savings-section">
+                    <div className="section-header">
+                      <h2>👥 Your Group Accounts</h2>
+                    </div>
+                    <div className="accounts-grid">
+                      {userGroups.filter(g => g.isMember && g.isActive).map(group => {
+                        const currency = getCurrencyFromCode(group.targetCurrency);
+                        const currencyInfo = CURRENCIES[currency];
+                        const isCreator = group.creator.toLowerCase() === account?.toLowerCase();
+                        const isExpanded = showGroupDetail === group.id;
+
+                        return (
+                          <div key={`group-${group.id}`} className="account-card group-card">
+                            <div className="account-header">
+                              <h3>{group.goalName}</h3>
+                              <div className="header-badges">
+                                <span className={`account-type ${group.accountType.toLowerCase()}`}>
+                                  👥 {group.accountType}
+                                </span>
+                                <span className="currency-badge">{currency}</span>
+                              </div>
+                            </div>
+
+                            <div className="account-details">
+                              <div className="detail-row">
+                                <span>Total Balance:</span>
+                                <span className="primary-amount">
+                                  {parseFloat(group.totalBalance).toLocaleString()} $OOOWEEE
+                                </span>
+                              </div>
+
+                              {(group.accountType === 'Growth' || group.accountType === 'Balance') && group.targetFiat !== '0' && (
+                                <div className="detail-row">
+                                  <span>Target:</span>
+                                  <span className="value">
+                                    {currencyInfo.symbol}
+                                    {(parseInt(group.targetFiat) / Math.pow(10, currencyInfo.decimals)).toFixed(currencyInfo.decimals)}
+                                  </span>
+                                </div>
+                              )}
+
+                              {group.accountType === 'Time' && group.unlockTime > 0 && (
+                                <div className="detail-row">
+                                  <span>Unlock Date:</span>
+                                  <span className="value">
+                                    {new Date(group.unlockTime * 1000).toLocaleDateString()}
+                                  </span>
+                                </div>
+                              )}
+
+                              <div className="detail-row">
+                                <span>Members:</span>
+                                <span className="value">{group.memberCount}</span>
+                              </div>
+
+                              <div className="detail-row">
+                                <span>My Contribution:</span>
+                                <span className="value">{parseFloat(group.myContribution).toLocaleString()} $OOOWEEE</span>
+                              </div>
+
+                              {group.destinationWallet && group.destinationWallet !== ethers.constants.AddressZero && (
+                                <div className="detail-row">
+                                  <span>Destination:</span>
+                                  <span className="value address">
+                                    {group.destinationWallet.slice(0, 6)}...{group.destinationWallet.slice(-4)}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Expand/collapse details */}
+                            <button
+                              className="toggle-btn"
+                              onClick={() => setShowGroupDetail(isExpanded ? null : group.id)}
+                              style={{ marginBottom: '0.5rem', fontSize: '0.85rem' }}
+                            >
+                              {isExpanded ? '▲ Hide Details' : '▼ Show Details'}
+                            </button>
+
+                            {isExpanded && (
+                              <div className="group-expanded">
+                                {/* Member list */}
+                                <div className="group-members">
+                                  <strong>Members:</strong>
+                                  {group.members.map((m, idx) => (
+                                    <div key={idx} className="member-row">
+                                      <span className="value address">
+                                        {m.slice(0, 6)}...{m.slice(-4)}
+                                        {m.toLowerCase() === group.creator.toLowerCase() ? ' (creator)' : ''}
+                                        {m.toLowerCase() === account?.toLowerCase() ? ' (you)' : ''}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+
+                                {/* Creator: Invite member */}
+                                {isCreator && (
+                                  <div className="group-invite-section">
+                                    <label>Invite Member:</label>
+                                    <input
+                                      type="text"
+                                      placeholder="0x... wallet address"
+                                      value={groupInviteAddress}
+                                      onChange={(e) => setGroupInviteAddress(e.target.value)}
+                                      className="deposit-input"
+                                    />
+                                    <button
+                                      onClick={() => inviteMemberToGroup(group.id, groupInviteAddress)}
+                                      disabled={loading || !groupInviteAddress}
+                                      className="deposit-btn"
+                                    >
+                                      📨 Invite
+                                    </button>
+                                  </div>
+                                )}
+
+                                {/* Process / Complete group */}
+                                <button
+                                  onClick={() => processGroup(group.id)}
+                                  disabled={loading}
+                                  className="deposit-btn"
+                                  style={{ marginTop: '0.5rem', background: 'linear-gradient(135deg, #10b981, #059669)' }}
+                                >
+                                  🏁 Complete Group Account
+                                </button>
+                              </div>
+                            )}
+
+                            {/* Deposit section - always visible for members */}
+                            <div className="deposit-section">
+                              <label className="deposit-label">Deposit ({currency})</label>
+                              <input
+                                type="number"
+                                placeholder={`Amount in ${currency}`}
+                                value={showGroupDetail === group.id ? groupDepositAmount : ''}
+                                onChange={(e) => {
+                                  setShowGroupDetail(group.id);
+                                  setGroupDepositAmount(e.target.value);
+                                }}
+                                min="1"
+                                step="1"
+                                className="deposit-input"
+                              />
+                              <button
+                                onClick={() => {
+                                  const fiatAmt = groupDepositAmount;
+                                  if (fiatAmt && fiatAmt > 0) {
+                                    const oooweeeAmt = convertFiatToOooweee(fiatAmt, currency);
+                                    if (oooweeeAmt > 0) {
+                                      depositToGroupAccount(group.id, oooweeeAmt.toString());
+                                    } else {
+                                      toast.error('Amount too small');
+                                    }
+                                  } else {
+                                    toast.error('Enter an amount');
+                                  }
+                                }}
+                                disabled={loading}
+                                className="deposit-btn"
+                              >
+                                💰 DEPOSIT
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Completed Groups */}
+                {userGroups.filter(g => g.isMember && !g.isActive).length > 0 && (
+                  <div className="completed-section" style={{ marginTop: '1rem' }}>
+                    <h3>✅ Completed Group Accounts</h3>
+                    <div className="accounts-grid">
+                      {userGroups.filter(g => g.isMember && !g.isActive).map(group => {
+                        const currency = getCurrencyFromCode(group.targetCurrency);
+                        return (
+                          <div key={`group-done-${group.id}`} className="account-card completed group-card">
+                            <div className="account-header">
+                              <h3>{group.goalName}</h3>
+                              <div className="header-badges">
+                                <span className={`account-type ${group.accountType.toLowerCase()}`}>
+                                  👥 {group.accountType}
+                                </span>
+                                <span className="currency-badge">{currency}</span>
+                              </div>
+                            </div>
+                            <div className="account-details">
+                              <p className="completed-text">🏆 Group Goal Complete!</p>
+                              <div className="detail-row">
+                                <span>Final Balance:</span>
+                                <span className="value">{parseFloat(group.totalContributions || group.totalBalance).toLocaleString()} $OOOWEEE</span>
+                              </div>
+                              <div className="detail-row">
+                                <span>Members:</span>
+                                <span className="value">{group.memberCount}</span>
+                              </div>
+                              <div className="detail-row">
+                                <span>Your Contribution:</span>
+                                <span className="value">{parseFloat(group.myContribution).toLocaleString()} $OOOWEEE</span>
+                              </div>
+                              <div className="progress-section">
+                                <div className="progress-bar">
+                                  <div className="progress-fill rainbow-fill" style={{ width: '100%' }} />
+                                </div>
+                                <span className="progress-text">100% Complete ✨</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {completedAccounts.length > 0 && (
                   <>
                     <div className="toggle-completed">
@@ -2337,26 +3542,26 @@ function App() {
                     
                     {showCompleted && (
                       <div className="completed-section">
-                        <h3>✅ Completed Quests</h3>
+                        <h3>✅ Completed Accounts</h3>
                         <div className="accounts-grid">
                           {completedAccounts.map(acc => {
                             const currency = getCurrencyFromCode(acc.targetCurrency);
                             const currencyInfo = CURRENCIES[currency];
                             
                             return (
-                              <div key={acc.id} className="account-card completed">
+                              <div key={acc.id} className={`account-card completed ${acc.type === 'Time' ? 'time-lock' : acc.type === 'Growth' ? 'growth-goal' : 'balance-transfer'}`}>
                                 <div className="account-header">
                                   <h3>{acc.goalName}</h3>
                                   <div className="header-badges">
                                     <span className={`account-type ${acc.type.toLowerCase()}`}>
-                                      {acc.type === 'Time' ? '⏰' : acc.type === 'Growth' ? '🌱' : '⚖️'} {acc.type}
+                                      {acc.type}
                                     </span>
                                     <span className="currency-badge">{currency}</span>
                                   </div>
                                 </div>
                                 
                                 <div className="account-details">
-                                  <p className="completed-text">🏆 Quest Complete!</p>
+                                  <p className="completed-text">🏆 Goal Complete!</p>
                                   
                                   {acc.isFiatTarget ? (
                                     <>
@@ -2381,9 +3586,9 @@ function App() {
                                     <div className="detail-row">
                                       <span>Final Balance:</span>
                                       <span className="value">
-                                        {displayCurrency === 'crypto'
+                                        {!showFiat
                                           ? `${parseFloat(acc.balance).toLocaleString()} $OOOWEEE`
-                                          : getOooweeeInFiat(acc.balance, 'eur')
+                                          : getOooweeeInFiat(acc.balance, selectedCurrency.toLowerCase())
                                         }
                                       </span>
                                     </div>
