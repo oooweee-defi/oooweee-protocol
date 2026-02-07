@@ -1717,6 +1717,83 @@ textarea:focus {
   color: var(--text-secondary);
 }
 
+/* ATH Donor Banner */
+.ath-donor-banner {
+  background: linear-gradient(135deg, #667eea 0%, #7B68EE 40%, #764ba2 100%);
+  border-radius: var(--radius-md);
+  padding: 1.5rem 2rem;
+  margin-bottom: 2rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(123, 104, 238, 0.3);
+  animation: slideDown 0.5s ease-out;
+}
+
+.ath-donor-banner::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255,215,0,0.1) 0%, transparent 50%, rgba(255,215,0,0.05) 100%);
+  pointer-events: none;
+}
+
+.ath-badge {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 0.6875rem;
+  letter-spacing: 0.12em;
+  color: var(--oooweee-yellow);
+  margin-bottom: 0.5rem;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.ath-content {
+  position: relative;
+  z-index: 1;
+}
+
+.ath-amount {
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-size: 1.75rem;
+  color: #FFFFFF;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  margin-bottom: 0.25rem;
+}
+
+.ath-name {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 1.125rem;
+  color: rgba(255,255,255,0.95);
+  margin-bottom: 0.25rem;
+}
+
+.ath-address {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  color: rgba(255,255,255,0.7);
+}
+
+.ath-message {
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-style: italic;
+  color: rgba(255,255,255,0.85);
+  margin-top: 0.375rem;
+}
+
+.ath-location {
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.65);
+  margin-top: 0.25rem;
+}
+
 .community-card {
   background: var(--bg-card);
   border: 1px solid var(--border-default);
@@ -2075,6 +2152,22 @@ textarea:focus {
 }
 
 .shoutout-notice p {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.sponsor-tier-notice {
+  background: linear-gradient(135deg, rgba(123, 104, 238, 0.08), rgba(255, 215, 0, 0.08));
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  border-radius: var(--radius-sm);
+  padding: 0.625rem 0.875rem;
+  text-align: center;
+}
+
+.sponsor-tier-notice p {
   margin: 0;
   font-family: var(--font-sans);
   font-size: 0.8125rem;
