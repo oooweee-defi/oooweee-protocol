@@ -1506,10 +1506,12 @@ function App() {
     }
   };
 
-  const depositToGroupAccount = async (groupId, oooweeeAmount) => {
+  const depositToGroupAccount = async (groupId, oooweeeAmount, fiatAmount, currency) => {
     try {
       setLoading(true);
       const depositAmount = ethers.utils.parseUnits(Math.floor(parseFloat(oooweeeAmount)).toString(), 18);
+      const formattedTokens = Number(parseFloat(oooweeeAmount)).toLocaleString(undefined, { maximumFractionDigits: 0 });
+      const fiatLabel = fiatAmount && currency ? `${CURRENCIES[currency.toUpperCase()]?.symbol || '€'}${fiatAmount}` : `${formattedTokens} $OOOWEEE`;
 
       const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
       await toast.promise(approveTx.wait(), {
@@ -1520,8 +1522,8 @@ function App() {
 
       const tx = await savingsContract.depositToGroup(groupId, depositAmount);
       await toast.promise(tx.wait(), {
-        loading: '💰 Depositing to group...',
-        success: '✅ Deposit successful!',
+        loading: `💰 Depositing ${fiatLabel} to group...`,
+        success: `✅ Deposited ${fiatLabel}!`,
         error: '❌ Failed to deposit'
       });
 
@@ -1870,38 +1872,40 @@ function App() {
     }
   };
 
-  const depositToAccount = async (accountId, amount) => {
+  const depositToAccount = async (accountId, amount, fiatAmount, currency) => {
     try {
       setLoading(true);
-      
+
       const depositAmountNumber = parseFloat(amount);
       const currentBalance = parseFloat(balance);
-      
+
       if (currentBalance < depositAmountNumber) {
         const needed = depositAmountNumber - currentBalance;
-        
+
         // Open buy modal with exact amount needed
         toast(`You need ${needed.toFixed(0)} more OOOWEEE`, { icon: '💡' });
         await openBuyModalWithAmount(needed);
         setLoading(false);
         return;
       }
-      
+
       const depositAmount = ethers.utils.parseUnits(depositAmountNumber.toString(), 18);
-      
+      const formattedTokens = Number(depositAmountNumber).toLocaleString(undefined, { maximumFractionDigits: 0 });
+      const fiatLabel = fiatAmount && currency ? `${CURRENCIES[currency.toUpperCase()]?.symbol || '€'}${fiatAmount}` : `${formattedTokens} $OOOWEEE`;
+
       const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
-      
+
       await toast.promise(approveTx.wait(), {
         loading: '🔓 Approving tokens...',
         success: '✅ Tokens approved!',
         error: '❌ Failed to approve'
       });
-      
+
       const depositTx = await savingsContract.deposit(accountId, depositAmount);
-      
+
       await toast.promise(depositTx.wait(), {
-        loading: `💰 Depositing ${depositAmountNumber} OOOWEEE...`,
-        success: `🎉 Deposited ${depositAmountNumber} $OOOWEEE!`,
+        loading: `💰 Depositing ${fiatLabel} (${formattedTokens} $OOOWEEE)...`,
+        success: `🎉 Deposited ${fiatLabel}!`,
         error: '❌ Failed to deposit'
       });
       
@@ -3290,7 +3294,7 @@ function App() {
                                     if (fiatAmount && fiatAmount > 0) {
                                       const oooweeeAmount = await convertFiatToOooweeeOracle(fiatAmount, currency);
                                       if (oooweeeAmount > 0) {
-                                        depositToAccount(acc.id, oooweeeAmount.toString());
+                                        depositToAccount(acc.id, oooweeeAmount.toString(), fiatAmount, currency);
                                       } else {
                                         toast.error('Amount too small');
                                       }
@@ -3490,7 +3494,7 @@ function App() {
                                   if (fiatAmt && fiatAmt > 0) {
                                     const oooweeeAmt = await convertFiatToOooweeeOracle(fiatAmt, currency);
                                     if (oooweeeAmt > 0) {
-                                      depositToGroupAccount(group.id, oooweeeAmt.toString());
+                                      depositToGroupAccount(group.id, oooweeeAmt.toString(), fiatAmt, currency);
                                     } else {
                                       toast.error('Amount too small');
                                     }
