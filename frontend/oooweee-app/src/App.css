@@ -1790,6 +1790,13 @@ textarea:focus {
   font-variant-numeric: tabular-nums;
 }
 
+.metric-content .metric-sub {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  margin-top: 0.125rem;
+}
+
 .validator-progress-section {
   margin: 1.5rem 0;
 }
@@ -2245,6 +2252,22 @@ textarea:focus {
   font-weight: 600;
   font-size: 0.75rem;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.leaderboard-entry .donor-address {
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  color: var(--text-tertiary);
+}
+
+.leaderboard-entry .donor-message {
+  font-family: var(--font-sans);
+  font-size: 0.6875rem;
+  color: var(--oooweee-purple);
+  font-style: italic;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
