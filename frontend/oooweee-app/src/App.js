@@ -102,6 +102,7 @@ function App() {
   const [web3Modal, setWeb3Modal] = useState(null);
   const [targetAmountInput, setTargetAmountInput] = useState('');
   const [initialDepositInput, setInitialDepositInput] = useState('');
+  const [oracleDepositPreview, setOracleDepositPreview] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -581,6 +582,22 @@ function App() {
     const timeoutId = setTimeout(estimateOooweee, 500);
     return () => clearTimeout(timeoutId);
   }, [ethToBuy, routerContract]);
+
+  // Oracle-based deposit preview (debounced)
+  useEffect(() => {
+    if (!savingsContract || !initialDepositInput || parseFloat(initialDepositInput) <= 0) {
+      setOracleDepositPreview(null);
+      return;
+    }
+    const fetchPreview = async () => {
+      try {
+        const amount = await convertFiatToOooweeeOracle(initialDepositInput, accountCurrency.toLowerCase());
+        setOracleDepositPreview(Math.floor(amount));
+      } catch { setOracleDepositPreview(null); }
+    };
+    const timeoutId = setTimeout(fetchPreview, 300);
+    return () => clearTimeout(timeoutId);
+  }, [initialDepositInput, accountCurrency, savingsContract]);
 
   // Load validator stats - with error handling
   const loadValidatorStats = useCallback(async () => {
@@ -2826,7 +2843,7 @@ function App() {
                 />
                 {initialDepositInput && (
                   <p className="conversion-note">
-                    ≈ {convertFiatToOooweee(initialDepositInput, accountCurrency.toLowerCase()).toLocaleString()} $OOOWEEE at current rate
+                    ≈ {(oracleDepositPreview ?? convertFiatToOooweee(initialDepositInput, accountCurrency.toLowerCase())).toLocaleString()} $OOOWEEE at current rate
                   </p>
                 )}
                 <p className="fee-note">1% creation fee from initial deposit</p>
@@ -2835,7 +2852,7 @@ function App() {
                   <p className="error-note">⚠️ Minimum deposit is €10</p>
                 )}
                 {(() => {
-                  const oooweeeNeeded = convertFiatToOooweee(initialDepositInput, accountCurrency.toLowerCase());
+                  const oooweeeNeeded = oracleDepositPreview ?? convertFiatToOooweee(initialDepositInput, accountCurrency.toLowerCase());
                   return parseFloat(balance) < oooweeeNeeded && initialDepositInput ? (
                     <p className="swap-notice">⚠️ Insufficient balance - will offer to buy with ETH</p>
                   ) : null;
@@ -3272,15 +3289,23 @@ function App() {
                                         min="1"
                                         step="1"
                                         className="deposit-input"
-                                        onChange={(e) => {
+                                        onChange={async (e) => {
                                           const fiatAmount = e.target.value;
-                                          const oooweeeAmount = convertFiatToOooweee(fiatAmount, currency);
                                           const converter = document.getElementById(`deposit-convert-${acc.id}`);
-                                          if (converter) {
-                                            converter.textContent = fiatAmount && fiatAmount > 0 
-                                              ? `≈ ${oooweeeAmount.toLocaleString()} OOOWEEE`
-                                              : '';
+                                          if (!converter || !fiatAmount || fiatAmount <= 0) {
+                                            if (converter) converter.textContent = '';
+                                            return;
                                           }
+                                          // Show instant estimate, then update with oracle
+                                          const estimate = convertFiatToOooweee(fiatAmount, currency);
+                                          converter.textContent = `≈ ${estimate.toLocaleString()} OOOWEEE`;
+                                          try {
+                                            const oracleAmount = await convertFiatToOooweeeOracle(fiatAmount, currency);
+                                            // Only update if input hasn't changed
+                                            if (document.getElementById(`deposit-${acc.id}`)?.value === fiatAmount) {
+                                              converter.textContent = `≈ ${Math.floor(oracleAmount).toLocaleString()} OOOWEEE`;
+                                            }
+                                          } catch (err) { /* keep estimate */ }
                                         }}
                                       />
                                       <span id={`deposit-convert-${acc.id}`} className="deposit-conversion"></span>
