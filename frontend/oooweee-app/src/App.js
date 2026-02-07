@@ -148,7 +148,8 @@ function App() {
   const [oooweeePrice, setOooweeePrice] = useState(0.00001);
   const [priceFlash, setPriceFlash] = useState(null); // 'up' | 'down' | null
   const prevOooweeePriceRef = useRef(0.00001);
-  
+  const [priceFeedStatus, setPriceFeedStatus] = useState({ source: 'live', cachedAt: null, error: null });
+
   // Admin Dashboard State
   const [adminStats, setAdminStats] = useState({
     totalValueLocked: '0',
@@ -396,9 +397,24 @@ function App() {
         const response = await fetch('/api/eth-price');
         const data = await response.json();
         setEthPrice(data.ethereum);
+        if (data._meta) {
+          setPriceFeedStatus(data._meta);
+          if (data._meta.source === 'live') {
+            localStorage.setItem('oooweee_eth_price_cache', JSON.stringify({ prices: data.ethereum, at: Date.now() }));
+          }
+        }
       } catch (error) {
         console.error('Error fetching ETH price:', error);
-        setEthPrice({ usd: 2000, eur: 1850, gbp: 1600 });
+        // Try localStorage cache before hardcoded fallback
+        const cached = localStorage.getItem('oooweee_eth_price_cache');
+        if (cached) {
+          const { prices } = JSON.parse(cached);
+          setEthPrice(prices);
+          setPriceFeedStatus({ source: 'cached', error: 'Proxy unreachable', downSince: Date.now() });
+        } else {
+          setEthPrice({ usd: 2000, eur: 1850, gbp: 1600 });
+          setPriceFeedStatus({ source: 'fallback', error: 'No cache available', downSince: Date.now() });
+        }
       }
       
       setTimeout(() => setIsAppLoading(false), 1500);
@@ -428,9 +444,16 @@ function App() {
         const data = await response.json();
         if (data.ethereum) {
           setEthPrice(data.ethereum);
+          if (data._meta) {
+            setPriceFeedStatus(data._meta);
+            if (data._meta.source === 'live') {
+              localStorage.setItem('oooweee_eth_price_cache', JSON.stringify({ prices: data.ethereum, at: Date.now() }));
+            }
+          }
         }
       } catch (error) {
         console.error('ETH price refresh failed:', error);
+        setPriceFeedStatus(prev => ({ ...prev, source: prev.source === 'live' ? 'cached' : prev.source, error: 'Refresh failed' }));
       }
     };
 
@@ -1154,8 +1177,10 @@ function App() {
           const data = await response.json();
           freshEthPrice = data.ethereum;
           setEthPrice(freshEthPrice);
+          if (data._meta) setPriceFeedStatus(data._meta);
         } catch (e) {
-          freshEthPrice = { usd: 2000, eur: 1850, gbp: 1600 };
+          const cached = localStorage.getItem('oooweee_eth_price_cache');
+          freshEthPrice = cached ? JSON.parse(cached).prices : { usd: 2000, eur: 1850, gbp: 1600 };
         }
       }
       
@@ -1823,7 +1848,7 @@ function App() {
       {/* System Health Overview */}
       <div className="admin-section">
         <h2>System Health</h2>
-        <div className="admin-grid-4">
+        <div className="admin-grid-5">
           <div className="admin-card">
             <div className="admin-card-icon">{adminStats.isSequencerHealthy ? '✅' : '🔴'}</div>
             <div className="admin-card-content">
@@ -1852,9 +1877,24 @@ function App() {
               <p>{adminStats.marketHighVolatility ? 'High Volatility' : 'Normal'}</p>
             </div>
           </div>
+          <div className={`admin-card ${priceFeedStatus.source !== 'live' ? 'admin-card-warning' : ''}`}>
+            <div className="admin-card-icon">
+              {priceFeedStatus.source === 'live' ? '✅' : priceFeedStatus.source === 'cached' ? '⚠️' : '🔴'}
+            </div>
+            <div className="admin-card-content">
+              <h4>CoinGecko Feed</h4>
+              <p>{priceFeedStatus.source === 'live' ? 'Live' : priceFeedStatus.source === 'cached' ? 'Using cached prices' : 'Down — fallback prices'}</p>
+              {priceFeedStatus.source !== 'live' && priceFeedStatus.cachedAt && (
+                <span className="admin-card-detail">Last live: {new Date(priceFeedStatus.cachedAt).toLocaleTimeString()}</span>
+              )}
+              {priceFeedStatus.error && (
+                <span className="admin-card-detail error">{priceFeedStatus.error}</span>
+              )}
+            </div>
+          </div>
         </div>
       </div>
-      
+
       {/* Protocol Metrics */}
       <div className="admin-section">
         <h2>Protocol Metrics</h2>
