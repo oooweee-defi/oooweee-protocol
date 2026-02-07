@@ -3,7 +3,7 @@ import { ethers } from 'ethers';
 import toast, { Toaster } from 'react-hot-toast';
 import './App.css';
 import oooweeLogo from './assets/oooweee-logo.png';
-import { OOOWEEETokenABI, OOOWEEESavingsABI, OOOWEEEValidatorFundABI, OOOWEEEStabilityABI, CONTRACT_ADDRESSES } from './contracts/abis';
+import { OOOWEEETokenABI, OOOWEEESavingsABI, OOOWEEEValidatorFundABI, OOOWEEEStabilityABI, DonorRegistryABI, CONTRACT_ADDRESSES } from './contracts/abis';
 import Web3Modal from "web3modal";
 import WalletConnectProvider from "@walletconnect/web3-provider";
 
@@ -63,6 +63,7 @@ function App() {
   const [tokenContract, setTokenContract] = useState(null);
   const [savingsContract, setSavingsContract] = useState(null);
   const [validatorFundContract, setValidatorFundContract] = useState(null);
+  const [donorRegistryContract, setDonorRegistryContract] = useState(null);
   const [stabilityContract, setStabilityContract] = useState(null);
   const [routerContract, setRouterContract] = useState(null);
   const [balance, setBalance] = useState('0');
@@ -433,22 +434,41 @@ function App() {
         }
       }
 
-      // Build leaderboard — merge on-chain amounts with localStorage names
-      const donorMeta = JSON.parse(localStorage.getItem('oooweee_donor_meta') || '{}');
-      const leaderboard = onChainDonors
+      // Build leaderboard — merge on-chain amounts with DonorRegistry names
+      // Create a read-only DonorRegistry instance for fetching metadata
+      const registryRead = new ethers.Contract(
+        CONTRACT_ADDRESSES.DonorRegistry,
+        DonorRegistryABI,
+        validatorFundContract.provider
+      );
+
+      const sortedDonors = onChainDonors
         .sort((a, b) => (b.amount.gt(a.amount) ? 1 : b.amount.lt(a.amount) ? -1 : 0))
-        .slice(0, 10)
-        .map(d => {
-          const meta = donorMeta[d.address.toLowerCase()] || {};
+        .slice(0, 10);
+
+      const leaderboard = await Promise.all(
+        sortedDonors.map(async (d) => {
+          let name = null, message = null, location = null;
+          try {
+            const info = await registryRead.getDonorInfo(d.address);
+            if (info.timestamp && info.timestamp.toNumber() > 0) {
+              name = info.name || null;
+              message = info.message || null;
+              location = info.location || null;
+            }
+          } catch (e) {
+            // DonorRegistry might not have this donor
+          }
           return {
             address: d.address,
             shortAddress: `${d.address.slice(0, 6)}...${d.address.slice(-4)}`,
-            name: meta.name || null,
-            message: meta.message || null,
-            location: meta.location || null,
+            name,
+            message,
+            location,
             amount: parseFloat(ethers.utils.formatEther(d.amount)).toFixed(4)
           };
-        });
+        })
+      );
       setDonorLeaderboard(leaderboard);
 
       setValidatorStats({
@@ -649,13 +669,15 @@ function App() {
       const savings = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEESavings, OOOWEEESavingsABI, signer);
       const validatorFund = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEValidatorFund, OOOWEEEValidatorFundABI, signer);
       const stability = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEStability, OOOWEEEStabilityABI, signer);
+      const donorRegistry = new ethers.Contract(CONTRACT_ADDRESSES.DonorRegistry, DonorRegistryABI, signer);
       const router = new ethers.Contract(UNISWAP_ROUTER, UNISWAP_ROUTER_ABI, signer);
-      
+
       setAccount(address);
       setProvider(web3Provider);
       setTokenContract(token);
       setSavingsContract(savings);
       setValidatorFundContract(validatorFund);
+      setDonorRegistryContract(donorRegistry);
       setStabilityContract(stability);
       setRouterContract(router);
       
@@ -716,18 +738,27 @@ function App() {
         error: '❌ Donation failed'
       });
       
-      // Save donor metadata (name, message, location) keyed by address
-      // On-chain stores address → amount; localStorage stores address → name/message
-      const donorMeta = JSON.parse(localStorage.getItem('oooweee_donor_meta') || '{}');
-      donorMeta[account.toLowerCase()] = {
-        name: donorName.trim().slice(0, 50) || 'Anonymous',
-        location: donorLocation.trim().slice(0, 50) || '',
-        message: donorMessage.trim().slice(0, 180),
-        timestamp: Date.now()
-      };
-      localStorage.setItem('oooweee_donor_meta', JSON.stringify(donorMeta));
+      // Register donor metadata on-chain via DonorRegistry
+      if (donorRegistryContract) {
+        try {
+          const regTx = await donorRegistryContract.registerDonation(
+            donorName.trim().slice(0, 50) || 'Anonymous',
+            donorMessage.trim().slice(0, 180),
+            donorLocation.trim().slice(0, 50)
+          );
+          await toast.promise(regTx.wait(), {
+            loading: '📝 Saving your name & message on-chain...',
+            success: '✅ Donor info saved on-chain!',
+            error: '⚠️ Donation sent but name registration failed'
+          });
+        } catch (regError) {
+          console.error('Donor registration failed:', regError);
+          // Donation already went through — this is just metadata
+          toast.error('Donation sent! Name registration failed (metadata only)');
+        }
+      }
 
-      // If donation has a message, save shoutout
+      // Save shoutout locally for immediate display
       if (donorMessage.trim()) {
         const newShoutout = {
           message: donorMessage.trim().slice(0, 180),
@@ -774,6 +805,7 @@ function App() {
     setTokenContract(null);
     setSavingsContract(null);
     setValidatorFundContract(null);
+    setDonorRegistryContract(null);
     setStabilityContract(null);
     setRouterContract(null);
     setBalance('0');
