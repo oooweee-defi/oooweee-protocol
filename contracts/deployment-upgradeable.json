@@ -19,5 +19,16 @@
     "uniswapRouter": "0xeE567Fe1712Faf6149d80dA1E6934E354124CfE3",
     "chainlinkEthUsd": "0x694AA1769357215DE4FAC081bf1f309aDC325306"
   },
-  "setupComplete": true
+  "setupComplete": true,
+  "savingsV2Upgrade": {
+    "timestamp": "2026-02-07T13:22:36.658Z",
+    "implementationUpgraded": true
+  },
+  "uniswapPair": "0xd0F4Ae7c575918B7Bccd67EB4F04D317C97B07C2",
+  "liquiditySetup": {
+    "timestamp": "2026-02-07T13:37:14.809Z",
+    "tokenAmount": "10000000",
+    "ethAmount": "0.5",
+    "pair": "0xd0F4Ae7c575918B7Bccd67EB4F04D317C97B07C2"
+  }
 }

@@ -5,7 +5,7 @@ export const CONTRACT_ADDRESSES = {
   OOOWEEEStability: "0x9767D758d0bC527bEA0F712b6691Bac384b8Fd8f",
   SavingsPriceOracle: "0xAD8F21a0EE1611acaD347038F41f8af1f7dC497D",
   DonorRegistry: "0x639553e621bE1b1aD927FA841a91cfA72e131C46",
-  UniswapPair: "0x9B2474a702605F4f0f48104046a28B3880BaeD54"
+  UniswapPair: "0xd0F4Ae7c575918B7Bccd67EB4F04D317C97B07C2"
 };
 
 // ============================================

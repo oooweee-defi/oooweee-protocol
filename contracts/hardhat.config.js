@@ -1,6 +1,6 @@
 const path = require("path");
 require("@nomiclabs/hardhat-waffle");
-require("@nomiclabs/hardhat-etherscan");
+require("@nomicfoundation/hardhat-verify");
 require("@openzeppelin/hardhat-upgrades");
 require("dotenv").config({ path: path.resolve(__dirname, ".env") });
 
@@ -44,7 +44,23 @@ module.exports = {
     }
   },
   etherscan: {
-    apiKey: ETHERSCAN_API_KEY
+    apiKey: {
+      sepolia: ETHERSCAN_API_KEY
+    },
+    customChains: [
+      {
+        network: "sepolia",
+        chainId: 11155111,
+        urls: {
+          apiURL: "https://api.etherscan.io/v2/api?chainid=11155111",
+          browserURL: "https://sepolia.etherscan.io"
+        }
+      }
+    ],
+    enabled: true
+  },
+  sourcify: {
+    enabled: false
   },
   paths: {
     sources: "./contracts",
