@@ -2147,7 +2147,7 @@ function App() {
                           const currencyInfo = CURRENCIES[currency];
                           
                           return (
-                            <div key={acc.id} className="account-card">
+                            <div key={acc.id} className={`account-card ${acc.type === 'Time' ? 'time-lock' : acc.type === 'Growth' ? 'growth-goal' : 'balance-transfer'}`}>
                               <div className="account-header">
                                 <h3>{acc.goalName}</h3>
                                 <span className={`account-type ${acc.type.toLowerCase()}`}>{acc.type}</span>
@@ -2324,7 +2324,7 @@ function App() {
                             const currencyInfo = CURRENCIES[currency];
                             
                             return (
-                              <div key={acc.id} className="account-card completed">
+                              <div key={acc.id} className={`account-card completed ${acc.type === 'Time' ? 'time-lock' : acc.type === 'Growth' ? 'growth-goal' : 'balance-transfer'}`}>
                                 <div className="account-header">
                                   <h3>{acc.goalName}</h3>
                                   <div className="header-badges">
