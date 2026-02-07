@@ -45,9 +45,9 @@ const SEPOLIA_CHAIN_CONFIG = {
 
 // Currency configuration - USD/EUR/GBP only
 const CURRENCIES = {
-  USD: { code: 0, symbol: '$', name: 'US Dollar', decimals: 4, locale: 'en-US' },
-  EUR: { code: 1, symbol: '€', name: 'Euro', decimals: 4, locale: 'en-IE' },
-  GBP: { code: 2, symbol: '£', name: 'British Pound', decimals: 4, locale: 'en-GB' }
+  USD: { code: 0, symbol: '$', name: 'US Dollar', decimals: 8, locale: 'en-US' },
+  EUR: { code: 1, symbol: '€', name: 'Euro', decimals: 8, locale: 'en-IE' },
+  GBP: { code: 2, symbol: '£', name: 'British Pound', decimals: 8, locale: 'en-GB' }
 };
 
 // Web3Modal provider options
@@ -102,7 +102,6 @@ function App() {
   const [web3Modal, setWeb3Modal] = useState(null);
   const [targetAmountInput, setTargetAmountInput] = useState('');
   const [initialDepositInput, setInitialDepositInput] = useState('');
-  const [oracleDepositPreview, setOracleDepositPreview] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -583,21 +582,6 @@ function App() {
     return () => clearTimeout(timeoutId);
   }, [ethToBuy, routerContract]);
 
-  // Oracle-based deposit preview (debounced)
-  useEffect(() => {
-    if (!savingsContract || !initialDepositInput || parseFloat(initialDepositInput) <= 0) {
-      setOracleDepositPreview(null);
-      return;
-    }
-    const fetchPreview = async () => {
-      try {
-        const amount = await convertFiatToOooweeeOracle(initialDepositInput, accountCurrency.toLowerCase());
-        setOracleDepositPreview(Math.floor(amount));
-      } catch { setOracleDepositPreview(null); }
-    };
-    const timeoutId = setTimeout(fetchPreview, 300);
-    return () => clearTimeout(timeoutId);
-  }, [initialDepositInput, accountCurrency, savingsContract]);
 
   // Load validator stats - with error handling
   const loadValidatorStats = useCallback(async () => {
@@ -709,27 +693,12 @@ function App() {
     return formatCurrency(fiatValue, currency);
   };
 
-  // Convert fiat to OOOWEEE amount (frontend estimate — used for previews only)
+  // Convert fiat to OOOWEEE amount
   const convertFiatToOooweee = (fiatAmount, currency = 'eur') => {
     if (!ethPrice || !fiatAmount) return 0;
     const ethValue = parseFloat(fiatAmount) / (ethPrice[currency.toLowerCase()] || ethPrice.eur);
     const oooweeeAmount = ethValue / oooweeePrice;
     return Math.floor(oooweeeAmount);
-  };
-
-  // Convert fiat to OOOWEEE using the contract's oracle (exact match with display values)
-  const convertFiatToOooweeeOracle = async (fiatAmount, currency = 'eur') => {
-    if (!savingsContract || !fiatAmount || parseFloat(fiatAmount) <= 0) return 0;
-    try {
-      const currencyCode = CURRENCIES[currency.toUpperCase()]?.code ?? 1;
-      const decimals = CURRENCIES[currency.toUpperCase()]?.decimals ?? 4;
-      const fiatInOracleUnits = Math.floor(parseFloat(fiatAmount) * (10 ** decimals));
-      const tokensWei = await savingsContract.getFiatToTokensView(fiatInOracleUnits, currencyCode);
-      return parseFloat(ethers.utils.formatUnits(tokensWei, 18));
-    } catch (e) {
-      console.error('Oracle conversion failed, using frontend fallback:', e);
-      return convertFiatToOooweee(fiatAmount, currency);
-    }
   };
 
   // Convert OOOWEEE to fiat
@@ -1355,11 +1324,12 @@ function App() {
               accData.currentFiatValue = contractFiatValue.toNumber();
             } catch (e) {
               console.error('Error getting contract fiat value:', e);
-              // Fallback to frontend calculation with 4 decimals
+              // Fallback to frontend calculation
               const currencyCode = getCurrencyFromCode(accData.targetCurrency);
               const ethPriceForCurrency = freshEthPrice?.[currencyCode.toLowerCase()] || freshEthPrice?.eur || 1850;
               const tokenValueInEth = parseFloat(accData.balance) * freshOooweeePrice;
-              accData.currentFiatValue = Math.floor(tokenValueInEth * ethPriceForCurrency * 10000); // 4 decimals
+              const currencyInfo = CURRENCIES[currencyCode.toUpperCase()] || CURRENCIES.EUR;
+              accData.currentFiatValue = Math.floor(tokenValueInEth * ethPriceForCurrency * Math.pow(10, currencyInfo.decimals));
             }
           } else {
             accData.currentFiatValue = 0;
@@ -1523,12 +1493,10 @@ function App() {
     }
   };
 
-  const depositToGroupAccount = async (groupId, oooweeeAmount, fiatAmount, currency) => {
+  const depositToGroupAccount = async (groupId, oooweeeAmount) => {
     try {
       setLoading(true);
       const depositAmount = ethers.utils.parseUnits(Math.floor(parseFloat(oooweeeAmount)).toString(), 18);
-      const formattedTokens = Number(parseFloat(oooweeeAmount)).toLocaleString(undefined, { maximumFractionDigits: 0 });
-      const fiatLabel = fiatAmount && currency ? `${CURRENCIES[currency.toUpperCase()]?.symbol || '€'}${fiatAmount}` : `${formattedTokens} $OOOWEEE`;
 
       const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
       await toast.promise(approveTx.wait(), {
@@ -1539,8 +1507,8 @@ function App() {
 
       const tx = await savingsContract.depositToGroup(groupId, depositAmount);
       await toast.promise(tx.wait(), {
-        loading: `💰 Depositing ${fiatLabel} to group...`,
-        success: `✅ Deposited ${fiatLabel}!`,
+        loading: '💰 Depositing to group...',
+        success: '✅ Deposit successful!',
         error: '❌ Failed to deposit'
       });
 
@@ -1766,8 +1734,8 @@ function App() {
       return;
     }
     
-    // Convert fiat deposit to OOOWEEE using oracle (matches display price)
-    const initialDepositOooweee = await convertFiatToOooweeeOracle(initialDepositFiat, accountCurrency.toLowerCase());
+    // Convert fiat deposit to OOOWEEE
+    const initialDepositOooweee = convertFiatToOooweee(initialDepositFiat, accountCurrency.toLowerCase());
     
     if (initialDepositOooweee <= 0) {
       toast.error('Deposit amount too small');
@@ -1889,7 +1857,7 @@ function App() {
     }
   };
 
-  const depositToAccount = async (accountId, amount, fiatAmount, currency) => {
+  const depositToAccount = async (accountId, amount) => {
     try {
       setLoading(true);
 
@@ -1908,7 +1876,6 @@ function App() {
 
       const depositAmount = ethers.utils.parseUnits(depositAmountNumber.toString(), 18);
       const formattedTokens = Number(depositAmountNumber).toLocaleString(undefined, { maximumFractionDigits: 0 });
-      const fiatLabel = fiatAmount && currency ? `${CURRENCIES[currency.toUpperCase()]?.symbol || '€'}${fiatAmount}` : `${formattedTokens} $OOOWEEE`;
 
       const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
 
@@ -1921,8 +1888,8 @@ function App() {
       const depositTx = await savingsContract.deposit(accountId, depositAmount);
 
       await toast.promise(depositTx.wait(), {
-        loading: `💰 Depositing ${fiatLabel} (${formattedTokens} $OOOWEEE)...`,
-        success: `🎉 Deposited ${fiatLabel}!`,
+        loading: `💰 Depositing ${formattedTokens} $OOOWEEE...`,
+        success: `🎉 Deposited ${formattedTokens} $OOOWEEE!`,
         error: '❌ Failed to deposit'
       });
       
@@ -2843,7 +2810,7 @@ function App() {
                 />
                 {initialDepositInput && (
                   <p className="conversion-note">
-                    ≈ {(oracleDepositPreview ?? convertFiatToOooweee(initialDepositInput, accountCurrency.toLowerCase())).toLocaleString()} $OOOWEEE at current rate
+                    ≈ {convertFiatToOooweee(initialDepositInput, accountCurrency.toLowerCase()).toLocaleString()} $OOOWEEE at current rate
                   </p>
                 )}
                 <p className="fee-note">1% creation fee from initial deposit</p>
@@ -2852,7 +2819,7 @@ function App() {
                   <p className="error-note">⚠️ Minimum deposit is €10</p>
                 )}
                 {(() => {
-                  const oooweeeNeeded = oracleDepositPreview ?? convertFiatToOooweee(initialDepositInput, accountCurrency.toLowerCase());
+                  const oooweeeNeeded = convertFiatToOooweee(initialDepositInput, accountCurrency.toLowerCase());
                   return parseFloat(balance) < oooweeeNeeded && initialDepositInput ? (
                     <p className="swap-notice">⚠️ Insufficient balance - will offer to buy with ETH</p>
                   ) : null;
@@ -3289,23 +3256,15 @@ function App() {
                                         min="1"
                                         step="1"
                                         className="deposit-input"
-                                        onChange={async (e) => {
+                                        onChange={(e) => {
                                           const fiatAmount = e.target.value;
+                                          const oooweeeAmount = convertFiatToOooweee(fiatAmount, currency);
                                           const converter = document.getElementById(`deposit-convert-${acc.id}`);
-                                          if (!converter || !fiatAmount || fiatAmount <= 0) {
-                                            if (converter) converter.textContent = '';
-                                            return;
+                                          if (converter) {
+                                            converter.textContent = fiatAmount && fiatAmount > 0
+                                              ? `≈ ${oooweeeAmount.toLocaleString()} OOOWEEE`
+                                              : '';
                                           }
-                                          // Show instant estimate, then update with oracle
-                                          const estimate = convertFiatToOooweee(fiatAmount, currency);
-                                          converter.textContent = `≈ ${estimate.toLocaleString()} OOOWEEE`;
-                                          try {
-                                            const oracleAmount = await convertFiatToOooweeeOracle(fiatAmount, currency);
-                                            // Only update if input hasn't changed
-                                            if (document.getElementById(`deposit-${acc.id}`)?.value === fiatAmount) {
-                                              converter.textContent = `≈ ${Math.floor(oracleAmount).toLocaleString()} OOOWEEE`;
-                                            }
-                                          } catch (err) { /* keep estimate */ }
                                         }}
                                       />
                                       <span id={`deposit-convert-${acc.id}`} className="deposit-conversion"></span>
@@ -3313,13 +3272,13 @@ function App() {
                                   );
                                 })()}
                                 <button
-                                  onClick={async () => {
+                                  onClick={() => {
                                     const currency = acc.isFiatTarget ? getCurrencyFromCode(acc.targetCurrency) : 'EUR';
                                     const fiatAmount = document.getElementById(`deposit-${acc.id}`).value;
                                     if (fiatAmount && fiatAmount > 0) {
-                                      const oooweeeAmount = await convertFiatToOooweeeOracle(fiatAmount, currency);
+                                      const oooweeeAmount = convertFiatToOooweee(fiatAmount, currency);
                                       if (oooweeeAmount > 0) {
-                                        depositToAccount(acc.id, oooweeeAmount.toString(), fiatAmount, currency);
+                                        depositToAccount(acc.id, oooweeeAmount.toString());
                                       } else {
                                         toast.error('Amount too small');
                                       }
@@ -3514,12 +3473,12 @@ function App() {
                                 className="deposit-input"
                               />
                               <button
-                                onClick={async () => {
+                                onClick={() => {
                                   const fiatAmt = groupDepositAmount;
                                   if (fiatAmt && fiatAmt > 0) {
-                                    const oooweeeAmt = await convertFiatToOooweeeOracle(fiatAmt, currency);
+                                    const oooweeeAmt = convertFiatToOooweee(fiatAmt, currency);
                                     if (oooweeeAmt > 0) {
-                                      depositToGroupAccount(group.id, oooweeeAmt.toString(), fiatAmt, currency);
+                                      depositToGroupAccount(group.id, oooweeeAmt.toString());
                                     } else {
                                       toast.error('Amount too small');
                                     }
