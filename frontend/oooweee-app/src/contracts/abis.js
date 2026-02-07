@@ -1333,6 +1333,11 @@ export const OOOWEEESavingsABI = [
         "internalType": "string",
         "name": "goalName",
         "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "createdAt",
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",

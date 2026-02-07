@@ -112,6 +112,7 @@ function App() {
   });
   const [isConnecting, setIsConnecting] = useState(false);
   const [requiredOooweeeForPurchase, setRequiredOooweeeForPurchase] = useState(null);
+  const hasAutoReconnected = useRef(false);
   
   // Send modal state
   const [showSendModal, setShowSendModal] = useState(false);
@@ -191,20 +192,10 @@ function App() {
     priceIncreasePercent: 0
   });
   
-  // Admin refresh interval
-  useEffect(() => {
-    if (account?.toLowerCase() === ADMIN_WALLET.toLowerCase() && activeTab === 'admin') {
-      loadAdminStats();
-      const interval = setInterval(loadAdminStats, 5000);
-      return () => clearInterval(interval);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [account, activeTab, stabilityContract, savingsContract, provider]);
-
   // Load admin statistics
   const loadAdminStats = useCallback(async () => {
     if (!stabilityContract || !savingsContract || !provider) return;
-    
+
     try {
       const [stabilityInfo, marketConditions, circuitBreaker, statsView, blockNumber, checksEnabled] = await Promise.all([
         stabilityContract.getStabilityInfo(),
@@ -214,9 +205,9 @@ function App() {
         provider.getBlockNumber(),
         stabilityContract.systemChecksEnabled()
       ]);
-      
+
       const block = await provider.getBlock(blockNumber);
-      
+
       setAdminStats({
         totalValueLocked: ethers.utils.formatUnits(statsView[0], 18),
         totalAccountsCreated: statsView[1].toNumber(),
@@ -257,7 +248,7 @@ function App() {
       const interval = setInterval(loadAdminStats, 5000);
       return () => clearInterval(interval);
     }
-  }, [account, activeTab, loadAdminStats]);
+  }, [account, activeTab, stabilityContract, savingsContract, provider, loadAdminStats]);
 
   // Stability event alerting — listen for circuit breaker and interventions
   useEffect(() => {
@@ -475,14 +466,6 @@ function App() {
     init();
   }, []);
 
-  // Auto-reconnect wallet if cached - FIX: Prevent multiple connections
-  useEffect(() => {
-    if (web3Modal && web3Modal.cachedProvider && !account && !isConnecting) {
-      connectWallet();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [web3Modal]);
-
   // Persist selected currency
   useEffect(() => {
     localStorage.setItem('oooweee_currency', selectedCurrency);
@@ -524,14 +507,14 @@ function App() {
     prevOooweeePriceRef.current = oooweeePrice;
   }, [oooweeePrice]);
 
-  // Format currency
+  // Format currency for user display (2 decimal places)
   const formatCurrency = (amount, currency = 'eur') => {
     const curr = Object.entries(CURRENCIES).find(([key, _]) => key.toLowerCase() === currency.toLowerCase()) || ['EUR', CURRENCIES.EUR];
     return new Intl.NumberFormat(curr[1].locale, {
       style: 'currency',
       currency: curr[0],
-      minimumFractionDigits: curr[1].decimals,
-      maximumFractionDigits: curr[1].decimals
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     }).format(amount);
   };
 
@@ -685,7 +668,7 @@ function App() {
     }
   }, [validatorFundContract, loadValidatorStats]);
 
-  // Calculate fiat value
+  // Calculate fiat value (frontend estimation — for display when wallet not connected)
   const getOooweeeInFiat = (oooweeeAmount, currency = 'eur') => {
     if (!ethPrice) return '...';
     const ethValue = parseFloat(oooweeeAmount) * oooweeePrice;
@@ -693,12 +676,29 @@ function App() {
     return formatCurrency(fiatValue, currency);
   };
 
-  // Convert fiat to OOOWEEE amount
+  // Frontend estimation: fiat to OOOWEEE (for display hints only, not transactions)
   const convertFiatToOooweee = (fiatAmount, currency = 'eur') => {
     if (!ethPrice || !fiatAmount) return 0;
     const ethValue = parseFloat(fiatAmount) / (ethPrice[currency.toLowerCase()] || ethPrice.eur);
     const oooweeeAmount = ethValue / oooweeePrice;
     return Math.floor(oooweeeAmount);
+  };
+
+  // Oracle-based: fiat to OOOWEEE (uses contract oracle — matches withdrawal logic)
+  const convertFiatToOooweeeOracle = async (fiatAmount, currency = 'eur') => {
+    if (!savingsContract || !fiatAmount || parseFloat(fiatAmount) <= 0) {
+      return convertFiatToOooweee(fiatAmount, currency); // fallback
+    }
+    try {
+      const currencyCode = CURRENCIES[currency.toUpperCase()]?.code ?? 1;
+      const decimals = CURRENCIES[currency.toUpperCase()]?.decimals ?? 4;
+      const fiatInSmallestUnit = Math.round(parseFloat(fiatAmount) * Math.pow(10, decimals));
+      const tokensNeeded = await savingsContract.getFiatToTokensView(fiatInSmallestUnit, currencyCode);
+      return parseFloat(ethers.utils.formatUnits(tokensNeeded, 18));
+    } catch (e) {
+      console.error('Oracle fiat→token conversion failed, using frontend estimate:', e);
+      return convertFiatToOooweee(fiatAmount, currency);
+    }
   };
 
   // Convert OOOWEEE to fiat
@@ -833,6 +833,158 @@ function App() {
     }
   };
 
+  // Helper function to get currency code from enum value
+  const getCurrencyFromCode = useCallback((code) => {
+    const codes = ['USD', 'EUR', 'GBP'];
+    return codes[code] || 'EUR';
+  }, []);
+
+  const calculateProgress = useCallback((acc, currentOooweeePrice, currentEthPrice) => {
+    if (acc.type === 'Time') {
+      const now = Math.floor(Date.now() / 1000);
+      const created = acc.createdAt || now;
+      const unlock = acc.unlockTime;
+      if (unlock <= now) return 100;
+      const total = unlock - created;
+      const elapsed = now - created;
+      return Math.min(100, Math.floor((elapsed / total) * 100));
+    }
+
+    if (acc.isFiatTarget && acc.targetFiat > 0) {
+      if (acc.currentFiatValue && acc.currentFiatValue > 0) {
+        const progress = (acc.currentFiatValue / acc.targetFiat) * 100;
+        return Math.min(100, Math.floor(progress));
+      }
+
+      const currencyCode = getCurrencyFromCode(acc.targetCurrency);
+      const currencyInfo = CURRENCIES[currencyCode.toUpperCase()] || CURRENCIES.EUR;
+      const ethPriceForCurrency = currentEthPrice?.[currencyCode.toLowerCase()] || currentEthPrice?.eur || 1850;
+      const tokenValueInEth = parseFloat(acc.balance) * currentOooweeePrice;
+      const currentFiatValue = tokenValueInEth * ethPriceForCurrency;
+      const targetFiatValue = acc.targetFiat / Math.pow(10, currencyInfo.decimals);
+
+      if (targetFiatValue <= 0) return 0;
+      return Math.min(100, Math.floor((currentFiatValue / targetFiatValue) * 100));
+    }
+
+    if (parseFloat(acc.target) > 0) {
+      return Math.min(100, Math.floor((parseFloat(acc.balance) / parseFloat(acc.target)) * 100));
+    }
+
+    return 0;
+  }, [getCurrencyFromCode]);
+
+  const loadBalances = useCallback(async (userAccount, providerInstance, tokenContractInstance) => {
+    try {
+      const [tokenBal, ethBal] = await Promise.all([
+        tokenContractInstance.balanceOf(userAccount),
+        providerInstance.getBalance(userAccount)
+      ]);
+
+      setBalance(ethers.utils.formatUnits(tokenBal, 18));
+      setEthBalance(ethers.utils.formatEther(ethBal));
+    } catch (error) {
+      console.error('Error loading balances:', error);
+    }
+  }, []);
+
+  const loadSavingsAccounts = useCallback(async (userAccount, savingsContractInstance, providerInstance, routerContractInstance, currentEthPrice) => {
+    try {
+      let freshOooweeePrice = 0.00001;
+
+      if (routerContractInstance) {
+        try {
+          const ethAmount = ethers.utils.parseEther("1");
+          const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.OOOWEEEToken];
+          const amounts = await routerContractInstance.getAmountsOut(ethAmount, path);
+          const oooweeePerEth = parseFloat(ethers.utils.formatUnits(amounts[1], 18));
+          freshOooweeePrice = 1 / oooweeePerEth;
+          setOooweeePrice(freshOooweeePrice);
+        } catch (priceError) {
+          console.error('Error fetching fresh OOOWEEE price:', priceError);
+        }
+      }
+
+      let freshEthPrice = currentEthPrice;
+      if (!freshEthPrice) {
+        try {
+          const response = await fetch('/api/eth-price');
+          const data = await response.json();
+          freshEthPrice = data.ethereum;
+          setEthPrice(freshEthPrice);
+        } catch (e) {
+          freshEthPrice = { usd: 2000, eur: 1850, gbp: 1600 };
+        }
+      }
+
+      const [totalCount] = await savingsContractInstance.getUserAccountCount(userAccount);
+      const accountDetails = [];
+
+      const ACCOUNT_TYPES = ['Time', 'Balance', 'Growth'];
+      const CURRENCY_CODES_LOCAL = ['USD', 'EUR', 'GBP'];
+
+      for (let id = 0; id < totalCount.toNumber(); id++) {
+        try {
+          const info = await savingsContractInstance.getAccountDetails(userAccount, id);
+
+          const accData = {
+            id: id.toString(),
+            type: ACCOUNT_TYPES[info[0]],
+            isActive: info[1],
+            balance: ethers.utils.formatUnits(info[2], 18),
+            target: ethers.utils.formatUnits(info[3], 18),
+            targetFiat: info[4].toNumber(),
+            targetCurrency: info[5],
+            unlockTime: info[6].toNumber(),
+            recipient: info[7],
+            goalName: info[8],
+            createdAt: info[9].toNumber(),
+            pendingRewards: '0',
+            isFiatTarget: info[4].gt(0)
+          };
+
+          if (accData.isFiatTarget) {
+            try {
+              const balanceWei = ethers.utils.parseUnits(accData.balance, 18);
+              const contractFiatValue = await savingsContractInstance.getBalanceInFiatView(balanceWei, accData.targetCurrency);
+              accData.currentFiatValue = contractFiatValue.toNumber();
+            } catch (e) {
+              console.error('Error getting contract fiat value:', e);
+              const currencyCode = CURRENCY_CODES_LOCAL[accData.targetCurrency] || 'EUR';
+              const ethPriceForCurrency = freshEthPrice?.[currencyCode.toLowerCase()] || freshEthPrice?.eur || 1850;
+              const tokenValueInEth = parseFloat(accData.balance) * freshOooweeePrice;
+              accData.currentFiatValue = Math.floor(tokenValueInEth * ethPriceForCurrency * 10000);
+            }
+          } else {
+            accData.currentFiatValue = 0;
+          }
+
+          accData.progress = calculateProgress(accData, freshOooweeePrice, freshEthPrice);
+          accountDetails.push(accData);
+        } catch (error) {
+          console.error(`Error loading account ${id}:`, error);
+        }
+      }
+
+      setAccounts(accountDetails);
+    } catch (error) {
+      console.error('Error loading accounts:', error);
+    }
+  }, [calculateProgress]);
+
+  const handleAccountsChanged = useCallback(async (accounts) => {
+    if (accounts.length === 0) {
+      // Full page reload to reset all state cleanly
+      window.location.reload();
+    } else {
+      window.location.reload();
+    }
+  }, []);
+
+  const handleChainChanged = useCallback(() => {
+    window.location.reload();
+  }, []);
+
   // Buy and create account - FIXED: Buy exactly the needed amount
   // eslint-disable-next-line no-unused-vars
   const buyAndCreateAccount = async (requiredOooweee) => {
@@ -878,23 +1030,23 @@ function App() {
   };
 
   // Connect wallet - FIX: Prevent duplicate connections
-  const connectWallet = async () => {
+  const connectWallet = useCallback(async () => {
     if (isConnecting) return;
-    
+
     try {
       setIsConnecting(true);
       setLoading(true);
-      
+
       if (!web3Modal) {
         toast.error('Web3Modal not initialized');
         return;
       }
-      
+
       const instance = await web3Modal.connect();
       const web3Provider = new ethers.providers.Web3Provider(instance);
       const signer = web3Provider.getSigner();
       const address = await signer.getAddress();
-      
+
       const network = await web3Provider.getNetwork();
       if (network.chainId !== 11155111) {
         toast.error('Please switch to Sepolia network');
@@ -902,7 +1054,7 @@ function App() {
         setIsConnecting(false);
         return;
       }
-      
+
       // Initialize contracts
       const token = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEToken, OOOWEEETokenABI, signer);
       const savings = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEESavings, OOOWEEESavingsABI, signer);
@@ -919,7 +1071,7 @@ function App() {
       setDonorRegistryContract(donorRegistry);
       setStabilityContract(stability);
       setRouterContract(router);
-      
+
       // Load user data (read-only operations)
       await loadBalances(address, web3Provider, token);
       await loadSavingsAccounts(address, savings, web3Provider, router, ethPrice);
@@ -930,7 +1082,7 @@ function App() {
         instance.on("accountsChanged", handleAccountsChanged);
         instance.on("chainChanged", handleChainChanged);
       }
-      
+
       setLoginMethod('wallet');
       toast.success('Wallet connected!');
     } catch (error) {
@@ -942,7 +1094,7 @@ function App() {
       setLoading(false);
       setIsConnecting(false);
     }
-  };
+  }, [web3Modal, isConnecting, ethPrice, handleAccountsChanged, handleChainChanged, loadBalances, loadSavingsAccounts]);
 
   // Social login via Web3Auth (Google / Email)
   const connectSocialLogin = async () => {
@@ -995,17 +1147,14 @@ function App() {
     }
   };
 
-  const handleAccountsChanged = async (accounts) => {
-    if (accounts.length === 0) {
-      disconnectWallet();
-    } else {
-      window.location.reload();
+  // Auto-reconnect wallet if cached - one-shot on mount
+  useEffect(() => {
+    if (hasAutoReconnected.current) return;
+    if (web3Modal && web3Modal.cachedProvider && !account && !isConnecting) {
+      hasAutoReconnected.current = true;
+      connectWallet();
     }
-  };
-
-  const handleChainChanged = (chainId) => {
-    window.location.reload();
-  };
+  }, [web3Modal, account, isConnecting, connectWallet]);
 
   const donateToValidators = async () => {
     setShowDonateModal(true);
@@ -1188,166 +1337,6 @@ function App() {
     setEthBalance('0');
     setAccounts([]);
     setLoginMethod(null);
-  };
-
-  const loadBalances = async (account, provider, tokenContract) => {
-    try {
-      const [tokenBal, ethBal] = await Promise.all([
-        tokenContract.balanceOf(account),
-        provider.getBalance(account)
-      ]);
-      
-      setBalance(ethers.utils.formatUnits(tokenBal, 18));
-      setEthBalance(ethers.utils.formatEther(ethBal));
-    } catch (error) {
-      console.error('Error loading balances:', error);
-    }
-  };
-
-  // Helper function to get currency code from enum value
-  // Explicit array to avoid relying on Object.keys() order
-  const CURRENCY_CODES = ['USD', 'EUR', 'GBP'];
-  const getCurrencyFromCode = (code) => {
-    return CURRENCY_CODES[code] || 'EUR';
-  };
-
-  // FIX: Calculate progress using contract's fiat value (not frontend recalculation)
-  const calculateProgress = (acc, currentOooweeePrice, currentEthPrice) => {
-    if (acc.type === 'Time') {
-      // Time accounts: progress based on time
-      const now = Math.floor(Date.now() / 1000);
-      const created = acc.createdAt || now;
-      const unlock = acc.unlockTime;
-      if (unlock <= now) return 100;
-      const total = unlock - created;
-      const elapsed = now - created;
-      return Math.min(100, Math.floor((elapsed / total) * 100));
-    }
-    
-    if (acc.isFiatTarget && acc.targetFiat > 0) {
-      // Use contract's currentFiatValue if available (matches displayed value)
-      if (acc.currentFiatValue && acc.currentFiatValue > 0) {
-        // Both values are in smallest units (4 decimals)
-        const progress = (acc.currentFiatValue / acc.targetFiat) * 100;
-        return Math.min(100, Math.floor(progress));
-      }
-      
-      // Fallback to frontend calculation if contract value not available
-      const currencyCode = getCurrencyFromCode(acc.targetCurrency);
-      const currencyInfo = CURRENCIES[currencyCode.toUpperCase()] || CURRENCIES.EUR;
-      const ethPriceForCurrency = currentEthPrice?.[currencyCode.toLowerCase()] || currentEthPrice?.eur || 1850;
-      const tokenValueInEth = parseFloat(acc.balance) * currentOooweeePrice;
-      const currentFiatValue = tokenValueInEth * ethPriceForCurrency;
-      
-      // targetFiat is in smallest units (4 decimals: 10000 = $1.00)
-      const targetFiatValue = acc.targetFiat / Math.pow(10, currencyInfo.decimals);
-      
-      if (targetFiatValue <= 0) return 0;
-      return Math.min(100, Math.floor((currentFiatValue / targetFiatValue) * 100));
-    }
-    
-    if (parseFloat(acc.target) > 0) {
-      return Math.min(100, Math.floor((parseFloat(acc.balance) / parseFloat(acc.target)) * 100));
-    }
-    
-    return 0;
-  };
-
-  // FIX: loadSavingsAccounts now fetches fresh price from router to avoid stale closure bug
-  const loadSavingsAccounts = async (userAccount, savingsContractInstance, providerInstance, routerContractInstance, currentEthPrice) => {
-    try {
-      // CRITICAL FIX: Fetch fresh OOOWEEE price directly from router
-      // This prevents stale closure issues where the state value is outdated
-      let freshOooweeePrice = 0.00001; // Default fallback
-      
-      if (routerContractInstance) {
-        try {
-          const ethAmount = ethers.utils.parseEther("1");
-          const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.OOOWEEEToken];
-          const amounts = await routerContractInstance.getAmountsOut(ethAmount, path);
-          const oooweeePerEth = parseFloat(ethers.utils.formatUnits(amounts[1], 18));
-          freshOooweeePrice = 1 / oooweeePerEth;
-          
-          // Also update the state so UI stays in sync
-          setOooweeePrice(freshOooweeePrice);
-        } catch (priceError) {
-          console.error('Error fetching fresh OOOWEEE price:', priceError);
-        }
-      }
-      
-      // Use current ethPrice or fetch fresh if not provided
-      let freshEthPrice = currentEthPrice;
-      if (!freshEthPrice) {
-        try {
-          const response = await fetch('/api/eth-price');
-          const data = await response.json();
-          freshEthPrice = data.ethereum;
-          setEthPrice(freshEthPrice);
-          if (data._meta) setPriceFeedStatus(data._meta);
-        } catch (e) {
-          const cached = localStorage.getItem('oooweee_eth_price_cache');
-          freshEthPrice = cached ? JSON.parse(cached).prices : { usd: 2000, eur: 1850, gbp: 1600 };
-        }
-      }
-      
-      // Use getUserAccountCount to get TOTAL accounts (not just active ones)
-      const [totalCount] = await savingsContractInstance.getUserAccountCount(userAccount);
-      const accountDetails = [];
-      
-      // Loop through ALL account IDs from 0 to total-1
-      for (let id = 0; id < totalCount.toNumber(); id++) {
-        try {
-          const info = await savingsContractInstance.getAccountDetails(userAccount, id);
-          
-          const ACCOUNT_TYPES = ['Time', 'Balance', 'Growth'];
-
-          const accData = {
-            id: id.toString(),
-            type: ACCOUNT_TYPES[info[0]],
-            isActive: info[1],
-            balance: ethers.utils.formatUnits(info[2], 18),
-            target: ethers.utils.formatUnits(info[3], 18),
-            targetFiat: info[4].toNumber(),
-            targetCurrency: info[5],
-            unlockTime: info[6].toNumber(),
-            recipient: info[7],
-            goalName: info[8],
-            pendingRewards: '0',
-            isFiatTarget: info[4].gt(0)
-          };
-          
-         // Calculate current fiat value using CONTRACT's oracle (ensures match)
-          if (accData.isFiatTarget) {
-            try {
-              const balanceWei = ethers.utils.parseUnits(accData.balance, 18);
-              const contractFiatValue = await savingsContractInstance.getBalanceInFiatView(balanceWei, accData.targetCurrency);
-              accData.currentFiatValue = contractFiatValue.toNumber();
-            } catch (e) {
-              console.error('Error getting contract fiat value:', e);
-              // Fallback to frontend calculation
-              const currencyCode = getCurrencyFromCode(accData.targetCurrency);
-              const ethPriceForCurrency = freshEthPrice?.[currencyCode.toLowerCase()] || freshEthPrice?.eur || 1850;
-              const tokenValueInEth = parseFloat(accData.balance) * freshOooweeePrice;
-              const currencyInfo = CURRENCIES[currencyCode.toUpperCase()] || CURRENCIES.EUR;
-              accData.currentFiatValue = Math.floor(tokenValueInEth * ethPriceForCurrency * Math.pow(10, currencyInfo.decimals));
-            }
-          } else {
-            accData.currentFiatValue = 0;
-          }
-
-          // Calculate progress AFTER currentFiatValue is set (so it uses contract's value)
-          accData.progress = calculateProgress(accData, freshOooweeePrice, freshEthPrice);
-          
-          accountDetails.push(accData);
-        } catch (error) {
-          console.error(`Error loading account ${id}:`, error);
-        }
-      }
-      
-      setAccounts(accountDetails);
-    } catch (error) {
-      console.error('Error loading accounts:', error);
-    }
   };
 
   // eslint-disable-next-line no-unused-vars
@@ -1561,7 +1550,7 @@ function App() {
       }
       
       const unlockTime = Math.floor(new Date(unlockDate).getTime() / 1000);
-      const depositAmount = ethers.utils.parseUnits(Math.floor(initialDeposit).toString(), 18);
+      const depositAmount = ethers.utils.parseUnits(Math.ceil(parseFloat(initialDeposit)).toString(), 18);
       
       const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
       
@@ -1571,7 +1560,7 @@ function App() {
         error: '❌ Failed to approve'
       });
       
-      const createTx = await savingsContract.createTimeAccountFiat(
+      const createTx = await savingsContract.createTimeAccount(
         unlockTime,
         goalName,
         depositAmount,
@@ -1580,7 +1569,7 @@ function App() {
       
       await toast.promise(createTx.wait(), {
         loading: '🐷 Creating piggy bank...',
-        success: `🎉 Time account created with ${Math.floor(initialDeposit).toLocaleString()} $OOOWEEE!`,
+        success: `🎉 Time account created with ${Math.ceil(parseFloat(initialDeposit)).toLocaleString()} $OOOWEEE!`,
         error: '❌ Failed to create account'
       });
       
@@ -1617,7 +1606,7 @@ function App() {
       }
       
       const targetInSmallestUnit = Math.round(targetAmount * Math.pow(10, CURRENCIES[currency].decimals));
-      const depositAmount = ethers.utils.parseUnits(Math.floor(initialDeposit).toString(), 18);
+      const depositAmount = ethers.utils.parseUnits(Math.ceil(parseFloat(initialDeposit)).toString(), 18);
       
       const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
       
@@ -1672,7 +1661,7 @@ function App() {
       }
       
       const targetInSmallestUnit = Math.round(targetAmount * Math.pow(10, CURRENCIES[currency].decimals));
-      const depositAmount = ethers.utils.parseUnits(Math.floor(initialDeposit).toString(), 18);
+      const depositAmount = ethers.utils.parseUnits(Math.ceil(parseFloat(initialDeposit)).toString(), 18);
       
       const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
       
@@ -1734,14 +1723,14 @@ function App() {
       return;
     }
     
-    // Convert fiat deposit to OOOWEEE
-    const initialDepositOooweee = convertFiatToOooweee(initialDepositFiat, accountCurrency.toLowerCase());
-    
+    // Convert fiat deposit to OOOWEEE using contract oracle (matches withdrawal logic)
+    const initialDepositOooweee = await convertFiatToOooweeeOracle(initialDepositFiat, accountCurrency.toLowerCase());
+
     if (initialDepositOooweee <= 0) {
       toast.error('Deposit amount too small');
       return;
     }
-    
+
     if (accountType === 'time') {
       const unlockDate = document.getElementById('unlockDate').value;
       if (!unlockDate) {
@@ -3152,7 +3141,7 @@ function App() {
                                         <span>Target:</span>
                                         <span className="primary-amount">
                                           {currencyInfo.symbol}
-                                          {(acc.targetFiat / Math.pow(10, currencyInfo.decimals)).toFixed(currencyInfo.decimals)}
+                                          {(acc.targetFiat / Math.pow(10, currencyInfo.decimals)).toFixed(2)}
                                         </span>
                                       </div>
                                     )}
@@ -3161,7 +3150,7 @@ function App() {
                                       <span>Current Value:</span>
                                       <span className="primary-amount">
                                         {currencyInfo.symbol}
-                                        {(acc.currentFiatValue / Math.pow(10, currencyInfo.decimals)).toFixed(currencyInfo.decimals)}
+                                        {(acc.currentFiatValue / Math.pow(10, currencyInfo.decimals)).toFixed(2)}
                                       </span>
                                     </div>
                                     
@@ -3244,8 +3233,6 @@ function App() {
                               <div className="deposit-section">
                                 {(() => {
                                   const currency = acc.isFiatTarget ? getCurrencyFromCode(acc.targetCurrency) : 'EUR';
-                                  // eslint-disable-next-line no-unused-vars
-                                  const currencySymbol = CURRENCIES[currency.toUpperCase()]?.symbol || '€';
                                   return (
                                     <>
                                       <label className="deposit-label">Deposit ({currency})</label>
@@ -3272,11 +3259,11 @@ function App() {
                                   );
                                 })()}
                                 <button
-                                  onClick={() => {
+                                  onClick={async () => {
                                     const currency = acc.isFiatTarget ? getCurrencyFromCode(acc.targetCurrency) : 'EUR';
                                     const fiatAmount = document.getElementById(`deposit-${acc.id}`).value;
                                     if (fiatAmount && fiatAmount > 0) {
-                                      const oooweeeAmount = convertFiatToOooweee(fiatAmount, currency);
+                                      const oooweeeAmount = await convertFiatToOooweeeOracle(fiatAmount, currency);
                                       if (oooweeeAmount > 0) {
                                         depositToAccount(acc.id, oooweeeAmount.toString());
                                       } else {
@@ -3583,7 +3570,7 @@ function App() {
                                           <span>Target Reached:</span>
                                           <span className="value">
                                             {currencyInfo.symbol}
-                                            {(acc.targetFiat / Math.pow(10, currencyInfo.decimals)).toFixed(currencyInfo.decimals)}
+                                            {(acc.targetFiat / Math.pow(10, currencyInfo.decimals)).toFixed(2)}
                                           </span>
                                         </div>
                                       )}
@@ -3591,7 +3578,7 @@ function App() {
                                         <span>Final Value:</span>
                                         <span className="value">
                                           {currencyInfo.symbol}
-                                          {(acc.currentFiatValue / Math.pow(10, currencyInfo.decimals)).toFixed(currencyInfo.decimals)}
+                                          {(acc.currentFiatValue / Math.pow(10, currencyInfo.decimals)).toFixed(2)}
                                         </span>
                                       </div>
                                     </>

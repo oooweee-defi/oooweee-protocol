@@ -83,12 +83,13 @@ contract OOOWEEESavingsV3 is OOOWEEESavingsV2 {
             AccountType accountType, bool isActive, uint256 balance,
             uint256 targetAmount, uint256 targetFiat,
             SavingsPriceOracle.Currency targetCurrency,
-            uint256 unlockTime, address recipient, string memory goalName)
+            uint256 unlockTime, address recipient, string memory goalName,
+            uint256 createdAt)
     {
         require(accountId < userAccounts[owner].length, "E");
         SavingsAccount memory a = userAccounts[owner][accountId];
         return (a.accountType, a.isActive, _v3Bal(owner, accountId),
-            a.targetAmount, a.targetFiat, a.targetCurrency, a.unlockTime, a.recipient, a.goalName);
+            a.targetAmount, a.targetFiat, a.targetCurrency, a.unlockTime, a.recipient, a.goalName, a.createdAt);
     }
 
     function getAccountFiatProgressView(address owner, uint256 accountId)

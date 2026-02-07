@@ -12,18 +12,21 @@ import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 /**
  * @title SavingsPriceOracle
  * @notice Provides OOOWEEE price in USD/EUR/GBP using Chainlink + Uniswap reserves
- * @dev Two-step price calculation:
- *      1. Get ETH/USD (or EUR/GBP) from Chainlink (trusted, 8 decimals)
- *      2. Get OOOWEEE/ETH from Uniswap V2 pool reserves (spot or TWAP)
- *      3. Multiply to get OOOWEEE/USD (or EUR/GBP)
+ * @dev Price calculation:
+ *      1. Get OOOWEEE/ETH from Uniswap V2 pool reserves (real-time market price)
+ *      2. Get ETH/USD from Chainlink (trusted, 8 decimals)
+ *      3. For USD: OOOWEEE/USD = OOOWEEE/ETH × ETH/USD
+ *      4. For EUR: OOOWEEE/EUR = (OOOWEEE/ETH × ETH/USD) / EUR/USD
+ *      5. For GBP: OOOWEEE/GBP = (OOOWEEE/ETH × ETH/USD) / GBP/USD
  *
  * Chainlink mainnet feeds:
  *   ETH/USD: 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419
  *   EUR/USD: 0xb49f677943BC038e9857d61E7d053CaA2C1734C1
  *   GBP/USD: 0x5c0Ab2d9b5a7ed9f470386e82BB36A3613cDd4b5
  *
- * For EUR and GBP, we use cross-rates:
- *   OOOWEEE/EUR = (OOOWEEE/ETH * ETH/USD) / EUR/USD
+ * priceFeeds[USD] = ETH/USD feed (direct price)
+ * priceFeeds[EUR] = EUR/USD feed (cross-rate divisor)
+ * priceFeeds[GBP] = GBP/USD feed (cross-rate divisor)
  *
  * TWAP is used for withdrawal validation to prevent flash loan manipulation.
  */
@@ -97,7 +100,10 @@ contract SavingsPriceOracle is Initializable, OwnableUpgradeable, ReentrancyGuar
     // ============ Core Price Accessors ============
 
     /**
-     * @notice Get ETH price in fiat from Chainlink (8 decimals)
+     * @notice Get Chainlink price for a currency feed (8 decimals)
+     * @dev For USD: returns ETH/USD price
+     *      For EUR: returns EUR/USD rate (used as cross-rate divisor)
+     *      For GBP: returns GBP/USD rate (used as cross-rate divisor)
      */
     function getETHPrice(Currency currency) public view returns (uint256) {
         address feedAddress = priceFeeds[currency];
@@ -282,13 +288,17 @@ contract SavingsPriceOracle is Initializable, OwnableUpgradeable, ReentrancyGuar
     }
 
     /**
-     * @notice OOOWEEE price via Chainlink ETH/fiat + Uniswap OOOWEEE/ETH spot
+     * @notice OOOWEEE price via Chainlink + Uniswap OOOWEEE/ETH
+     * @dev For USD: price = OOOWEEE/ETH × ETH/USD
+     *      For EUR: price = (OOOWEEE/ETH × ETH/USD) / EUR/USD
+     *      For GBP: price = (OOOWEEE/ETH × ETH/USD) / GBP/USD
      */
     function _getChainlinkUniswapPrice(Currency currency)
         internal view returns (bool success, uint256 price)
     {
-        uint256 ethPrice = getETHPrice(currency);
-        if (ethPrice == 0) return (false, 0);
+        // Always need ETH/USD as the base price
+        uint256 ethUsdPrice = getETHPrice(Currency.USD);
+        if (ethUsdPrice == 0) return (false, 0);
         if (oooweeePool == address(0)) return (false, 0);
 
         try IUniswapV2Pair(oooweeePool).getReserves() returns (
@@ -309,7 +319,23 @@ contract SavingsPriceOracle is Initializable, OwnableUpgradeable, ReentrancyGuar
             if (targetDecimals == 0) targetDecimals = 4;
 
             uint256 divisor = 10 ** (18 + CHAINLINK_DECIMALS - targetDecimals);
-            uint256 calculatedPrice = (priceInEth * ethPrice) / divisor;
+
+            // OOOWEEE/USD = OOOWEEE/ETH × ETH/USD
+            uint256 priceInUsd = (priceInEth * ethUsdPrice) / divisor;
+
+            if (currency == Currency.USD) {
+                return (true, priceInUsd);
+            }
+
+            // For EUR/GBP: cross-rate division
+            // OOOWEEE/EUR = OOOWEEE/USD / EUR/USD
+            // OOOWEEE/GBP = OOOWEEE/USD / GBP/USD
+            uint256 crossRate = getETHPrice(currency); // EUR/USD or GBP/USD (8 decimals)
+            if (crossRate == 0) return (false, 0);
+
+            // priceInUsd is in 4-decimal format, crossRate is 8 decimals
+            // Result: (priceInUsd * 10^8) / crossRate stays in 4-decimal format
+            uint256 calculatedPrice = (priceInUsd * (10 ** CHAINLINK_DECIMALS)) / crossRate;
 
             return (true, calculatedPrice);
         } catch {

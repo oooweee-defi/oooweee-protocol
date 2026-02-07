@@ -22,7 +22,8 @@
       "Bash(gh api:*)",
       "Bash(gh pr merge:*)",
       "Bash(git fetch:*)",
-      "Bash(git merge:*)"
+      "Bash(git merge:*)",
+      "Bash(npx react-app-rewired build)"
     ]
   }
 }

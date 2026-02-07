@@ -698,7 +698,8 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
             SavingsPriceOracle.Currency targetCurrency,
             uint256 unlockTime,
             address recipient,
-            string memory goalName
+            string memory goalName,
+            uint256 createdAt
         )
     {
         require(accountId < userAccounts[owner].length, "Invalid account");
@@ -712,7 +713,8 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
             account.targetCurrency,
             account.unlockTime,
             account.recipient,
-            account.goalName
+            account.goalName,
+            account.createdAt
         );
     }
 
