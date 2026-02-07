@@ -727,19 +727,46 @@ function App() {
     
     try {
       setLoading(true);
-      const amount = parseFloat(donateAmount);
-      const tx = await validatorFundContract.donate({ 
-        value: ethers.utils.parseEther(donateAmount) 
-      });
-      
+      const hasMetadata = donorName.trim() || donorMessage.trim() || donorLocation.trim();
+      let donationWei = ethers.utils.parseEther(donateAmount);
+      let registrationCostWei = ethers.BigNumber.from(0);
+
+      // If user entered name/message, estimate registration gas cost
+      // and subtract it from the donation so total spend = donateAmount
+      if (donorRegistryContract && hasMetadata) {
+        try {
+          const gasEstimate = await donorRegistryContract.estimateGas.registerDonation(
+            donorName.trim().slice(0, 50) || 'Anonymous',
+            donorMessage.trim().slice(0, 180),
+            donorLocation.trim().slice(0, 50)
+          );
+          const gasPrice = await provider.getGasPrice();
+          registrationCostWei = gasEstimate.mul(gasPrice).mul(120).div(100); // 20% buffer
+          donationWei = donationWei.sub(registrationCostWei);
+          if (donationWei.lte(0)) {
+            toast.error('Donation amount too small to cover registration gas');
+            setLoading(false);
+            return;
+          }
+        } catch (e) {
+          // Can't estimate — just send full amount as donation, skip registration
+          console.warn('Could not estimate registration gas:', e);
+          registrationCostWei = ethers.BigNumber.from(0);
+          donationWei = ethers.utils.parseEther(donateAmount);
+        }
+      }
+
+      const actualDonation = ethers.utils.formatEther(donationWei);
+      const tx = await validatorFundContract.donate({ value: donationWei });
+
       await toast.promise(tx.wait(), {
         loading: '💰 Sending donation...',
-        success: `🎉 Donated ${donateAmount} ETH to validator fund!`,
+        success: `🎉 Donated ${parseFloat(actualDonation).toFixed(4)} ETH to validator fund!`,
         error: '❌ Donation failed'
       });
-      
-      // Register donor metadata on-chain via DonorRegistry
-      if (donorRegistryContract) {
+
+      // Register donor metadata on-chain (gas already budgeted from donation amount)
+      if (donorRegistryContract && hasMetadata) {
         try {
           const regTx = await donorRegistryContract.registerDonation(
             donorName.trim().slice(0, 50) || 'Anonymous',
@@ -747,14 +774,15 @@ function App() {
             donorLocation.trim().slice(0, 50)
           );
           await toast.promise(regTx.wait(), {
-            loading: '📝 Saving your name & message on-chain...',
-            success: '✅ Donor info saved on-chain!',
-            error: '⚠️ Donation sent but name registration failed'
+            loading: '📝 Saving your name on-chain...',
+            success: '✅ Name & message saved!',
+            error: '⚠️ Name save failed'
           });
         } catch (regError) {
           console.error('Donor registration failed:', regError);
-          // Donation already went through — this is just metadata
-          toast.error('Donation sent! Name registration failed (metadata only)');
+          if (regError.code !== 'ACTION_REJECTED') {
+            toast('Donation sent! Name save failed — try again next time', { icon: '⚠️' });
+          }
         }
       }
 
@@ -1905,26 +1933,26 @@ function App() {
                 </div>
               </div>
               
-              <div className="shoutout-notice">
-                <p>📣 Donations &gt;0.1 ETH get a shoutout!</p>
+              <div className="input-group message-group">
+                <label>Your Message (optional):</label>
+                <textarea
+                  value={donorMessage}
+                  onChange={(e) => setDonorMessage(e.target.value.slice(0, 180))}
+                  placeholder="Leave a message for the community..."
+                  maxLength={180}
+                  rows={3}
+                />
+                <span className="char-count">{donorMessage.length}/180</span>
               </div>
-              
-              {parseFloat(donateAmount) >= 0.1 && (
-                <div className="input-group message-group">
-                  <label>Your Message (optional):</label>
-                  <textarea
-                    value={donorMessage}
-                    onChange={(e) => setDonorMessage(e.target.value.slice(0, 180))}
-                    placeholder="Leave a message for the community..."
-                    maxLength={180}
-                    rows={3}
-                  />
-                  <span className="char-count">{donorMessage.length}/180</span>
+
+              {(donorName.trim() || donorMessage.trim() || donorLocation.trim()) && (
+                <div className="info-notice">
+                  <p>ℹ️ 2 transactions: (1) donation (2) save name on-chain. A small gas fee for the name save is deducted from your donation — you won't pay anything extra.</p>
                 </div>
               )}
-              
-              <button 
-                className="buy-btn rainbow-btn"
+
+              <button
+                className="buy-btn"
                 onClick={handleDonateSubmit}
                 disabled={loading || parseFloat(donateAmount) <= 0 || parseFloat(donateAmount) > parseFloat(ethBalance)}
               >

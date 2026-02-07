@@ -2082,6 +2082,22 @@ textarea:focus {
   color: var(--text-secondary);
 }
 
+.info-notice {
+  background: var(--oooweee-purple-light);
+  border: 1px solid var(--oooweee-purple-mid);
+  border-radius: var(--radius-sm);
+  padding: 0.625rem 0.875rem;
+  margin: 0;
+}
+
+.info-notice p {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
 /* ==========================================
    SUPPORT CARD
    ========================================== */
