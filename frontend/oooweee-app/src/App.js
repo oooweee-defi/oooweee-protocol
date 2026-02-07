@@ -402,27 +402,22 @@ function App() {
         validatorFundContract.ethUntilNextValidator(),
         validatorFundContract.progressToNextValidator()
       ]);
-      
-      let totalRewards = ethers.BigNumber.from(0);
-      try {
-        totalRewards = await validatorFundContract.totalValidatorRewards();
-      } catch (e) {
-        // totalValidatorRewards might not be accessible
-      }
 
-      const totalETHReceived = stats[3];
-      const totalDonations = stats[4];
-      const fromStability = totalETHReceived.sub(totalDonations);
-      
+      // getStats() returns 10 values:
+      // [0] totalETHReceived, [1] fromStability, [2] fromDonations,
+      // [3] fromRewards, [4] pendingRewards, [5] availableForValidators,
+      // [6] validatorsProvisioned, [7] validatorsActive,
+      // [8] totalDistributions, [9] donorCount
+
       setValidatorStats({
-        validators: stats[0].toString(),
+        validators: stats[7].toString(),
         nextValidatorIn: ethers.utils.formatEther(ethNeeded),
         progress: (parseFloat(ethers.utils.formatEther(progressData[0])) / 32) * 100,
-        pendingETH: ethers.utils.formatEther(stats[1]),
-        totalDonations: ethers.utils.formatEther(totalDonations),
-        donors: stats[5].toString(),
-        fromStability: ethers.utils.formatEther(fromStability),
-        fromRewards: ethers.utils.formatEther(totalRewards)
+        pendingETH: ethers.utils.formatEther(progressData[0]),
+        totalDonations: ethers.utils.formatEther(stats[2]),
+        donors: stats[9].toString(),
+        fromStability: ethers.utils.formatEther(stats[1]),
+        fromRewards: ethers.utils.formatEther(stats[3])
       });
     } catch (error) {
       console.error('Error loading validator stats:', error);
