@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
@@ -23,7 +25,7 @@ import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
  * For EUR and GBP, we use cross-rates:
  *   OOOWEEE/EUR = (OOOWEEE/ETH * ETH/USD) / EUR/USD
  */
-contract SavingsPriceOracle is Ownable, ReentrancyGuard {
+contract SavingsPriceOracle is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable {
 
     enum Currency { USD, EUR, GBP }
 
@@ -45,7 +47,7 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
     uint256 public constant PRICE_STALENESS_THRESHOLD = 1 hours;
     uint256 public constant CHAINLINK_DECIMALS = 8;
 
-    IUniswapV2Router02 public immutable uniswapRouter;
+    IUniswapV2Router02 public uniswapRouter;
     address public oooweeePool;
 
     mapping(Currency => address) public priceFeeds;
@@ -53,7 +55,7 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
     mapping(Currency => uint256) public defaultPrices;
     mapping(Currency => uint256) public emergencyFixedRates;
 
-    PriceSource public activePriceSource = PriceSource.CHAINLINK_UNISWAP;
+    PriceSource public activePriceSource;
     bool public emergencyPriceMode;
 
     LiquidityPoolInfo[] public liquidityPools;
@@ -66,8 +68,20 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
     event PoolDeactivated(address pool, string reason);
     event PoolAddressSet(address indexed pool);
 
-    constructor(address _uniswapRouter) Ownable() {
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(address _uniswapRouter) public initializer {
+        require(_uniswapRouter != address(0), "Invalid router");
+
+        __Ownable_init();
+        __ReentrancyGuard_init();
+        __UUPSUpgradeable_init();
+
         uniswapRouter = IUniswapV2Router02(_uniswapRouter);
+        activePriceSource = PriceSource.CHAINLINK_UNISWAP;
 
         // 4 decimals: 10000 = $1.00, allows sub-cent precision
         currencyDecimals[Currency.USD] = 4;
@@ -358,4 +372,6 @@ contract SavingsPriceOracle is Ownable, ReentrancyGuard {
     function getCurrencyDecimals(Currency currency) external view returns (uint8) {
         return currencyDecimals[currency];
     }
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 }

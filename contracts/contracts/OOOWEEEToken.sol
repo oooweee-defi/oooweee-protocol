@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 /**
  * @title OOOWEEEToken
@@ -15,7 +17,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
  *   for years while the validator yield engine builds
  * - Zero transfer taxes — fees are collected at savings contract level only
  */
-contract OOOWEEEToken is ERC20, Ownable {
+contract OOOWEEEToken is Initializable, ERC20Upgradeable, OwnableUpgradeable, UUPSUpgradeable {
     uint256 public constant TOTAL_SUPPLY = 100_000_000 * 10**18;       // 100M
     uint256 public constant FOUNDER_ALLOCATION = 10_000_000 * 10**18;  // 10M  (10%)
     uint256 public constant LIQUIDITY_ALLOCATION = 10_000_000 * 10**18; // 10M  (10%)
@@ -31,7 +33,7 @@ contract OOOWEEEToken is ERC20, Ownable {
 
     mapping(address => bool) public isLiquidityPair;
     mapping(address => bool) public isExemptFromLimits;
-    bool public tradingEnabled = false;
+    bool public tradingEnabled;
 
     event StabilityMechanismSet(address indexed mechanism);
     event StabilityMechanismUpdated(address indexed oldMechanism, address indexed newMechanism);
@@ -39,12 +41,21 @@ contract OOOWEEEToken is ERC20, Ownable {
     event LiquidityPairSet(address indexed pair, bool value);
     event ExemptionSet(address indexed account, bool exempt);
 
-    constructor(
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(
         address _founderWallet,
         address _operationsWallet
-    ) ERC20("OOOWEEE", "OOOWEEE") Ownable() {
+    ) public initializer {
         require(_founderWallet != address(0), "Invalid founder");
         require(_operationsWallet != address(0), "Invalid operations");
+
+        __ERC20_init("OOOWEEE", "OOOWEEE");
+        __Ownable_init();
+        __UUPSUpgradeable_init();
 
         founderWallet = _founderWallet;
         operationsWallet = _operationsWallet;
@@ -122,4 +133,6 @@ contract OOOWEEEToken is ERC20, Ownable {
         }
         super._beforeTokenTransfer(from, to, amount);
     }
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 }

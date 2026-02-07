@@ -1,6 +1,7 @@
 const path = require("path");
 require("@nomiclabs/hardhat-waffle");
 require("@nomiclabs/hardhat-etherscan");
+require("@openzeppelin/hardhat-upgrades");
 require("dotenv").config({ path: path.resolve(__dirname, ".env") });
 
 // Ensure we have required environment variables
@@ -25,8 +26,9 @@ module.exports = {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 200
-      }
+        runs: 50
+      },
+      viaIR: true
     }
   },
   networks: {

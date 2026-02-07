@@ -86,6 +86,25 @@ function App() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [requiredOooweeeForPurchase, setRequiredOooweeeForPurchase] = useState(null);
   
+  // Send modal state
+  const [showSendModal, setShowSendModal] = useState(false);
+  const [sendRecipient, setSendRecipient] = useState('');
+  const [sendAmount, setSendAmount] = useState('');
+
+  // Group savings state
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const [groupGoalName, setGroupGoalName] = useState('');
+  const [groupDestination, setGroupDestination] = useState('');
+  const [groupTargetFiat, setGroupTargetFiat] = useState('');
+  const [groupAccountType, setGroupAccountType] = useState('time');
+  const [groupUnlockTime, setGroupUnlockTime] = useState('');
+  const [groupInitialDeposit, setGroupInitialDeposit] = useState('');
+  const [groupCurrency, setGroupCurrency] = useState('EUR');
+  const [userGroups, setUserGroups] = useState([]);
+  const [groupInviteAddress, setGroupInviteAddress] = useState('');
+  const [groupDepositAmount, setGroupDepositAmount] = useState('');
+  const [pendingInvitations, setPendingInvitations] = useState([]);
+
   // Donate modal state
   const [showDonateModal, setShowDonateModal] = useState(false);
   const [donateAmount, setDonateAmount] = useState('0.05');
@@ -294,6 +313,34 @@ function App() {
     }
   };
   
+  // Send tokens from wallet
+  const sendTokens = async () => {
+    if (!tokenContract || !sendRecipient || !sendAmount) return;
+    try {
+      setLoading(true);
+      if (!ethers.utils.isAddress(sendRecipient)) {
+        toast.error('Invalid recipient address');
+        return;
+      }
+      const amount = ethers.utils.parseUnits(sendAmount, 18);
+      const tx = await tokenContract.transfer(sendRecipient, amount);
+      await toast.promise(tx.wait(), {
+        loading: 'Sending OOOWEEE...',
+        success: 'Sent successfully!',
+        error: 'Transfer failed'
+      });
+      setShowSendModal(false);
+      setSendRecipient('');
+      setSendAmount('');
+      await loadBalances(account, provider, tokenContract);
+    } catch (error) {
+      console.error(error);
+      toast.error('Send failed: ' + (error.reason || error.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Initialize on load
   useEffect(() => {
     const init = async () => {
@@ -1752,6 +1799,45 @@ function App() {
     <div className="App">
       <Toaster position="top-right" />
       
+      {/* Send Modal */}
+      {showSendModal && (
+        <div className="modal-overlay" onClick={() => setShowSendModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>📤 Send $OOOWEEE</h2>
+            <button className="close-modal" onClick={() => setShowSendModal(false)}>✕</button>
+
+            <div className="form-group">
+              <label>Recipient Address</label>
+              <input
+                type="text"
+                placeholder="0x..."
+                value={sendRecipient}
+                onChange={(e) => setSendRecipient(e.target.value)}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Amount (OOOWEEE)</label>
+              <input
+                type="number"
+                placeholder="0"
+                value={sendAmount}
+                onChange={(e) => setSendAmount(e.target.value)}
+              />
+              <p className="info-text">Available: {parseFloat(balance).toLocaleString()} OOOWEEE</p>
+            </div>
+
+            <button
+              className="cta-button rainbow-btn"
+              onClick={sendTokens}
+              disabled={loading || !sendRecipient || !sendAmount || parseFloat(sendAmount) <= 0}
+            >
+              {loading ? 'Sending...' : 'Send'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {showBuyModal && (
         <div className="modal-overlay" onClick={() => { setShowBuyModal(false); setRequiredOooweeeForPurchase(null); }}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -2208,14 +2294,23 @@ function App() {
                       </div>
                     )}
                     
-                    <button 
+                    <button
                       className="add-oooweee-btn rainbow-btn"
                       onClick={() => setShowBuyModal(true)}
                     >
                       🛒 Buy $OOOWEEE
                     </button>
-                    
-                    <button 
+
+                    <button
+                      className="add-oooweee-btn"
+                      onClick={() => setShowSendModal(true)}
+                      disabled={parseFloat(balance) === 0}
+                      style={{ marginTop: '8px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
+                    >
+                      📤 Send $OOOWEEE
+                    </button>
+
+                    <button
                       className="create-savings-btn"
                       onClick={() => setShowCreateModal(true)}
                     >

@@ -2,8 +2,10 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./SavingsPriceOracle.sol";
 
 /**
@@ -24,8 +26,8 @@ import "./SavingsPriceOracle.sol";
  * When they see it's hit target, they submit the withdrawal transaction.
  * The contract checks the oracle on-chain and either releases or reverts.
  */
-contract OOOWEEESavings is ReentrancyGuard, Ownable {
-    IERC20 public immutable oooweeeToken;
+contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpgradeable, UUPSUpgradeable {
+    IERC20 public oooweeeToken;
     SavingsPriceOracle public priceOracle;
 
     enum AccountType { Time, Balance, Growth }
@@ -53,8 +55,8 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
 
     // ============ Fee Settings ============
 
-    uint256 public creationFeeRate = 100;       // 1%
-    uint256 public withdrawalFeeRate = 100;     // 1%
+    uint256 public creationFeeRate;
+    uint256 public withdrawalFeeRate;
     uint256 public constant FEE_DIVISOR = 10000;
     uint256 public constant MAX_LOCK_DURATION = 36500 days;
 
@@ -119,16 +121,27 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
     event FeesUpdated(uint256 creationFee, uint256 withdrawalFee);
     event PriceOracleUpdated(address indexed newOracle);
 
-    constructor(
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(
         address _tokenAddress,
         address _priceOracle
-    ) Ownable() {
+    ) public initializer {
         require(_tokenAddress != address(0), "Invalid token");
         require(_priceOracle != address(0), "Invalid oracle");
+
+        __ReentrancyGuard_init();
+        __Ownable_init();
+        __UUPSUpgradeable_init();
 
         oooweeeToken = IERC20(_tokenAddress);
         priceOracle = SavingsPriceOracle(_priceOracle);
         feeCollector = msg.sender;
+        creationFeeRate = 100;     // 1%
+        withdrawalFeeRate = 100;   // 1%
     }
 
     // ============ Admin Functions ============
@@ -202,7 +215,7 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
         string memory goalName,
         uint256 initialDeposit,
         SavingsPriceOracle.Currency displayCurrency
-    ) external returns (uint256) {
+    ) external virtual returns (uint256) {
         require(unlockTime > block.timestamp, "Unlock must be future");
         require(unlockTime <= block.timestamp + MAX_LOCK_DURATION, "Max 100 years");
         require(initialDeposit > 0, "Must deposit");
@@ -248,7 +261,7 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
         SavingsPriceOracle.Currency targetCurrency,
         string memory goalName,
         uint256 initialDeposit
-    ) external returns (uint256) {
+    ) external virtual returns (uint256) {
         require(targetFiatAmount > 0, "Target required");
         require(initialDeposit > 0, "Must deposit");
 
@@ -297,7 +310,7 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
         address recipient,
         string memory goalName,
         uint256 initialDeposit
-    ) external returns (uint256) {
+    ) external virtual returns (uint256) {
         require(targetFiatAmount > 0, "Target required");
         require(recipient != address(0), "Invalid recipient");
         require(recipient != msg.sender, "Cannot send to self");
@@ -527,7 +540,7 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
     /**
      * @notice Return OOOWEEE tokens to account owner (Time & Growth)
      */
-    function _executeReturn(address owner, uint256 accountId) private {
+    function _executeReturn(address owner, uint256 accountId) internal virtual {
         SavingsAccount storage account = userAccounts[owner][accountId];
 
         uint256 balance = account.balance;
@@ -557,7 +570,7 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
      * @notice Transfer OOOWEEE to recipient (Balance accounts)
      * @dev Sends target amount to recipient, remainder back to owner
      */
-    function _executeBalanceTransfer(address owner, uint256 accountId) private {
+    function _executeBalanceTransfer(address owner, uint256 accountId) internal virtual {
         SavingsAccount storage account = userAccounts[owner][accountId];
 
         // Cache full balance before any modifications
@@ -718,4 +731,6 @@ contract OOOWEEESavings is ReentrancyGuard, Ownable {
             totalFeesCollected
         );
     }
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 }

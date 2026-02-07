@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 
@@ -32,12 +34,12 @@ interface IOOOWEEESavings {
  *
  * All flows are visible on Etherscan. No bridging. No cross-chain messaging.
  */
-contract OOOWEEEValidatorFund is Ownable, ReentrancyGuard {
+contract OOOWEEEValidatorFund is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable {
 
     // ============ Contracts ============
 
     IERC20 public oooweeeToken;
-    IUniswapV2Router02 public immutable uniswapRouter;
+    IUniswapV2Router02 public uniswapRouter;
     IOOOWEEESavings public savingsContract;
 
     // ============ Addresses ============
@@ -112,12 +114,21 @@ contract OOOWEEEValidatorFund is Ownable, ReentrancyGuard {
     error NoRewardsToDistribute();
     error SwapFailed();
 
-    constructor(
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(
         address _uniswapRouter,
         address _operationsWallet
-    ) {
+    ) public initializer {
         require(_uniswapRouter != address(0), "Invalid router");
         require(_operationsWallet != address(0), "Invalid operations");
+
+        __Ownable_init();
+        __ReentrancyGuard_init();
+        __UUPSUpgradeable_init();
 
         uniswapRouter = IUniswapV2Router02(_uniswapRouter);
         operationsWallet = _operationsWallet;
@@ -434,4 +445,6 @@ contract OOOWEEEValidatorFund is Ownable, ReentrancyGuard {
             totalDistributions
         );
     }
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 }
