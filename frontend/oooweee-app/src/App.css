@@ -1855,6 +1855,70 @@ textarea:focus {
   margin-bottom: 1.5rem;
 }
 
+/* Features Grid */
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+/* Tokenomics Details */
+.tokenomics-details {
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--border-default);
+  padding-top: 1rem;
+}
+
+.tokenomics-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.tokenomics-detail-row .value {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.token-stat.highlight {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(139, 92, 246, 0.08));
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+/* Smart Contracts List */
+.contracts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.contract-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+}
+
+.contract-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.contract-desc {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
 /* ==========================================
    COMMUNITY PAGE
    ========================================== */

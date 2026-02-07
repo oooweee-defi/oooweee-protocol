@@ -1407,7 +1407,18 @@ function App() {
             const myContribution = memberCheck
               ? await contract.getGroupContribution(i, userAccount)
               : ethers.BigNumber.from(0);
+            // Sum all member contributions (shows total even after completion)
+            let totalContributions = ethers.BigNumber.from(0);
+            for (const member of members) {
+              try {
+                const contrib = await contract.getGroupContribution(i, member);
+                totalContributions = totalContributions.add(contrib);
+              } catch (e) {}
+            }
             const TYPES = ['Time', 'Balance', 'Growth'];
+            const displayBalance = details.isActive
+              ? ethers.utils.formatUnits(details.totalBalance, 18)
+              : ethers.utils.formatUnits(totalContributions, 18);
             groupsList.push({
               id: i,
               creator: details.creator,
@@ -1415,6 +1426,8 @@ function App() {
               accountType: TYPES[details.accountType] || 'Time',
               isActive: details.isActive,
               totalBalance: ethers.utils.formatUnits(details.totalBalance, 18),
+              totalContributions: ethers.utils.formatUnits(totalContributions, 18),
+              displayBalance: displayBalance,
               targetFiat: details.targetFiat.toString(),
               targetCurrency: details.targetCurrency,
               unlockTime: details.unlockTime,
@@ -1919,44 +1932,80 @@ function App() {
       <div className="about-header">
         <img src={oooweeLogo} alt="OOOWEEE" className="about-logo pixel-art" />
         <h1>The OOOWEEE Protocol</h1>
-        <p className="subtitle">Decentralized Savings Revolution</p>
+        <p className="subtitle">Make your $aving goals non-negotiable</p>
       </div>
 
       <div className="about-section">
         <h2>The Problem</h2>
-        <p>Traditional banks make it too easy to break your savings goals. That "7-day cooling period"? You can still break it. Those withdrawal fees? They're not enough to stop impulsive spending.</p>
+        <p>Saving money should be simple. But traditional banks make breaking your goals too easy &mdash; cooling-off periods you can override, penalty fees that barely sting, and no real accountability. 92% of people abandon their savings goals within 6 months.</p>
       </div>
 
       <div className="about-section">
         <h2>The Solution</h2>
-        <p>OOOWEEE creates truly immutable savings accounts using smart contracts. When you lock your funds, they're REALLY locked - no bank manager can override it, no "forgot password" backdoor. Your future self will thank you.</p>
+        <p>OOOWEEE uses smart contracts to create savings accounts that <strong>cannot be broken early</strong>. No bank manager override. No "forgot password" backdoor. When you set a time lock, balance target, or growth goal &mdash; it's enforced by code, not willpower. Your future self will thank you.</p>
       </div>
 
-      <div className="value-flow">
-        <h2>How It Works</h2>
+      <div className="about-section features-section">
+        <h2>Key Features</h2>
+        <div className="features-grid">
+          <div className="feature-card">
+            <span className="feature-icon">🔒</span>
+            <h3>Three Lock Types</h3>
+            <p><strong>Time Lock</strong> &mdash; funds release after a set date. <strong>Balance Target</strong> &mdash; unlock when your savings hit a fiat value. <strong>Growth Goal</strong> &mdash; unlock when your tokens grow by a target percentage.</p>
+          </div>
+          <div className="feature-card">
+            <span className="feature-icon">👥</span>
+            <h3>Group Savings</h3>
+            <p>Save together with friends, family, or communities. Create a shared goal, invite members, and watch your collective savings grow. Perfect for holidays, emergency funds, or group investments.</p>
+          </div>
+          <div className="feature-card">
+            <span className="feature-icon">🎁</span>
+            <h3>Passive Rewards</h3>
+            <p>Active savers earn rewards from the protocol's validator staking income. The longer you save, the more you earn &mdash; all distributed automatically in $OOOWEEE.</p>
+          </div>
+          <div className="feature-card">
+            <span className="feature-icon">🛡️</span>
+            <h3>Price Stability</h3>
+            <p>An automated stability mechanism monitors the token price and intervenes during excessive pumps, capturing ETH value and protecting savers from volatile swings.</p>
+          </div>
+          <div className="feature-card">
+            <span className="feature-icon">💸</span>
+            <h3>Multi-Currency Targets</h3>
+            <p>Set your savings goals in USD, EUR, or GBP. Live Chainlink price feeds convert your $OOOWEEE balance to real-world values so you always know where you stand.</p>
+          </div>
+          <div className="feature-card">
+            <span className="feature-icon">⚡</span>
+            <h3>Auto-Unlock</h3>
+            <p>When your savings account matures, Chainlink Automation processes the unlock automatically. No manual claiming needed &mdash; funds return to your wallet on time, every time.</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="about-section">
+        <h2>How the Value Flows</h2>
         <div className="flow-diagram">
           <div className="flow-step">
             <span className="step-icon">📈</span>
-            <h3>Speculation</h3>
-            <p>Traders buy OOOWEEE, price increases</p>
+            <h3>1. Market Activity</h3>
+            <p>Traders buy and sell $OOOWEEE on Uniswap, creating price movement</p>
           </div>
-          <div className="flow-arrow">→</div>
+          <div className="flow-arrow">&#8594;</div>
           <div className="flow-step">
             <span className="step-icon">🛡️</span>
-            <h3>Stability</h3>
-            <p>System sells into pumps, captures ETH</p>
+            <h3>2. Stability</h3>
+            <p>Protocol detects price spikes above 10%, sells reserve tokens, captures ETH</p>
           </div>
-          <div className="flow-arrow">→</div>
+          <div className="flow-arrow">&#8594;</div>
           <div className="flow-step">
             <span className="step-icon">🔐</span>
-            <h3>Validators</h3>
-            <p>ETH funds validators, earns 4% APY</p>
+            <h3>3. Validators</h3>
+            <p>Captured ETH funds Ethereum validators earning ~4% APY staking rewards</p>
           </div>
-          <div className="flow-arrow">→</div>
+          <div className="flow-arrow">&#8594;</div>
           <div className="flow-step">
             <span className="step-icon">🎁</span>
-            <h3>Rewards</h3>
-            <p>Savers earn passive income</p>
+            <h3>4. Rewards</h3>
+            <p>Validator rewards are split: 34% converted to $OOOWEEE for savers</p>
           </div>
         </div>
       </div>
@@ -1966,11 +2015,11 @@ function App() {
         <div className="tokenomics-grid">
           <div className="token-stat">
             <h4>Total Supply</h4>
-            <p>100,000,000 $OOOWEEE</p>
+            <p>100,000,000</p>
           </div>
-          <div className="token-stat">
+          <div className="token-stat highlight">
             <h4>Stability Reserve</h4>
-            <p>89,000,000 (89%)</p>
+            <p>80,000,000 (80%)</p>
           </div>
           <div className="token-stat">
             <h4>Founder Allocation</h4>
@@ -1978,14 +2027,59 @@ function App() {
           </div>
           <div className="token-stat">
             <h4>Initial Liquidity</h4>
-            <p>1,000,000 (1%)</p>
+            <p>10,000,000 (10%)</p>
+          </div>
+        </div>
+        <div className="tokenomics-details">
+          <div className="tokenomics-detail-row">
+            <span>Buy / Sell Tax</span>
+            <span className="value">0%</span>
+          </div>
+          <div className="tokenomics-detail-row">
+            <span>Savings Creation Fee</span>
+            <span className="value">1%</span>
+          </div>
+          <div className="tokenomics-detail-row">
+            <span>Validator Reward Split</span>
+            <span className="value">33% Ops / 33% Validators / 34% Savers</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="about-section">
+        <h2>Smart Contracts</h2>
+        <p style={{ marginBottom: '1rem' }}>All contracts are upgradeable (UUPS proxy pattern), verified on Etherscan, and powered by Chainlink oracles and automation.</p>
+        <div className="contracts-list">
+          <div className="contract-item">
+            <span className="contract-name">$OOOWEEE Token</span>
+            <span className="contract-desc">ERC-20 with stability mechanism integration</span>
+          </div>
+          <div className="contract-item">
+            <span className="contract-name">Savings</span>
+            <span className="contract-desc">Individual &amp; group accounts with auto-unlock</span>
+          </div>
+          <div className="contract-item">
+            <span className="contract-name">Stability</span>
+            <span className="contract-desc">Automated price intervention &amp; ETH capture</span>
+          </div>
+          <div className="contract-item">
+            <span className="contract-name">Validator Fund</span>
+            <span className="contract-desc">ETH staking &amp; 33/33/34 reward distribution</span>
+          </div>
+          <div className="contract-item">
+            <span className="contract-name">Price Oracle</span>
+            <span className="contract-desc">Chainlink feeds for USD, EUR, GBP conversion</span>
+          </div>
+          <div className="contract-item">
+            <span className="contract-name">Donor Registry</span>
+            <span className="contract-desc">On-chain recognition for community contributors</span>
           </div>
         </div>
       </div>
 
       <div className="cta-section">
-        <h2>Join the Revolution</h2>
-        <p>Take control of your financial future. Start saving with OOOWEEE today.</p>
+        <h2>Ready to start saving?</h2>
+        <p>Take control of your financial future. Create an account that holds you accountable.</p>
         <button onClick={() => setActiveTab('dashboard')} className="cta-button rainbow-btn">
           Start Saving Now
         </button>
@@ -3424,7 +3518,7 @@ function App() {
                               <p className="completed-text">🏆 Group Goal Complete!</p>
                               <div className="detail-row">
                                 <span>Final Balance:</span>
-                                <span className="value">{parseFloat(group.totalBalance).toLocaleString()} $OOOWEEE</span>
+                                <span className="value">{parseFloat(group.totalContributions || group.totalBalance).toLocaleString()} $OOOWEEE</span>
                               </div>
                               <div className="detail-row">
                                 <span>Members:</span>
