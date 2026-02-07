@@ -3328,3 +3328,125 @@ textarea:focus {
     padding: 0.15rem 0.375rem;
   }
 }
+
+/* ===== GROUP SAVINGS STYLES ===== */
+
+.invitations-banner {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  border: 4px solid #000;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  box-shadow: 6px 6px 0px #000;
+}
+
+.invitations-banner h3 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+  color: #000;
+}
+
+.invitation-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #fff;
+  border: 3px solid #000;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  box-shadow: 3px 3px 0px #000;
+  gap: 1rem;
+}
+
+.invitation-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  flex: 1;
+}
+
+.invitation-info strong {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.7rem;
+}
+
+.invitation-meta {
+  font-size: 0.8rem;
+  color: #555;
+}
+
+.invitation-creator {
+  font-size: 0.75rem;
+  color: #888;
+}
+
+.accept-invite-btn {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
+  border: 3px solid #000;
+  padding: 0.6rem 1.2rem;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 0.6rem;
+  cursor: pointer;
+  box-shadow: 3px 3px 0px #000;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.accept-invite-btn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0px #000;
+}
+
+.accept-invite-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.group-card {
+  border-left: 6px solid #6366f1;
+}
+
+.group-expanded {
+  border-top: 2px solid #e5e7eb;
+  padding-top: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.group-members {
+  margin-bottom: 0.75rem;
+}
+
+.group-members strong {
+  font-size: 0.75rem;
+  display: block;
+  margin-bottom: 0.3rem;
+}
+
+.member-row {
+  padding: 0.2rem 0;
+  font-size: 0.8rem;
+}
+
+.group-invite-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.group-invite-section label {
+  font-size: 0.75rem;
+  font-weight: bold;
+}
+
+@media (max-width: 768px) {
+  .invitation-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .accept-invite-btn {
+    text-align: center;
+  }
+}

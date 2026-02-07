@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
@@ -27,9 +29,9 @@ import "@chainlink/contracts/src/v0.8/automation/AutomationCompatible.sol";
  * A 20% spike gets 70% captured. A 50% spike gets 85% captured.
  * The rules are public and deterministic — no randomness to manipulate.
  */
-contract OOOWEEEStability is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
-    IERC20 public immutable oooweeeToken;
-    IUniswapV2Router02 public immutable uniswapRouter;
+contract OOOWEEEStability is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable, AutomationCompatibleInterface {
+    IERC20 public oooweeeToken;
+    IUniswapV2Router02 public uniswapRouter;
     IUniswapV2Pair public liquidityPair;
 
     address public validatorFundWallet;
@@ -90,7 +92,7 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard, AutomationCompatibleInter
     // ============ State ============
 
     bool public circuitBreakerTripped;
-    bool public systemChecksEnabled = true;
+    bool public systemChecksEnabled;
 
     // Chainlink Automation registry (restrict performUpkeep caller)
     address public chainlinkRegistry;
@@ -130,19 +132,29 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard, AutomationCompatibleInter
     event DailyLimitsReset(uint256 timestamp);
     event ETHSentToValidators(uint256 amount, uint256 timestamp);
 
-    constructor(
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(
         address _oooweeeToken,
         address _uniswapRouter,
         address _validatorFund
-    ) {
+    ) public initializer {
         require(_oooweeeToken != address(0), "Invalid token");
         require(_uniswapRouter != address(0), "Invalid router");
         require(_validatorFund != address(0), "Invalid fund");
+
+        __Ownable_init();
+        __ReentrancyGuard_init();
+        __UUPSUpgradeable_init();
 
         oooweeeToken = IERC20(_oooweeeToken);
         uniswapRouter = IUniswapV2Router02(_uniswapRouter);
         validatorFundWallet = _validatorFund;
         lastDayReset = block.timestamp;
+        systemChecksEnabled = true;
     }
 
     receive() external payable {}
@@ -824,4 +836,6 @@ contract OOOWEEEStability is Ownable, ReentrancyGuard, AutomationCompatibleInter
         require(balance > 0, "No ETH");
         payable(owner()).transfer(balance);
     }
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 }
