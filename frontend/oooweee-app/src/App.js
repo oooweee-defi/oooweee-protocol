@@ -1927,7 +1927,18 @@ function App() {
   const manualWithdraw = async (accountId, goalName) => {
     try {
       setLoading(true);
-      const tx = await savingsContract.manualWithdraw(accountId);
+
+      // First verify eligibility via view function
+      const eligible = await savingsContract.canWithdraw(account, accountId);
+      if (!eligible) {
+        toast.error('Account not yet eligible for withdrawal');
+        setLoading(false);
+        return;
+      }
+
+      // Use manual gas limit — the oracle's TWAP update can cause gas estimation
+      // to fail even though the transaction succeeds (callStatic confirms this)
+      const tx = await savingsContract.manualWithdraw(accountId, { gasLimit: 500000 });
       await toast.promise(tx.wait(), {
         loading: `🔓 Withdrawing from "${goalName}"...`,
         success: `🎉 Withdrawn from "${goalName}" — tokens returned!`,
@@ -1939,7 +1950,7 @@ function App() {
       console.error('Manual withdraw error:', error);
       if (error.code === 'ACTION_REJECTED') {
         toast.error('Transaction cancelled');
-      } else if (error.message?.includes('E')) {
+      } else if (error.message?.includes('not yet eligible')) {
         toast.error('Account not yet eligible for withdrawal');
       } else {
         toast.error('Withdrawal failed: ' + (error.reason || error.message));
@@ -1953,7 +1964,8 @@ function App() {
   const triggerProcessMaturedAccounts = async () => {
     try {
       setLoading(true);
-      const tx = await savingsContract.processMaturedAccounts();
+      // Manual gas limit — auto-processing calls the oracle's TWAP update internally
+      const tx = await savingsContract.processMaturedAccounts({ gasLimit: 800000 });
       await toast.promise(tx.wait(), {
         loading: '⚙️ Processing matured accounts...',
         success: '✅ Matured accounts processed!',
