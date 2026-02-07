@@ -8,6 +8,9 @@
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^13.5.0",
     "@walletconnect/web3-provider": "^1.8.0",
+    "@web3auth/base": "^9.7.0",
+    "@web3auth/ethereum-provider": "^9.7.0",
+    "@web3auth/modal": "^10.14.0",
     "assert": "^2.1.0",
     "buffer": "^6.0.3",
     "crypto-browserify": "^3.12.1",
@@ -28,11 +31,11 @@
     "web-vitals": "^2.1.4",
     "web3modal": "^1.9.12"
   },
-"scripts": {
-  "start": "react-app-rewired start",
-  "build": "CI=false react-app-rewired build",
-  "test": "react-app-rewired test",
-  "eject": "react-scripts eject"
+  "scripts": {
+    "start": "react-app-rewired start",
+    "build": "CI=false react-app-rewired build",
+    "test": "react-app-rewired test",
+    "eject": "react-scripts eject"
   },
   "eslintConfig": {
     "extends": [
