@@ -727,11 +727,13 @@ function App() {
     
     try {
       setLoading(true);
-      const hasMetadata = donorName.trim() || donorMessage.trim() || donorLocation.trim();
+      const amount = parseFloat(donateAmount);
+      const isSponsor = amount >= 0.05;
+      const hasMetadata = isSponsor && (donorName.trim() || donorMessage.trim() || donorLocation.trim());
       let donationWei = ethers.utils.parseEther(donateAmount);
       let registrationCostWei = ethers.BigNumber.from(0);
 
-      // If user entered name/message, estimate registration gas cost
+      // Sponsor tier (0.05+ ETH): estimate registration gas cost
       // and subtract it from the donation so total spend = donateAmount
       if (donorRegistryContract && hasMetadata) {
         try {
@@ -1409,6 +1411,29 @@ function App() {
         <p>Supporting the network, together!</p>
       </div>
 
+      {/* ATH Donor Banner */}
+      {validatorStats.topDonor && parseFloat(validatorStats.topDonorAmount) > 0 && (
+        <div className="ath-donor-banner">
+          <div className="ath-badge">🏆 TOP SPONSOR</div>
+          <div className="ath-content">
+            <div className="ath-amount">{parseFloat(validatorStats.topDonorAmount).toFixed(4)} ETH</div>
+            {donorLeaderboard.length > 0 && donorLeaderboard[0].name ? (
+              <>
+                <div className="ath-name">{donorLeaderboard[0].name}</div>
+                {donorLeaderboard[0].message && (
+                  <div className="ath-message">"{donorLeaderboard[0].message}"</div>
+                )}
+                {donorLeaderboard[0].location && (
+                  <div className="ath-location">📍 {donorLeaderboard[0].location}</div>
+                )}
+              </>
+            ) : (
+              <div className="ath-address">{validatorStats.topDonor.slice(0, 6)}...{validatorStats.topDonor.slice(-4)}</div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Validator Network Stats */}
       <div className="community-card validator-stats-card">
         <h2>Validator Network</h2>
@@ -1909,45 +1934,56 @@ function App() {
                 <button onClick={() => setDonateAmount('0.5')}>0.5 ETH</button>
               </div>
               
-              <div className="donor-info-fields">
-                <div className="input-group">
-                  <label>Your Name (optional):</label>
-                  <input
-                    type="text"
-                    value={donorName}
-                    onChange={(e) => setDonorName(e.target.value.slice(0, 50))}
-                    placeholder="Anonymous"
-                    maxLength={50}
-                  />
-                </div>
-                
-                <div className="input-group">
-                  <label>Location (optional):</label>
-                  <input
-                    type="text"
-                    value={donorLocation}
-                    onChange={(e) => setDonorLocation(e.target.value.slice(0, 50))}
-                    placeholder="e.g. Dublin, Ireland"
-                    maxLength={50}
-                  />
-                </div>
-              </div>
-              
-              <div className="input-group message-group">
-                <label>Your Message (optional):</label>
-                <textarea
-                  value={donorMessage}
-                  onChange={(e) => setDonorMessage(e.target.value.slice(0, 180))}
-                  placeholder="Leave a message for the community..."
-                  maxLength={180}
-                  rows={3}
-                />
-                <span className="char-count">{donorMessage.length}/180</span>
-              </div>
+              {parseFloat(donateAmount) >= 0.05 ? (
+                <>
+                  <div className="sponsor-tier-notice">
+                    <p>🌟 Sponsor tier! Your name & message will be saved on-chain forever.</p>
+                  </div>
+                  <div className="donor-info-fields">
+                    <div className="input-group">
+                      <label>Your Name (optional):</label>
+                      <input
+                        type="text"
+                        value={donorName}
+                        onChange={(e) => setDonorName(e.target.value.slice(0, 50))}
+                        placeholder="Anonymous"
+                        maxLength={50}
+                      />
+                    </div>
 
-              {(donorName.trim() || donorMessage.trim() || donorLocation.trim()) && (
+                    <div className="input-group">
+                      <label>Location (optional):</label>
+                      <input
+                        type="text"
+                        value={donorLocation}
+                        onChange={(e) => setDonorLocation(e.target.value.slice(0, 50))}
+                        placeholder="e.g. Dublin, Ireland"
+                        maxLength={50}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="input-group message-group">
+                    <label>Your Message (optional):</label>
+                    <textarea
+                      value={donorMessage}
+                      onChange={(e) => setDonorMessage(e.target.value.slice(0, 180))}
+                      placeholder="Leave a message for the community..."
+                      maxLength={180}
+                      rows={3}
+                    />
+                    <span className="char-count">{donorMessage.length}/180</span>
+                  </div>
+
+                  {(donorName.trim() || donorMessage.trim() || donorLocation.trim()) && (
+                    <div className="info-notice">
+                      <p>ℹ️ Donation includes gas fees for sponsor registration.</p>
+                    </div>
+                  )}
+                </>
+              ) : (
                 <div className="info-notice">
-                  <p>ℹ️ Donation includes gas fees for sponsor registration.</p>
+                  <p>💡 Donate 0.05+ ETH to become a sponsor — your name & message saved on-chain forever!</p>
                 </div>
               )}
 
