@@ -667,11 +667,12 @@ function App() {
     }
   }, [validatorFundContract]);
 
-  // Load validator stats — only when community tab is active, poll every 60s
+  // Load validator stats — when community or admin tab is active
   useEffect(() => {
-    if (validatorFundContract && activeTab === 'community') {
+    if (validatorFundContract && (activeTab === 'community' || activeTab === 'admin')) {
       loadValidatorStats();
-      const interval = setInterval(loadValidatorStats, 60000);
+      const pollInterval = activeTab === 'admin' ? 5000 : 60000;
+      const interval = setInterval(loadValidatorStats, pollInterval);
       return () => clearInterval(interval);
     }
   }, [validatorFundContract, loadValidatorStats, activeTab]);
@@ -961,7 +962,8 @@ function App() {
               const currencyCode = CURRENCY_CODES_LOCAL[accData.targetCurrency] || 'EUR';
               const ethPriceForCurrency = freshEthPrice?.[currencyCode.toLowerCase()] || freshEthPrice?.eur || 1850;
               const tokenValueInEth = parseFloat(accData.balance) * freshOooweeePrice;
-              accData.currentFiatValue = Math.floor(tokenValueInEth * ethPriceForCurrency * 10000);
+              const decimals = CURRENCIES[currencyCode.toUpperCase()]?.decimals || 8;
+              accData.currentFiatValue = Math.floor(tokenValueInEth * ethPriceForCurrency * Math.pow(10, decimals));
             }
           } else {
             accData.currentFiatValue = 0;
@@ -2309,7 +2311,9 @@ function App() {
             <div className="admin-card-icon">{adminStats.isPriceOracleHealthy ? '✅' : '🔴'}</div>
             <div className="admin-card-content">
               <h4>Price Oracle</h4>
-              <p>${parseFloat(oooweeePrice).toFixed(8)}</p>
+              <p>{ethPrice?.[selectedCurrency.toLowerCase()]
+                ? formatCurrency(oooweeePrice * ethPrice[selectedCurrency.toLowerCase()], selectedCurrency)
+                : `${oooweeePrice.toFixed(10)} ETH`}</p>
             </div>
           </div>
           <div className="admin-card">

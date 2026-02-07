@@ -91,7 +91,8 @@ contract SavingsPriceOracle is Initializable, OwnableUpgradeable, ReentrancyGuar
         uniswapRouter = IUniswapV2Router02(_uniswapRouter);
         activePriceSource = PriceSource.CHAINLINK_UNISWAP;
 
-        // 4 decimals: 10000 = $1.00, allows sub-cent precision
+        // Initial decimals (can be changed via setCurrencyDecimals)
+        // On Sepolia: upgraded to 8 decimals (100000000 = $1.00) for sub-cent token prices
         currencyDecimals[Currency.USD] = 4;
         currencyDecimals[Currency.EUR] = 4;
         currencyDecimals[Currency.GBP] = 4;
@@ -333,8 +334,8 @@ contract SavingsPriceOracle is Initializable, OwnableUpgradeable, ReentrancyGuar
             uint256 crossRate = getETHPrice(currency); // EUR/USD or GBP/USD (8 decimals)
             if (crossRate == 0) return (false, 0);
 
-            // priceInUsd is in 4-decimal format, crossRate is 8 decimals
-            // Result: (priceInUsd * 10^8) / crossRate stays in 4-decimal format
+            // priceInUsd is in currencyDecimals format, crossRate is 8 decimals (Chainlink)
+            // Result: (priceInUsd * 10^8) / crossRate stays in currencyDecimals format
             uint256 calculatedPrice = (priceInUsd * (10 ** CHAINLINK_DECIMALS)) / crossRate;
 
             return (true, calculatedPrice);
@@ -398,7 +399,7 @@ contract SavingsPriceOracle is Initializable, OwnableUpgradeable, ReentrancyGuar
         uint256 fixedRate = emergencyFixedRates[currency];
         if (fixedRate > 0) return fixedRate;
 
-        return 10; // ~$0.001 in 4-decimal format
+        return 10; // emergency fallback price (value depends on currencyDecimals)
     }
 
     // ============ Admin ============
