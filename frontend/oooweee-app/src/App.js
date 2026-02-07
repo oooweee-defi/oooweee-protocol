@@ -692,12 +692,27 @@ function App() {
     return formatCurrency(fiatValue, currency);
   };
 
-  // Convert fiat to OOOWEEE amount
+  // Convert fiat to OOOWEEE amount (frontend estimate — used for previews only)
   const convertFiatToOooweee = (fiatAmount, currency = 'eur') => {
     if (!ethPrice || !fiatAmount) return 0;
     const ethValue = parseFloat(fiatAmount) / (ethPrice[currency.toLowerCase()] || ethPrice.eur);
     const oooweeeAmount = ethValue / oooweeePrice;
     return Math.floor(oooweeeAmount);
+  };
+
+  // Convert fiat to OOOWEEE using the contract's oracle (exact match with display values)
+  const convertFiatToOooweeeOracle = async (fiatAmount, currency = 'eur') => {
+    if (!savingsContract || !fiatAmount || parseFloat(fiatAmount) <= 0) return 0;
+    try {
+      const currencyCode = CURRENCIES[currency.toUpperCase()]?.code ?? 1;
+      const decimals = CURRENCIES[currency.toUpperCase()]?.decimals ?? 4;
+      const fiatInOracleUnits = Math.floor(parseFloat(fiatAmount) * (10 ** decimals));
+      const tokensWei = await savingsContract.getFiatToTokensView(fiatInOracleUnits, currencyCode);
+      return parseFloat(ethers.utils.formatUnits(tokensWei, 18));
+    } catch (e) {
+      console.error('Oracle conversion failed, using frontend fallback:', e);
+      return convertFiatToOooweee(fiatAmount, currency);
+    }
   };
 
   // Convert OOOWEEE to fiat
@@ -1732,8 +1747,8 @@ function App() {
       return;
     }
     
-    // Convert fiat deposit to OOOWEEE
-    const initialDepositOooweee = convertFiatToOooweee(initialDepositFiat, accountCurrency.toLowerCase());
+    // Convert fiat deposit to OOOWEEE using oracle (matches display price)
+    const initialDepositOooweee = await convertFiatToOooweeeOracle(initialDepositFiat, accountCurrency.toLowerCase());
     
     if (initialDepositOooweee <= 0) {
       toast.error('Deposit amount too small');
@@ -3268,12 +3283,12 @@ function App() {
                                     </>
                                   );
                                 })()}
-                                <button 
-                                  onClick={() => {
+                                <button
+                                  onClick={async () => {
                                     const currency = acc.isFiatTarget ? getCurrencyFromCode(acc.targetCurrency) : 'EUR';
                                     const fiatAmount = document.getElementById(`deposit-${acc.id}`).value;
                                     if (fiatAmount && fiatAmount > 0) {
-                                      const oooweeeAmount = convertFiatToOooweee(fiatAmount, currency);
+                                      const oooweeeAmount = await convertFiatToOooweeeOracle(fiatAmount, currency);
                                       if (oooweeeAmount > 0) {
                                         depositToAccount(acc.id, oooweeeAmount.toString());
                                       } else {
@@ -3470,10 +3485,10 @@ function App() {
                                 className="deposit-input"
                               />
                               <button
-                                onClick={() => {
+                                onClick={async () => {
                                   const fiatAmt = groupDepositAmount;
                                   if (fiatAmt && fiatAmt > 0) {
-                                    const oooweeeAmt = convertFiatToOooweee(fiatAmt, currency);
+                                    const oooweeeAmt = await convertFiatToOooweeeOracle(fiatAmt, currency);
                                     if (oooweeeAmt > 0) {
                                       depositToGroupAccount(group.id, oooweeeAmt.toString());
                                     } else {
