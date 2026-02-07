@@ -6,6 +6,9 @@ import oooweeLogo from './assets/oooweee-logo.png';
 import { OOOWEEETokenABI, OOOWEEESavingsABI, OOOWEEEValidatorFundABI, OOOWEEEStabilityABI, DonorRegistryABI, CONTRACT_ADDRESSES } from './contracts/abis';
 import Web3Modal from "web3modal";
 import WalletConnectProvider from "@walletconnect/web3-provider";
+import { Web3Auth } from "@web3auth/modal";
+import { EthereumPrivateKeyProvider } from "@web3auth/ethereum-provider";
+import { CHAIN_NAMESPACES, WEB3AUTH_NETWORK } from "@web3auth/base";
 
 // Uniswap Router ABI (minimal)
 const UNISWAP_ROUTER_ABI = [
@@ -22,6 +25,23 @@ const WETH_ADDRESS = "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14";
 
 // ADMIN WALLET - Update this to your operations wallet address
 const ADMIN_WALLET = "0xB05F42B174E5152d34431eE4504210932ddfE715";
+
+// Web3Auth configuration
+const WEB3AUTH_CLIENT_ID = "BBELIcLUxA8LFzE-ux8CxUpyKoojLwasmixNSEtqLcPFv7KUnRWKmM-C0PQFtWXy-cv8iHxDebZ4uiJkHEnBLSs";
+
+// Transak fiat onramp configuration
+const TRANSAK_API_KEY = "5606035c-b59a-4c73-80f0-b9930cdfd9f9";
+const SEPOLIA_CHAIN_CONFIG = {
+  chainNamespace: CHAIN_NAMESPACES.EIP155,
+  chainId: "0xaa36a7",
+  rpcTarget: "https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161",
+  displayName: "Ethereum Sepolia",
+  blockExplorerUrl: "https://sepolia.etherscan.io",
+  ticker: "ETH",
+  tickerName: "Ethereum",
+  decimals: 18,
+  isTestnet: true,
+};
 
 // Currency configuration - USD/EUR/GBP only
 const CURRENCIES = {
@@ -73,6 +93,8 @@ function App() {
   const [accountType, setAccountType] = useState('time');
   const [showCompleted, setShowCompleted] = useState(false);
   const [isAppLoading, setIsAppLoading] = useState(true);
+  const [web3auth, setWeb3auth] = useState(null);
+  const [loginMethod, setLoginMethod] = useState(null); // 'wallet' | 'social' | null
   const [ethPrice, setEthPrice] = useState(null);
   const [showFiat, setShowFiat] = useState(true);
   const [selectedCurrency, setSelectedCurrency] = useState(() => {
@@ -313,14 +335,64 @@ function App() {
   useEffect(() => {
     const init = async () => {
       setIsAppLoading(true);
-      
+
       const web3ModalInstance = new Web3Modal({
         cacheProvider: true,
         providerOptions
       });
-      
+
       setWeb3Modal(web3ModalInstance);
-      
+
+      // Initialize Web3Auth
+      try {
+        const privateKeyProvider = new EthereumPrivateKeyProvider({
+          config: { chainConfig: SEPOLIA_CHAIN_CONFIG },
+        });
+
+        const web3authInstance = new Web3Auth({
+          clientId: WEB3AUTH_CLIENT_ID,
+          web3AuthNetwork: WEB3AUTH_NETWORK.SAPPHIRE_DEVNET,
+          privateKeyProvider,
+          uiConfig: {
+            appName: "OOOWEEE Protocol",
+            mode: "dark",
+            loginMethodsOrder: ["google", "email_passwordless"],
+            defaultLanguage: "en",
+            theme: { primary: "#7B68EE" },
+          },
+        });
+
+        await web3authInstance.initModal();
+        setWeb3auth(web3authInstance);
+
+        // Auto-reconnect if Web3Auth has an active session
+        if (web3authInstance.connected && web3authInstance.provider) {
+          const web3Provider = new ethers.providers.Web3Provider(web3authInstance.provider);
+          const signer = web3Provider.getSigner();
+          const address = await signer.getAddress();
+
+          const token = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEToken, OOOWEEETokenABI, signer);
+          const savings = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEESavings, OOOWEEESavingsABI, signer);
+          const validatorFund = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEValidatorFund, OOOWEEEValidatorFundABI, signer);
+          const stability = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEStability, OOOWEEEStabilityABI, signer);
+          const donorRegistry = new ethers.Contract(CONTRACT_ADDRESSES.DonorRegistry, DonorRegistryABI, signer);
+          const router = new ethers.Contract(UNISWAP_ROUTER, UNISWAP_ROUTER_ABI, signer);
+
+          setAccount(address);
+          setProvider(web3Provider);
+          setTokenContract(token);
+          setSavingsContract(savings);
+          setValidatorFundContract(validatorFund);
+          setDonorRegistryContract(donorRegistry);
+          setStabilityContract(stability);
+          setRouterContract(router);
+          setLoginMethod('social');
+        }
+      } catch (error) {
+        console.error('Web3Auth init error:', error);
+        // Non-fatal — wallet login still works
+      }
+
       try {
         const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd,eur,gbp');
         const data = await response.json();
@@ -734,11 +806,63 @@ function App() {
         instance.on("chainChanged", handleChainChanged);
       }
       
+      setLoginMethod('wallet');
       toast.success('Wallet connected!');
     } catch (error) {
       console.error(error);
       if (error.message !== 'User closed modal') {
         toast.error('Failed to connect wallet');
+      }
+    } finally {
+      setLoading(false);
+      setIsConnecting(false);
+    }
+  };
+
+  // Social login via Web3Auth (Google / Email)
+  const connectSocialLogin = async () => {
+    if (isConnecting || !web3auth) return;
+
+    try {
+      setIsConnecting(true);
+      setLoading(true);
+
+      const web3authProvider = await web3auth.connect();
+
+      if (!web3authProvider) {
+        throw new Error('No provider returned from Web3Auth');
+      }
+
+      const web3Provider = new ethers.providers.Web3Provider(web3authProvider);
+      const signer = web3Provider.getSigner();
+      const address = await signer.getAddress();
+
+      // Initialize contracts (same as wallet flow)
+      const token = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEToken, OOOWEEETokenABI, signer);
+      const savings = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEESavings, OOOWEEESavingsABI, signer);
+      const validatorFund = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEValidatorFund, OOOWEEEValidatorFundABI, signer);
+      const stability = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEStability, OOOWEEEStabilityABI, signer);
+      const donorRegistry = new ethers.Contract(CONTRACT_ADDRESSES.DonorRegistry, DonorRegistryABI, signer);
+      const router = new ethers.Contract(UNISWAP_ROUTER, UNISWAP_ROUTER_ABI, signer);
+
+      setAccount(address);
+      setProvider(web3Provider);
+      setTokenContract(token);
+      setSavingsContract(savings);
+      setValidatorFundContract(validatorFund);
+      setDonorRegistryContract(donorRegistry);
+      setStabilityContract(stability);
+      setRouterContract(router);
+      setLoginMethod('social');
+
+      await loadBalances(address, web3Provider, token);
+      await loadSavingsAccounts(address, savings, web3Provider, router, ethPrice);
+
+      toast.success('Signed in successfully!');
+    } catch (error) {
+      console.error('Social login error:', error);
+      if (error.message !== 'User closed popup' && error.message !== 'user closed popup') {
+        toast.error('Failed to sign in');
       }
     } finally {
       setLoading(false);
@@ -761,7 +885,51 @@ function App() {
   const donateToValidators = async () => {
     setShowDonateModal(true);
   };
-  
+
+  // Fiat onramp — buy ETH with card / Google Pay / Apple Pay
+  const openFiatOnramp = () => {
+    if (!account) {
+      toast.error('Please connect your wallet first');
+      return;
+    }
+
+    const transakUrl = new URL('https://global-stg.transak.com');
+    transakUrl.searchParams.set('apiKey', TRANSAK_API_KEY);
+    transakUrl.searchParams.set('environment', 'STAGING');
+    transakUrl.searchParams.set('cryptoCurrencyCode', 'ETH');
+    transakUrl.searchParams.set('network', 'ethereum');
+    transakUrl.searchParams.set('defaultCryptoCurrency', 'ETH');
+    transakUrl.searchParams.set('walletAddress', account);
+    transakUrl.searchParams.set('fiatCurrency', selectedCurrency);
+    transakUrl.searchParams.set('defaultFiatAmount', '50');
+    transakUrl.searchParams.set('themeColor', '7B68EE');
+    transakUrl.searchParams.set('disableWalletAddressForm', 'true');
+
+    // Open in a popup window
+    const width = 450;
+    const height = 700;
+    const left = (window.innerWidth - width) / 2 + window.screenX;
+    const top = (window.innerHeight - height) / 2 + window.screenY;
+    window.open(
+      transakUrl.toString(),
+      'transak_widget',
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+    );
+
+    toast('ETH purchase window opened! Your balance will update after the purchase completes.', { icon: '💳', duration: 5000 });
+
+    // Poll for balance changes after opening widget
+    const startBalance = ethBalance;
+    const pollInterval = setInterval(async () => {
+      if (provider && tokenContract && account) {
+        await loadBalances(account, provider, tokenContract);
+      }
+    }, 15000);
+
+    // Stop polling after 10 minutes
+    setTimeout(() => clearInterval(pollInterval), 600000);
+  };
+
   const handleDonateSubmit = async () => {
     if (!donateAmount || parseFloat(donateAmount) <= 0) {
       toast.error('Enter a valid ETH amount');
@@ -864,15 +1032,24 @@ function App() {
   };
 
   const disconnectWallet = async () => {
+    // Logout from Web3Auth if social login
+    if (loginMethod === 'social' && web3auth) {
+      try {
+        await web3auth.logout();
+      } catch (e) {
+        console.error('Web3Auth logout error:', e);
+      }
+    }
+
     if (web3Modal) {
       web3Modal.clearCachedProvider();
     }
-    
+
     if (window.ethereum) {
       window.ethereum.removeAllListeners('accountsChanged');
       window.ethereum.removeAllListeners('chainChanged');
     }
-    
+
     setAccount(null);
     setProvider(null);
     setTokenContract(null);
@@ -884,6 +1061,7 @@ function App() {
     setBalance('0');
     setEthBalance('0');
     setAccounts([]);
+    setLoginMethod(null);
   };
 
   const loadBalances = async (account, provider, tokenContract) => {
@@ -1932,12 +2110,23 @@ function App() {
                     <button onClick={() => setEthToBuy('0.5')}>0.5 ETH</button>
                   </div>
                   
-                  <button 
+                  <button
                     className="buy-btn rainbow-btn"
                     onClick={buyOooweee}
                     disabled={loading || parseFloat(ethToBuy) <= 0}
                   >
                     {loading ? '⏳ Processing...' : '🚀 Swap for OOOWEEE'}
+                  </button>
+
+                  <div className="onramp-divider">
+                    <span>or buy ETH directly with</span>
+                  </div>
+
+                  <button
+                    className="fiat-onramp-btn"
+                    onClick={() => { setShowBuyModal(false); openFiatOnramp(); }}
+                  >
+                    💳 Card / Google Pay / Apple Pay
                   </button>
                 </>
               )}
@@ -2273,10 +2462,20 @@ function App() {
                     </div>
                   </div>
                 </div>
-                <button onClick={connectWallet} className="connect-btn rainbow-btn" disabled={isConnecting}>
-                  {isConnecting ? 'Connecting...' : 'Connect Wallet'}
-                </button>
-                <p className="info-text">Works with MetaMask, Trust Wallet, and more!</p>
+                <div className="connect-options">
+                  <button onClick={connectSocialLogin} className="connect-btn social-btn" disabled={isConnecting || !web3auth}>
+                    {isConnecting ? 'Signing in...' : 'Sign in with Google / Email'}
+                  </button>
+
+                  <div className="divider-text">
+                    <span>or</span>
+                  </div>
+
+                  <button onClick={connectWallet} className="connect-btn wallet-btn" disabled={isConnecting}>
+                    {isConnecting ? 'Connecting...' : 'Connect Wallet'}
+                  </button>
+                  <p className="info-text">Works with MetaMask, Trust Wallet, and more!</p>
+                </div>
                 <p className="disclaimer">Values shown in your selected currency are estimates based on current market rates</p>
               </div>
             ) : (
@@ -2335,14 +2534,21 @@ function App() {
                       </div>
                     )}
                     
-                    <button 
+                    <button
                       className="add-oooweee-btn rainbow-btn"
                       onClick={() => setShowBuyModal(true)}
                     >
                       Buy $OOOWEEE
                     </button>
-                    
-                    <button 
+
+                    <button
+                      className="fiat-onramp-btn"
+                      onClick={openFiatOnramp}
+                    >
+                      💳 Buy with Card
+                    </button>
+
+                    <button
                       className="create-savings-btn"
                       onClick={() => setShowCreateModal(true)}
                     >
