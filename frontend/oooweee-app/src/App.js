@@ -328,14 +328,14 @@ function App() {
     }
   }, [web3Modal]);
   
-  // Format currency
+  // Format currency for user display (2 decimal places)
   const formatCurrency = (amount, currency = 'eur') => {
     const curr = Object.entries(CURRENCIES).find(([key, _]) => key.toLowerCase() === currency.toLowerCase()) || ['EUR', CURRENCIES.EUR];
     return new Intl.NumberFormat(curr[1].locale, {
       style: 'currency',
       currency: curr[0],
-      minimumFractionDigits: curr[1].decimals,
-      maximumFractionDigits: curr[1].decimals
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     }).format(amount);
   };
 
@@ -432,7 +432,7 @@ function App() {
     }
   }, [validatorFundContract, loadValidatorStats]);
 
-  // Calculate fiat value
+  // Calculate fiat value (frontend estimation — for display when wallet not connected)
   const getOooweeeInFiat = (oooweeeAmount, currency = 'eur') => {
     if (!ethPrice) return '...';
     const ethValue = parseFloat(oooweeeAmount) * oooweeePrice;
@@ -440,7 +440,7 @@ function App() {
     return formatCurrency(fiatValue, currency);
   };
 
-  // Convert fiat to OOOWEEE amount
+  // Frontend estimation: fiat to OOOWEEE (for display hints only, not transactions)
   const convertFiatToOooweee = (fiatAmount, currency = 'eur') => {
     if (!ethPrice || !fiatAmount) return 0;
     const ethValue = parseFloat(fiatAmount) / (ethPrice[currency.toLowerCase()] || ethPrice.eur);
@@ -448,11 +448,28 @@ function App() {
     return Math.floor(oooweeeAmount);
   };
 
-  // Convert OOOWEEE to fiat
+  // Frontend estimation: OOOWEEE to fiat (for display hints only)
   const convertOooweeeToFiat = (oooweeeAmount, currency = 'eur') => {
     if (!ethPrice || !oooweeeAmount) return 0;
     const ethValue = parseFloat(oooweeeAmount) * oooweeePrice;
     return ethValue * (ethPrice[currency.toLowerCase()] || ethPrice.eur);
+  };
+
+  // Oracle-based: fiat to OOOWEEE (uses contract oracle — matches withdrawal logic)
+  const convertFiatToOooweeeOracle = async (fiatAmount, currency = 'eur') => {
+    if (!savingsContract || !fiatAmount || parseFloat(fiatAmount) <= 0) {
+      return convertFiatToOooweee(fiatAmount, currency); // fallback
+    }
+    try {
+      const currencyCode = CURRENCIES[currency.toUpperCase()]?.code ?? 1;
+      const decimals = CURRENCIES[currency.toUpperCase()]?.decimals ?? 4;
+      const fiatInSmallestUnit = Math.round(parseFloat(fiatAmount) * Math.pow(10, decimals));
+      const tokensNeeded = await savingsContract.getFiatToTokensView(fiatInSmallestUnit, currencyCode);
+      return parseFloat(ethers.utils.formatUnits(tokensNeeded, 18));
+    } catch (e) {
+      console.error('Oracle fiat→token conversion failed, using frontend estimate:', e);
+      return convertFiatToOooweee(fiatAmount, currency);
+    }
   };
 
   // Check if deposit meets minimum €10 requirement
@@ -911,6 +928,7 @@ function App() {
             unlockTime: info[6].toNumber(),
             recipient: info[7],
             goalName: info[8],
+            createdAt: info[9].toNumber(),
             pendingRewards: '0',
             isFiatTarget: info[4].gt(0)
           };
@@ -1006,7 +1024,7 @@ function App() {
       }
       
       const unlockTime = Math.floor(new Date(unlockDate).getTime() / 1000);
-      const depositAmount = ethers.utils.parseUnits(Math.floor(initialDeposit).toString(), 18);
+      const depositAmount = ethers.utils.parseUnits(Math.ceil(parseFloat(initialDeposit)).toString(), 18);
       
       const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
       
@@ -1016,7 +1034,7 @@ function App() {
         error: '❌ Failed to approve'
       });
       
-      const createTx = await savingsContract.createTimeAccountFiat(
+      const createTx = await savingsContract.createTimeAccount(
         unlockTime,
         goalName,
         depositAmount,
@@ -1025,7 +1043,7 @@ function App() {
       
       await toast.promise(createTx.wait(), {
         loading: '🐷 Creating piggy bank...',
-        success: `🎉 Time account created with ${Math.floor(initialDeposit).toLocaleString()} $OOOWEEE!`,
+        success: `🎉 Time account created with ${Math.ceil(parseFloat(initialDeposit)).toLocaleString()} $OOOWEEE!`,
         error: '❌ Failed to create account'
       });
       
@@ -1062,7 +1080,7 @@ function App() {
       }
       
       const targetInSmallestUnit = Math.round(targetAmount * Math.pow(10, CURRENCIES[currency].decimals));
-      const depositAmount = ethers.utils.parseUnits(Math.floor(initialDeposit).toString(), 18);
+      const depositAmount = ethers.utils.parseUnits(Math.ceil(parseFloat(initialDeposit)).toString(), 18);
       
       const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
       
@@ -1072,7 +1090,7 @@ function App() {
         error: '❌ Failed to approve'
       });
       
-      const createTx = await savingsContract.createGrowthAccountFiat(
+      const createTx = await savingsContract.createGrowthAccount(
         targetInSmallestUnit,
         CURRENCIES[currency].code,
         goalName,
@@ -1117,7 +1135,7 @@ function App() {
       }
       
       const targetInSmallestUnit = Math.round(targetAmount * Math.pow(10, CURRENCIES[currency].decimals));
-      const depositAmount = ethers.utils.parseUnits(Math.floor(initialDeposit).toString(), 18);
+      const depositAmount = ethers.utils.parseUnits(Math.ceil(parseFloat(initialDeposit)).toString(), 18);
       
       const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
       
@@ -1127,7 +1145,7 @@ function App() {
         error: '❌ Failed to approve'
       });
       
-      const createTx = await savingsContract.createBalanceAccountFiat(
+      const createTx = await savingsContract.createBalanceAccount(
         targetInSmallestUnit,
         CURRENCIES[currency].code,
         recipientAddress,
@@ -1179,14 +1197,14 @@ function App() {
       return;
     }
     
-    // Convert fiat deposit to OOOWEEE
-    const initialDepositOooweee = convertFiatToOooweee(initialDepositFiat, accountCurrency.toLowerCase());
-    
+    // Convert fiat deposit to OOOWEEE using contract oracle (matches withdrawal logic)
+    const initialDepositOooweee = await convertFiatToOooweeeOracle(initialDepositFiat, accountCurrency.toLowerCase());
+
     if (initialDepositOooweee <= 0) {
       toast.error('Deposit amount too small');
       return;
     }
-    
+
     if (accountType === 'time') {
       const unlockDate = document.getElementById('unlockDate').value;
       if (!unlockDate) {
@@ -2255,7 +2273,7 @@ function App() {
                                         <span>Target:</span>
                                         <span className="primary-amount">
                                           {currencyInfo.symbol}
-                                          {(acc.targetFiat / Math.pow(10, currencyInfo.decimals)).toFixed(currencyInfo.decimals)}
+                                          {(acc.targetFiat / Math.pow(10, currencyInfo.decimals)).toFixed(2)}
                                         </span>
                                       </div>
                                     )}
@@ -2264,7 +2282,7 @@ function App() {
                                       <span>Current Value:</span>
                                       <span className="primary-amount">
                                         {currencyInfo.symbol}
-                                        {(acc.currentFiatValue / Math.pow(10, currencyInfo.decimals)).toFixed(currencyInfo.decimals)}
+                                        {(acc.currentFiatValue / Math.pow(10, currencyInfo.decimals)).toFixed(2)}
                                       </span>
                                     </div>
                                     
@@ -2373,12 +2391,12 @@ function App() {
                                     </>
                                   );
                                 })()}
-                                <button 
-                                  onClick={() => {
+                                <button
+                                  onClick={async () => {
                                     const currency = acc.isFiatTarget ? getCurrencyFromCode(acc.targetCurrency) : 'EUR';
                                     const fiatAmount = document.getElementById(`deposit-${acc.id}`).value;
                                     if (fiatAmount && fiatAmount > 0) {
-                                      const oooweeeAmount = convertFiatToOooweee(fiatAmount, currency);
+                                      const oooweeeAmount = await convertFiatToOooweeeOracle(fiatAmount, currency);
                                       if (oooweeeAmount > 0) {
                                         depositToAccount(acc.id, oooweeeAmount.toString());
                                       } else {
@@ -2440,7 +2458,7 @@ function App() {
                                           <span>Target Reached:</span>
                                           <span className="value">
                                             {currencyInfo.symbol}
-                                            {(acc.targetFiat / Math.pow(10, currencyInfo.decimals)).toFixed(currencyInfo.decimals)}
+                                            {(acc.targetFiat / Math.pow(10, currencyInfo.decimals)).toFixed(2)}
                                           </span>
                                         </div>
                                       )}
@@ -2448,7 +2466,7 @@ function App() {
                                         <span>Final Value:</span>
                                         <span className="value">
                                           {currencyInfo.symbol}
-                                          {(acc.currentFiatValue / Math.pow(10, currencyInfo.decimals)).toFixed(currencyInfo.decimals)}
+                                          {(acc.currentFiatValue / Math.pow(10, currencyInfo.decimals)).toFixed(2)}
                                         </span>
                                       </div>
                                     </>

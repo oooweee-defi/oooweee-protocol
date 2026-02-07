@@ -693,7 +693,7 @@ export const OOOWEEESavingsABI = [
       { "internalType": "uint256", "name": "initialDeposit", "type": "uint256" },
       { "internalType": "enum SavingsPriceOracle.Currency", "name": "displayCurrency", "type": "uint8" }
     ],
-    "name": "createTimeAccountFiat",
+    "name": "createTimeAccount",
     "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -705,7 +705,7 @@ export const OOOWEEESavingsABI = [
       { "internalType": "string", "name": "goalName", "type": "string" },
       { "internalType": "uint256", "name": "initialDeposit", "type": "uint256" }
     ],
-    "name": "createGrowthAccountFiat",
+    "name": "createGrowthAccount",
     "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -718,7 +718,7 @@ export const OOOWEEESavingsABI = [
       { "internalType": "string", "name": "goalName", "type": "string" },
       { "internalType": "uint256", "name": "initialDeposit", "type": "uint256" }
     ],
-    "name": "createBalanceAccountFiat",
+    "name": "createBalanceAccount",
     "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -797,7 +797,8 @@ export const OOOWEEESavingsABI = [
       { "internalType": "enum SavingsPriceOracle.Currency", "name": "targetCurrency", "type": "uint8" },
       { "internalType": "uint256", "name": "unlockTime", "type": "uint256" },
       { "internalType": "address", "name": "recipient", "type": "address" },
-      { "internalType": "string", "name": "goalName", "type": "string" }
+      { "internalType": "string", "name": "goalName", "type": "string" },
+      { "internalType": "uint256", "name": "createdAt", "type": "uint256" }
     ],
     "stateMutability": "view",
     "type": "function"
