@@ -157,6 +157,7 @@ function App() {
       const interval = setInterval(loadAdminStats, 5000);
       return () => clearInterval(interval);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [account, activeTab, stabilityContract, savingsContract, provider]);
   
   // Load admin statistics
@@ -359,6 +360,7 @@ function App() {
     if (web3Modal && web3Modal.cachedProvider && !account && !isConnecting) {
       connectWallet();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [web3Modal]);
   
   // Format currency
@@ -489,6 +491,7 @@ function App() {
   };
 
   // Check if deposit meets minimum €10 requirement
+  // eslint-disable-next-line no-unused-vars
   const checkMinimumDeposit = (oooweeeAmount) => {
     const fiatValue = convertOooweeeToFiat(oooweeeAmount, 'eur');
     return fiatValue >= 10; // €10 minimum
@@ -613,6 +616,7 @@ function App() {
   };
 
   // Buy and create account - FIXED: Buy exactly the needed amount
+  // eslint-disable-next-line no-unused-vars
   const buyAndCreateAccount = async (requiredOooweee) => {
     const result = await toast.promise(
       new Promise(async (resolve, reject) => {
@@ -923,7 +927,7 @@ function App() {
       }
       
       // Use getUserAccountCount to get TOTAL accounts (not just active ones)
-      const [totalCount, activeCount] = await savingsContractInstance.getUserAccountCount(userAccount);
+      const [totalCount] = await savingsContractInstance.getUserAccountCount(userAccount);
       const accountDetails = [];
       
       // Loop through ALL account IDs from 0 to total-1
@@ -981,6 +985,7 @@ function App() {
     }
   };
 
+  // eslint-disable-next-line no-unused-vars
   const claimRewards = async (accountId) => {
     try {
       setLoading(true);
@@ -2428,6 +2433,7 @@ function App() {
                               <div className="deposit-section">
                                 {(() => {
                                   const currency = acc.isFiatTarget ? getCurrencyFromCode(acc.targetCurrency) : 'EUR';
+                                  // eslint-disable-next-line no-unused-vars
                                   const currencySymbol = CURRENCIES[currency.toUpperCase()]?.symbol || '€';
                                   return (
                                     <>
