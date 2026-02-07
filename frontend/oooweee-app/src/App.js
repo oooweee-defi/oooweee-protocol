@@ -393,7 +393,7 @@ function App() {
       }
 
       try {
-        const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd,eur,gbp');
+        const response = await fetch('/api/eth-price');
         const data = await response.json();
         setEthPrice(data.ethereum);
       } catch (error) {
@@ -424,9 +424,7 @@ function App() {
   useEffect(() => {
     const refreshEthPrice = async () => {
       try {
-        const response = await fetch(
-          'https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd,eur,gbp'
-        );
+        const response = await fetch('/api/eth-price');
         const data = await response.json();
         if (data.ethereum) {
           setEthPrice(data.ethereum);
@@ -1152,7 +1150,7 @@ function App() {
       let freshEthPrice = currentEthPrice;
       if (!freshEthPrice) {
         try {
-          const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd,eur,gbp,jpy,cny,cad,aud,chf,inr,krw');
+          const response = await fetch('/api/eth-price');
           const data = await response.json();
           freshEthPrice = data.ethereum;
           setEthPrice(freshEthPrice);
@@ -2483,7 +2481,16 @@ function App() {
                   <div className="wallet-card">
                     <div className="wallet-header">
                       <h3>Wallet</h3>
-                      <span className="address">{account.slice(0, 6)}...{account.slice(-4)}</span>
+                      <span
+                        className="address copyable"
+                        title="Click to copy full address"
+                        onClick={() => {
+                          navigator.clipboard.writeText(account);
+                          toast.success('Wallet address copied!');
+                        }}
+                      >
+                        {account.slice(0, 6)}...{account.slice(-4)} 📋
+                      </span>
                       <button onClick={disconnectWallet} className="disconnect-btn">Disconnect</button>
                     </div>
                     

@@ -816,6 +816,16 @@
   border-radius: var(--radius-sm);
 }
 
+.wallet-header .address.copyable {
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.wallet-header .address.copyable:hover {
+  background: var(--oooweee-purple-light);
+  color: var(--oooweee-purple);
+}
+
 .currency-toggle {
   display: flex;
   gap: 0.5rem;
