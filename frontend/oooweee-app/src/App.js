@@ -163,6 +163,7 @@ function App() {
   const [oooweeePrice, setOooweeePrice] = useState(0.00001);
   const [priceFlash, setPriceFlash] = useState(null); // 'up' | 'down' | null
   const prevOooweeePriceRef = useRef(0.00001);
+  const fiatOnrampPollRef = useRef(null);
   const [priceFeedStatus, setPriceFeedStatus] = useState({ source: 'live', cachedAt: null, error: null });
 
   // Admin Dashboard State
@@ -567,9 +568,10 @@ function App() {
 
 
   // Load validator stats - with error handling
+  // Batches donor lookups via Promise.all and only polls on community tab
   const loadValidatorStats = useCallback(async () => {
     if (!validatorFundContract) return;
-    
+
     try {
       const [stats, ethNeeded, progressData] = await Promise.all([
         validatorFundContract.getStats(),
@@ -583,30 +585,33 @@ function App() {
       // [6] validatorsProvisioned, [7] validatorsActive,
       // [8] totalDistributions, [9] donorCount
 
-      // Build on-chain leaderboard by iterating the donors array
-      let topDonor = null;
-      let topDonorAmount = ethers.BigNumber.from(0);
+      // Build on-chain leaderboard — batch donor lookups via Promise.all
       const donorCount = stats[9].toNumber();
-      const onChainDonors = [];
+      let onChainDonors = [];
 
       if (donorCount > 0 && donorCount <= 100) {
-        for (let i = 0; i < donorCount; i++) {
-          try {
-            const donorAddr = await validatorFundContract.donors(i);
-            const donorAmt = await validatorFundContract.donations(donorAddr);
-            onChainDonors.push({ address: donorAddr, amount: donorAmt });
-            if (donorAmt.gt(topDonorAmount)) {
-              topDonor = donorAddr;
-              topDonorAmount = donorAmt;
-            }
-          } catch (e) {
-            break;
-          }
-        }
+        // Fetch all donor addresses in parallel
+        const donorAddresses = await Promise.all(
+          Array.from({ length: donorCount }, (_, i) =>
+            validatorFundContract.donors(i).catch(() => null)
+          )
+        );
+        const validAddresses = donorAddresses.filter(Boolean);
+
+        // Fetch all donation amounts in parallel
+        const donorAmounts = await Promise.all(
+          validAddresses.map(addr =>
+            validatorFundContract.donations(addr).catch(() => ethers.BigNumber.from(0))
+          )
+        );
+
+        onChainDonors = validAddresses.map((addr, i) => ({
+          address: addr,
+          amount: donorAmounts[i]
+        }));
       }
 
       // Build leaderboard — merge on-chain amounts with DonorRegistry names
-      // Create a read-only DonorRegistry instance for fetching metadata
       const registryRead = new ethers.Contract(
         CONTRACT_ADDRESSES.DonorRegistry,
         DonorRegistryABI,
@@ -642,6 +647,9 @@ function App() {
       );
       setDonorLeaderboard(leaderboard);
 
+      const topDonor = sortedDonors.length > 0 ? sortedDonors[0].address : null;
+      const topDonorAmount = sortedDonors.length > 0 ? sortedDonors[0].amount : ethers.BigNumber.from(0);
+
       setValidatorStats({
         validators: stats[7].toString(),
         nextValidatorIn: ethers.utils.formatEther(ethNeeded),
@@ -659,14 +667,14 @@ function App() {
     }
   }, [validatorFundContract]);
 
-  // Load validator stats
+  // Load validator stats — only when community tab is active, poll every 60s
   useEffect(() => {
-    if (validatorFundContract) {
+    if (validatorFundContract && activeTab === 'community') {
       loadValidatorStats();
-      const interval = setInterval(loadValidatorStats, 10000);
+      const interval = setInterval(loadValidatorStats, 60000);
       return () => clearInterval(interval);
     }
-  }, [validatorFundContract, loadValidatorStats]);
+  }, [validatorFundContract, loadValidatorStats, activeTab]);
 
   // Calculate fiat value (frontend estimation — for display when wallet not connected)
   const getOooweeeInFiat = (oooweeeAmount, currency = 'eur') => {
@@ -1193,16 +1201,24 @@ function App() {
     toast('ETH purchase window opened! Your balance will update after the purchase completes.', { icon: '💳', duration: 5000 });
 
     // Poll for balance changes after opening widget
-    // eslint-disable-next-line no-unused-vars
-    const startBalance = ethBalance;
-    const pollInterval = setInterval(async () => {
+    // Clear any previous polling interval to prevent stacking
+    if (fiatOnrampPollRef.current) {
+      clearInterval(fiatOnrampPollRef.current);
+    }
+    fiatOnrampPollRef.current = setInterval(async () => {
       if (provider && tokenContract && account) {
         await loadBalances(account, provider, tokenContract);
       }
     }, 15000);
 
     // Stop polling after 10 minutes
-    setTimeout(() => clearInterval(pollInterval), 600000);
+    const currentInterval = fiatOnrampPollRef.current;
+    setTimeout(() => {
+      clearInterval(currentInterval);
+      if (fiatOnrampPollRef.current === currentInterval) {
+        fiatOnrampPollRef.current = null;
+      }
+    }, 600000);
   };
 
   const handleDonateSubmit = async () => {
@@ -1700,8 +1716,8 @@ function App() {
   };
 
   const handleCreateAccount = async () => {
-    const goalName = document.getElementById('goalName').value;
-    const initialDepositFiat = document.getElementById('initialDeposit').value;
+    const goalName = document.getElementById('goalName')?.value;
+    const initialDepositFiat = document.getElementById('initialDeposit')?.value;
     
     if (!goalName) {
       toast.error('Please enter an account name');
@@ -1732,14 +1748,14 @@ function App() {
     }
 
     if (accountType === 'time') {
-      const unlockDate = document.getElementById('unlockDate').value;
+      const unlockDate = document.getElementById('unlockDate')?.value;
       if (!unlockDate) {
         toast.error('Please select an unlock date');
         return;
       }
       createTimeAccount(unlockDate, goalName, initialDepositOooweee, accountCurrency);
     } else if (accountType === 'growth') {
-      const targetAmount = document.getElementById('targetAmount').value;
+      const targetAmount = document.getElementById('targetAmount')?.value;
       if (!targetAmount || targetAmount <= 0) {
         toast.error('Please enter a valid target amount');
         return;
@@ -1751,8 +1767,8 @@ function App() {
       }
       createGrowthAccount(targetAmount, goalName, initialDepositOooweee, accountCurrency);
     } else if (accountType === 'balance') {
-      const targetAmount = document.getElementById('targetAmount').value;
-      const recipientAddress = document.getElementById('recipientAddress').value;
+      const targetAmount = document.getElementById('targetAmount')?.value;
+      const recipientAddress = document.getElementById('recipientAddress')?.value;
       if (!targetAmount || targetAmount <= 0) {
         toast.error('Please enter a valid target amount');
         return;
@@ -2902,7 +2918,7 @@ function App() {
               )}
               
               <button 
-                onClick={() => { handleCreateAccount(); setShowCreateModal(false); }} 
+                onClick={async () => { await handleCreateAccount(); setShowCreateModal(false); }}
                 disabled={loading}
                 className="buy-btn rainbow-btn"
               >
@@ -3261,7 +3277,7 @@ function App() {
                                 <button
                                   onClick={async () => {
                                     const currency = acc.isFiatTarget ? getCurrencyFromCode(acc.targetCurrency) : 'EUR';
-                                    const fiatAmount = document.getElementById(`deposit-${acc.id}`).value;
+                                    const fiatAmount = document.getElementById(`deposit-${acc.id}`)?.value;
                                     if (fiatAmount && fiatAmount > 0) {
                                       const oooweeeAmount = await convertFiatToOooweeeOracle(fiatAmount, currency);
                                       if (oooweeeAmount > 0) {
