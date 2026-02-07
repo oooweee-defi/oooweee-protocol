@@ -34,7 +34,7 @@ const TRANSAK_API_KEY = "5606035c-b59a-4c73-80f0-b9930cdfd9f9";
 const SEPOLIA_CHAIN_CONFIG = {
   chainNamespace: CHAIN_NAMESPACES.EIP155,
   chainId: "0xaa36a7",
-  rpcTarget: "https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161",
+  rpcTarget: "https://rpc.sepolia.org",
   displayName: "Ethereum Sepolia",
   blockExplorerUrl: "https://sepolia.etherscan.io",
   ticker: "ETH",
@@ -56,9 +56,8 @@ const providerOptions = {
     package: WalletConnectProvider,
     options: {
       projectId: "084d65a488f56065ea7a901e023a8b3e",
-      infuraId: "9aa3d95b3bc440fa88ea12eaa4456161",
       rpc: {
-        11155111: "https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161"
+        11155111: "https://rpc.sepolia.org"
       },
       chainId: 11155111,
       bridge: "https://bridge.walletconnect.org",
