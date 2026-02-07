@@ -148,7 +148,7 @@ contract OOOWEEESavingsV2 is OOOWEEESavings {
         }
     }
 
-    function _isAccountMatured(address owner, uint256 accountId) internal view returns (bool) {
+    function _isAccountMatured(address owner, uint256 accountId) internal virtual view returns (bool) {
         if (accountId >= userAccounts[owner].length) return false;
         SavingsAccount memory account = userAccounts[owner][accountId];
         if (!account.isActive) return false;
@@ -175,7 +175,7 @@ contract OOOWEEESavingsV2 is OOOWEEESavings {
         return false;
     }
 
-    function _autoProcess(address owner, uint256 accountId) internal {
+    function _autoProcess(address owner, uint256 accountId) internal virtual {
         if (accountId >= userAccounts[owner].length) return;
         SavingsAccount storage account = userAccounts[owner][accountId];
         if (!account.isActive) return;
