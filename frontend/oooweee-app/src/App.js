@@ -511,11 +511,18 @@ function App() {
   // Format currency for user display (2 decimal places)
   const formatCurrency = (amount, currency = 'eur') => {
     const curr = Object.entries(CURRENCIES).find(([key, _]) => key.toLowerCase() === currency.toLowerCase()) || ['EUR', CURRENCIES.EUR];
+    const absAmount = Math.abs(amount);
+    // Use more decimal places for very small amounts (e.g. token prices < €0.01)
+    let maxDecimals = 2;
+    if (absAmount > 0 && absAmount < 0.01) {
+      // Show enough decimals to display first significant digit + 1
+      maxDecimals = Math.min(8, Math.max(4, -Math.floor(Math.log10(absAmount)) + 2));
+    }
     return new Intl.NumberFormat(curr[1].locale, {
       style: 'currency',
       currency: curr[0],
       minimumFractionDigits: 2,
-      maximumFractionDigits: 2
+      maximumFractionDigits: maxDecimals
     }).format(amount);
   };
 
@@ -1916,6 +1923,55 @@ function App() {
     }
   };
 
+  // Manual withdrawal for matured accounts
+  const manualWithdraw = async (accountId, goalName) => {
+    try {
+      setLoading(true);
+      const tx = await savingsContract.manualWithdraw(accountId);
+      await toast.promise(tx.wait(), {
+        loading: `🔓 Withdrawing from "${goalName}"...`,
+        success: `🎉 Withdrawn from "${goalName}" — tokens returned!`,
+        error: '❌ Withdrawal failed'
+      });
+      await loadSavingsAccounts(account, savingsContract, provider, routerContract, ethPrice);
+      await loadBalances(account, provider, tokenContract);
+    } catch (error) {
+      console.error('Manual withdraw error:', error);
+      if (error.code === 'ACTION_REJECTED') {
+        toast.error('Transaction cancelled');
+      } else if (error.message?.includes('E')) {
+        toast.error('Account not yet eligible for withdrawal');
+      } else {
+        toast.error('Withdrawal failed: ' + (error.reason || error.message));
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Admin: process all matured accounts (permissionless — anyone can call)
+  const triggerProcessMaturedAccounts = async () => {
+    try {
+      setLoading(true);
+      const tx = await savingsContract.processMaturedAccounts();
+      await toast.promise(tx.wait(), {
+        loading: '⚙️ Processing matured accounts...',
+        success: '✅ Matured accounts processed!',
+        error: '❌ Failed to process accounts'
+      });
+      await loadSavingsAccounts(account, savingsContract, provider, routerContract, ethPrice);
+    } catch (error) {
+      console.error('Process matured error:', error);
+      if (error.code === 'ACTION_REJECTED') {
+        toast.error('Transaction cancelled');
+      } else {
+        toast.error('Failed: ' + (error.reason || error.message));
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getDaysRemaining = (unlockTime) => {
     const now = Math.floor(Date.now() / 1000);
     const remaining = unlockTime - now;
@@ -2520,6 +2576,9 @@ function App() {
             a.click();
           }}>
             💾 Export Stats
+          </button>
+          <button className="action-btn" onClick={triggerProcessMaturedAccounts} disabled={loading}>
+            🔓 Process Matured Accounts
           </button>
         </div>
       </div>
@@ -3299,6 +3358,19 @@ function App() {
                                   DEPOSIT
                                 </button>
                               </div>
+
+                              {/* Withdraw button for matured accounts */}
+                              {acc.progress >= 100 && (
+                                <div className="withdraw-section">
+                                  <button
+                                    onClick={() => manualWithdraw(acc.id, acc.goalName)}
+                                    disabled={loading}
+                                    className="withdraw-btn"
+                                  >
+                                    🔓 WITHDRAW — Goal Reached!
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -3306,7 +3378,7 @@ function App() {
                     </>
                   )}
                 </div>
-                
+
                 {/* Pending Group Invitations */}
                 {pendingInvitations.length > 0 && (
                   <div className="invitations-banner">
