@@ -91,6 +91,15 @@ function App() {
   const [sendRecipient, setSendRecipient] = useState('');
   const [sendAmount, setSendAmount] = useState('');
 
+  // Group savings state
+  const [userGroups, setUserGroups] = useState([]);
+  const [showGroupDetail, setShowGroupDetail] = useState(null);
+  const [groupInviteAddress, setGroupInviteAddress] = useState('');
+  const [groupDepositAmount, setGroupDepositAmount] = useState('');
+  const [pendingInvitations, setPendingInvitations] = useState([]);
+  const [groupSubType, setGroupSubType] = useState('time');
+  const [groupDestination, setGroupDestination] = useState('');
+
   // Donate modal state
   const [showDonateModal, setShowDonateModal] = useState(false);
   const [donateAmount, setDonateAmount] = useState('0.05');
@@ -703,7 +712,8 @@ function App() {
       // Load user data (read-only operations)
       await loadBalances(address, web3Provider, token);
       await loadSavingsAccounts(address, savings, web3Provider, router, ethPrice);
-      
+      await loadGroupAccounts(address, savings);
+
       // Subscribe to events
       if (instance.on) {
         instance.on("accountsChanged", handleAccountsChanged);
@@ -1028,6 +1038,145 @@ function App() {
     }
   };
 
+  // ============ Group Savings Functions ============
+
+  const loadGroupAccounts = async (userAccount, contract) => {
+    try {
+      const count = await contract.groupCount();
+      const groupsList = [];
+      for (let i = 0; i < count.toNumber(); i++) {
+        try {
+          const memberCheck = await contract.isGroupMember(i, userAccount);
+          const inviteCheck = await contract.isGroupInvited(i, userAccount);
+          if (memberCheck || inviteCheck) {
+            const details = await contract.getGroupDetails(i);
+            const members = await contract.getGroupMembers(i);
+            const myContribution = memberCheck
+              ? await contract.getGroupContribution(i, userAccount)
+              : ethers.BigNumber.from(0);
+            const TYPES = ['Time', 'Balance', 'Growth'];
+            groupsList.push({
+              id: i,
+              creator: details.creator,
+              destinationWallet: details.destinationWallet,
+              accountType: TYPES[details.accountType] || 'Time',
+              isActive: details.isActive,
+              totalBalance: ethers.utils.formatUnits(details.totalBalance, 18),
+              targetFiat: details.targetFiat.toString(),
+              targetCurrency: details.targetCurrency,
+              unlockTime: details.unlockTime,
+              goalName: details.goalName,
+              memberCount: details.memberCount.toNumber(),
+              members: members,
+              myContribution: ethers.utils.formatUnits(myContribution, 18),
+              isMember: memberCheck,
+              isInvited: inviteCheck && !memberCheck
+            });
+          }
+        } catch (e) {
+          console.error('Error loading group', i, e);
+        }
+      }
+      setUserGroups(groupsList);
+      setPendingInvitations(groupsList.filter(g => g.isInvited));
+    } catch (error) {
+      console.error('Error loading groups:', error);
+    }
+  };
+
+  const inviteMemberToGroup = async (groupId, memberAddress) => {
+    try {
+      setLoading(true);
+      if (!ethers.utils.isAddress(memberAddress)) {
+        toast.error('Invalid address');
+        return;
+      }
+      const tx = await savingsContract.inviteMember(groupId, memberAddress);
+      await toast.promise(tx.wait(), {
+        loading: '📨 Sending invitation...',
+        success: '✅ Member invited!',
+        error: '❌ Failed to invite'
+      });
+      setGroupInviteAddress('');
+      await loadGroupAccounts(account, savingsContract);
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to invite: ' + (error.reason || error.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const acceptGroupInvitation = async (groupId) => {
+    try {
+      setLoading(true);
+      const tx = await savingsContract.acceptInvitation(groupId);
+      await toast.promise(tx.wait(), {
+        loading: '🤝 Accepting invitation...',
+        success: '✅ You joined the group!',
+        error: '❌ Failed to accept'
+      });
+      await loadGroupAccounts(account, savingsContract);
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to accept: ' + (error.reason || error.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const depositToGroupAccount = async (groupId, oooweeeAmount) => {
+    try {
+      setLoading(true);
+      const depositAmount = ethers.utils.parseUnits(Math.floor(parseFloat(oooweeeAmount)).toString(), 18);
+
+      const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
+      await toast.promise(approveTx.wait(), {
+        loading: '🔓 Approving tokens...',
+        success: '✅ Tokens approved!',
+        error: '❌ Failed to approve'
+      });
+
+      const tx = await savingsContract.depositToGroup(groupId, depositAmount);
+      await toast.promise(tx.wait(), {
+        loading: '💰 Depositing to group...',
+        success: '✅ Deposit successful!',
+        error: '❌ Failed to deposit'
+      });
+
+      setGroupDepositAmount('');
+      await loadGroupAccounts(account, savingsContract);
+      await loadBalances(account, provider, tokenContract);
+    } catch (error) {
+      console.error(error);
+      if (error.code === 'ACTION_REJECTED') {
+        toast.error('Transaction cancelled');
+      } else {
+        toast.error('Failed to deposit: ' + (error.reason || error.message));
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const processGroup = async (groupId) => {
+    try {
+      setLoading(true);
+      const tx = await savingsContract.processGroupAccount(groupId);
+      await toast.promise(tx.wait(), {
+        loading: '🏁 Completing group account...',
+        success: '🎉 Group account completed! Funds sent to destination.',
+        error: '❌ Conditions not met yet'
+      });
+      await loadGroupAccounts(account, savingsContract);
+    } catch (error) {
+      console.error(error);
+      toast.error('Cannot complete: ' + (error.reason || error.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const createTimeAccount = async (unlockDate, goalName, initialDeposit, currency) => {
     try {
       setLoading(true);
@@ -1198,7 +1347,7 @@ function App() {
     const initialDepositFiat = document.getElementById('initialDeposit').value;
     
     if (!goalName) {
-      toast.error('Please enter a quest name');
+      toast.error('Please enter an account name');
       return;
     }
     
@@ -1256,6 +1405,87 @@ function App() {
         return;
       }
       createBalanceAccount(targetAmount, recipientAddress, goalName, initialDepositOooweee, accountCurrency);
+    } else if (accountType === 'group') {
+      if (!groupDestination || !ethers.utils.isAddress(groupDestination)) {
+        toast.error('Please enter a valid destination wallet address');
+        return;
+      }
+      const ACCOUNT_TYPE_MAP = { time: 0, balance: 1, growth: 2 };
+      const CURRENCY_MAP = { USD: 0, EUR: 1, GBP: 2 };
+      const typeEnum = ACCOUNT_TYPE_MAP[groupSubType] || 0;
+      const currencyEnum = CURRENCY_MAP[accountCurrency] || 1;
+
+      let unlockTime = 0;
+      let targetFiatSmallest = 0;
+
+      if (groupSubType === 'time') {
+        const unlockDate = document.getElementById('unlockDate')?.value;
+        if (!unlockDate) {
+          toast.error('Please select an unlock date');
+          return;
+        }
+        unlockTime = Math.floor(new Date(unlockDate).getTime() / 1000);
+      } else {
+        const targetAmount = document.getElementById('targetAmount')?.value;
+        if (!targetAmount || parseFloat(targetAmount) <= 0) {
+          toast.error('Please enter a valid target amount');
+          return;
+        }
+        targetFiatSmallest = Math.round(parseFloat(targetAmount) * Math.pow(10, CURRENCIES[accountCurrency].decimals));
+      }
+
+      createGroupAccountFn(typeEnum, groupDestination, goalName, targetFiatSmallest, currencyEnum, unlockTime, initialDepositOooweee);
+    }
+  };
+
+  const createGroupAccountFn = async (typeEnum, destination, goalName, targetFiat, currencyEnum, unlockTime, initialDeposit) => {
+    try {
+      setLoading(true);
+
+      if (parseFloat(balance) < parseFloat(initialDeposit)) {
+        const needed = parseFloat(initialDeposit) - parseFloat(balance);
+        toast(`You need ${Math.ceil(needed).toLocaleString()} more OOOWEEE`, { icon: '💡' });
+        await openBuyModalWithAmount(needed);
+        setLoading(false);
+        return;
+      }
+
+      const depositAmount = ethers.utils.parseUnits(Math.floor(initialDeposit).toString(), 18);
+
+      const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
+      await toast.promise(approveTx.wait(), {
+        loading: '🔓 Approving tokens...',
+        success: '✅ Tokens approved!',
+        error: '❌ Failed to approve'
+      });
+
+      const createTx = await savingsContract.createGroupAccount(
+        typeEnum,
+        destination,
+        goalName,
+        targetFiat,
+        currencyEnum,
+        unlockTime,
+        depositAmount
+      );
+
+      await toast.promise(createTx.wait(), {
+        loading: '👥 Creating group account...',
+        success: '🎉 Group account created!',
+        error: '❌ Failed to create group account'
+      });
+
+      await loadGroupAccounts(account, savingsContract);
+      await loadBalances(account, provider, tokenContract);
+    } catch (error) {
+      console.error(error);
+      if (error.code === 'ACTION_REJECTED') {
+        toast.error('Transaction cancelled');
+      } else {
+        toast.error('Failed to create group: ' + (error.reason || error.message));
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1996,21 +2226,22 @@ function App() {
       {showCreateModal && (
         <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
           <div className="modal-content create-modal" onClick={(e) => e.stopPropagation()}>
-            <h2>🎮 Start New Savings Quest</h2>
+            <h2>New Savings Account</h2>
             <button className="close-modal" onClick={() => setShowCreateModal(false)}>✕</button>
             
             <div className="buy-form">
               <div className="form-group">
-                <label>Quest Type:</label>
+                <label>Account Type:</label>
                 <select 
                   id="accountType" 
                   value={accountType}
                   onChange={(e) => setAccountType(e.target.value)}
                   className="select-input"
                 >
-                  <option value="time">⏰ Time Quest - Lock until date</option>
-                  <option value="growth">🌱 Growth Quest - Grow to target</option>
-                  <option value="balance">⚖️ Balance Quest - Send at target</option>
+                  <option value="time">Time Lock - Lock until date</option>
+                  <option value="growth">Growth Goal - Grow to target</option>
+                  <option value="balance">Transfer Goal - Send at target</option>
+                  <option value="group">👥 Group Savings - Save together</option>
                 </select>
               </div>
               
@@ -2028,7 +2259,7 @@ function App() {
               </div>
               
               <div className="form-group">
-                <label>Quest Name:</label>
+                <label>Account Name:</label>
                 <input 
                   type="text" 
                   placeholder="e.g., Epic Vacation" 
@@ -2067,23 +2298,54 @@ function App() {
                 })()}
               </div>
               
-              {accountType === 'time' && (
+              {/* Group-specific: sub-type and destination */}
+              {accountType === 'group' && (
+                <>
+                  <div className="form-group">
+                    <label>Group Type:</label>
+                    <select
+                      value={groupSubType}
+                      onChange={(e) => setGroupSubType(e.target.value)}
+                      className="select-input"
+                    >
+                      <option value="time">Time Lock - Lock until date</option>
+                      <option value="growth">Growth Goal - Grow to target</option>
+                      <option value="balance">Transfer Goal - Send at target</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>📮 Destination Wallet:</label>
+                    <input
+                      type="text"
+                      placeholder="0x... (where funds go on completion)"
+                      value={groupDestination}
+                      onChange={(e) => setGroupDestination(e.target.value)}
+                      className="text-input"
+                    />
+                    <p className="info-note">Funds will be sent here when the group goal is completed</p>
+                  </div>
+                </>
+              )}
+
+              {/* Time: unlock date (individual or group time sub-type) */}
+              {(accountType === 'time' || (accountType === 'group' && groupSubType === 'time')) && (
                 <div className="form-group">
                   <label>🗓️ Unlock Date:</label>
-                  <input 
-                    type="date" 
+                  <input
+                    type="date"
                     id="unlockDate"
                     min={new Date().toISOString().split('T')[0]}
                     className="date-input"
                   />
                 </div>
               )}
-              
-              {(accountType === 'growth' || accountType === 'balance') && (
+
+              {/* Growth/Balance: target amount (individual or group growth/balance sub-type) */}
+              {(accountType === 'growth' || accountType === 'balance' || (accountType === 'group' && (groupSubType === 'growth' || groupSubType === 'balance'))) && (
                 <div className="form-group">
                   <label>🎯 Target Amount ({CURRENCIES[accountCurrency].symbol}):</label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     placeholder={`Target in ${CURRENCIES[accountCurrency].name}`}
                     id="targetAmount"
                     value={targetAmountInput}
@@ -2097,7 +2359,7 @@ function App() {
                       ≈ {convertFiatToOooweee(targetAmountInput, accountCurrency.toLowerCase()).toLocaleString()} $OOOWEEE at current rate
                     </p>
                   )}
-                  {accountType === 'growth' && initialDepositInput && targetAmountInput && (
+                  {(accountType === 'growth' || (accountType === 'group' && groupSubType === 'growth')) && initialDepositInput && targetAmountInput && (
                     (() => {
                       if (parseFloat(initialDepositInput) >= parseFloat(targetAmountInput)) {
                         return <p className="error-note">⚠️ Target must be higher than initial deposit ({CURRENCIES[accountCurrency].symbol}{initialDepositInput})</p>;
@@ -2107,13 +2369,14 @@ function App() {
                   )}
                 </div>
               )}
-              
+
+              {/* Balance: recipient address (individual only — group uses destination wallet) */}
               {accountType === 'balance' && (
                 <div className="form-group">
                   <label>📮 Recipient Address:</label>
-                  <input 
-                    type="text" 
-                    placeholder="0x..." 
+                  <input
+                    type="text"
+                    placeholder="0x..."
                     id="recipientAddress"
                     className="text-input"
                   />
@@ -2305,7 +2568,7 @@ function App() {
                       className="create-savings-btn"
                       onClick={() => setShowCreateModal(true)}
                     >
-                      🎮 New Savings Quest
+                      New Savings Account
                     </button>
                   </div>
                 </div>
@@ -2314,7 +2577,7 @@ function App() {
                   {activeAccounts.length > 0 && (
                     <>
                       <div className="section-header">
-                        <h2>🎮 Your Active Quests</h2>
+                        <h2>Your Active Accounts</h2>
                         {activeAccounts.some(acc => parseFloat(acc.pendingRewards) > 0) && (
                           <button className="claim-all-btn" onClick={claimAllRewards} disabled={loading}>
                             🎁 Claim All Rewards
@@ -2489,6 +2752,251 @@ function App() {
                   )}
                 </div>
                 
+                {/* Pending Group Invitations */}
+                {pendingInvitations.length > 0 && (
+                  <div className="invitations-banner">
+                    <h3>📨 Pending Group Invitations</h3>
+                    {pendingInvitations.map(group => (
+                      <div key={`inv-${group.id}`} className="invitation-card">
+                        <div className="invitation-info">
+                          <strong>{group.goalName}</strong>
+                          <span className="invitation-meta">
+                            👥 {group.accountType} · {group.memberCount} member{group.memberCount !== 1 ? 's' : ''} · {parseFloat(group.totalBalance).toLocaleString()} $OOOWEEE pooled
+                          </span>
+                          <span className="invitation-creator">
+                            Created by {group.creator.slice(0, 6)}...{group.creator.slice(-4)}
+                          </span>
+                        </div>
+                        <button
+                          className="accept-invite-btn"
+                          onClick={() => acceptGroupInvitation(group.id)}
+                          disabled={loading}
+                        >
+                          🤝 Accept
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Group Accounts Section */}
+                {userGroups.filter(g => g.isMember && g.isActive).length > 0 && (
+                  <div className="savings-section">
+                    <div className="section-header">
+                      <h2>👥 Your Group Accounts</h2>
+                    </div>
+                    <div className="accounts-grid">
+                      {userGroups.filter(g => g.isMember && g.isActive).map(group => {
+                        const currency = getCurrencyFromCode(group.targetCurrency);
+                        const currencyInfo = CURRENCIES[currency];
+                        const isCreator = group.creator.toLowerCase() === account?.toLowerCase();
+                        const isExpanded = showGroupDetail === group.id;
+
+                        return (
+                          <div key={`group-${group.id}`} className="account-card group-card">
+                            <div className="account-header">
+                              <h3>{group.goalName}</h3>
+                              <div className="header-badges">
+                                <span className={`account-type ${group.accountType.toLowerCase()}`}>
+                                  👥 {group.accountType}
+                                </span>
+                                <span className="currency-badge">{currency}</span>
+                              </div>
+                            </div>
+
+                            <div className="account-details">
+                              <div className="detail-row">
+                                <span>Total Balance:</span>
+                                <span className="primary-amount">
+                                  {parseFloat(group.totalBalance).toLocaleString()} $OOOWEEE
+                                </span>
+                              </div>
+
+                              {(group.accountType === 'Growth' || group.accountType === 'Balance') && group.targetFiat !== '0' && (
+                                <div className="detail-row">
+                                  <span>Target:</span>
+                                  <span className="value">
+                                    {currencyInfo.symbol}
+                                    {(parseInt(group.targetFiat) / Math.pow(10, currencyInfo.decimals)).toFixed(currencyInfo.decimals)}
+                                  </span>
+                                </div>
+                              )}
+
+                              {group.accountType === 'Time' && group.unlockTime > 0 && (
+                                <div className="detail-row">
+                                  <span>Unlock Date:</span>
+                                  <span className="value">
+                                    {new Date(group.unlockTime * 1000).toLocaleDateString()}
+                                  </span>
+                                </div>
+                              )}
+
+                              <div className="detail-row">
+                                <span>Members:</span>
+                                <span className="value">{group.memberCount}</span>
+                              </div>
+
+                              <div className="detail-row">
+                                <span>My Contribution:</span>
+                                <span className="value">{parseFloat(group.myContribution).toLocaleString()} $OOOWEEE</span>
+                              </div>
+
+                              {group.destinationWallet && group.destinationWallet !== ethers.constants.AddressZero && (
+                                <div className="detail-row">
+                                  <span>Destination:</span>
+                                  <span className="value address">
+                                    {group.destinationWallet.slice(0, 6)}...{group.destinationWallet.slice(-4)}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Expand/collapse details */}
+                            <button
+                              className="toggle-btn"
+                              onClick={() => setShowGroupDetail(isExpanded ? null : group.id)}
+                              style={{ marginBottom: '0.5rem', fontSize: '0.85rem' }}
+                            >
+                              {isExpanded ? '▲ Hide Details' : '▼ Show Details'}
+                            </button>
+
+                            {isExpanded && (
+                              <div className="group-expanded">
+                                {/* Member list */}
+                                <div className="group-members">
+                                  <strong>Members:</strong>
+                                  {group.members.map((m, idx) => (
+                                    <div key={idx} className="member-row">
+                                      <span className="value address">
+                                        {m.slice(0, 6)}...{m.slice(-4)}
+                                        {m.toLowerCase() === group.creator.toLowerCase() ? ' (creator)' : ''}
+                                        {m.toLowerCase() === account?.toLowerCase() ? ' (you)' : ''}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+
+                                {/* Creator: Invite member */}
+                                {isCreator && (
+                                  <div className="group-invite-section">
+                                    <label>Invite Member:</label>
+                                    <input
+                                      type="text"
+                                      placeholder="0x... wallet address"
+                                      value={groupInviteAddress}
+                                      onChange={(e) => setGroupInviteAddress(e.target.value)}
+                                      className="deposit-input"
+                                    />
+                                    <button
+                                      onClick={() => inviteMemberToGroup(group.id, groupInviteAddress)}
+                                      disabled={loading || !groupInviteAddress}
+                                      className="deposit-btn"
+                                    >
+                                      📨 Invite
+                                    </button>
+                                  </div>
+                                )}
+
+                                {/* Process / Complete group */}
+                                <button
+                                  onClick={() => processGroup(group.id)}
+                                  disabled={loading}
+                                  className="deposit-btn"
+                                  style={{ marginTop: '0.5rem', background: 'linear-gradient(135deg, #10b981, #059669)' }}
+                                >
+                                  🏁 Complete Group Account
+                                </button>
+                              </div>
+                            )}
+
+                            {/* Deposit section - always visible for members */}
+                            <div className="deposit-section">
+                              <label className="deposit-label">Deposit ({currency})</label>
+                              <input
+                                type="number"
+                                placeholder={`Amount in ${currency}`}
+                                value={showGroupDetail === group.id ? groupDepositAmount : ''}
+                                onChange={(e) => {
+                                  setShowGroupDetail(group.id);
+                                  setGroupDepositAmount(e.target.value);
+                                }}
+                                min="1"
+                                step="1"
+                                className="deposit-input"
+                              />
+                              <button
+                                onClick={() => {
+                                  const fiatAmt = groupDepositAmount;
+                                  if (fiatAmt && fiatAmt > 0) {
+                                    const oooweeeAmt = convertFiatToOooweee(fiatAmt, currency);
+                                    if (oooweeeAmt > 0) {
+                                      depositToGroupAccount(group.id, oooweeeAmt.toString());
+                                    } else {
+                                      toast.error('Amount too small');
+                                    }
+                                  } else {
+                                    toast.error('Enter an amount');
+                                  }
+                                }}
+                                disabled={loading}
+                                className="deposit-btn"
+                              >
+                                💰 DEPOSIT
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Completed Groups */}
+                {userGroups.filter(g => g.isMember && !g.isActive).length > 0 && (
+                  <div className="completed-section" style={{ marginTop: '1rem' }}>
+                    <h3>✅ Completed Group Accounts</h3>
+                    <div className="accounts-grid">
+                      {userGroups.filter(g => g.isMember && !g.isActive).map(group => {
+                        const currency = getCurrencyFromCode(group.targetCurrency);
+                        return (
+                          <div key={`group-done-${group.id}`} className="account-card completed group-card">
+                            <div className="account-header">
+                              <h3>{group.goalName}</h3>
+                              <div className="header-badges">
+                                <span className={`account-type ${group.accountType.toLowerCase()}`}>
+                                  👥 {group.accountType}
+                                </span>
+                                <span className="currency-badge">{currency}</span>
+                              </div>
+                            </div>
+                            <div className="account-details">
+                              <p className="completed-text">🏆 Group Goal Complete!</p>
+                              <div className="detail-row">
+                                <span>Final Balance:</span>
+                                <span className="value">{parseFloat(group.totalBalance).toLocaleString()} $OOOWEEE</span>
+                              </div>
+                              <div className="detail-row">
+                                <span>Members:</span>
+                                <span className="value">{group.memberCount}</span>
+                              </div>
+                              <div className="detail-row">
+                                <span>Your Contribution:</span>
+                                <span className="value">{parseFloat(group.myContribution).toLocaleString()} $OOOWEEE</span>
+                              </div>
+                              <div className="progress-section">
+                                <div className="progress-bar">
+                                  <div className="progress-fill rainbow-fill" style={{ width: '100%' }} />
+                                </div>
+                                <span className="progress-text">100% Complete ✨</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {completedAccounts.length > 0 && (
                   <>
                     <div className="toggle-completed">
@@ -2499,7 +3007,7 @@ function App() {
                     
                     {showCompleted && (
                       <div className="completed-section">
-                        <h3>✅ Completed Quests</h3>
+                        <h3>✅ Completed Accounts</h3>
                         <div className="accounts-grid">
                           {completedAccounts.map(acc => {
                             const currency = getCurrencyFromCode(acc.targetCurrency);
@@ -2518,7 +3026,7 @@ function App() {
                                 </div>
                                 
                                 <div className="account-details">
-                                  <p className="completed-text">🏆 Quest Complete!</p>
+                                  <p className="completed-text">🏆 Goal Complete!</p>
                                   
                                   {acc.isFiatTarget ? (
                                     <>

@@ -869,6 +869,179 @@ export const OOOWEEESavingsABI = [
     ],
     "stateMutability": "view",
     "type": "function"
+  },
+  // ============================================
+  // V2 Group Savings Functions
+  // ============================================
+  // Events
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint256", "name": "groupId", "type": "uint256" },
+      { "indexed": true, "internalType": "address", "name": "creator", "type": "address" },
+      { "indexed": false, "internalType": "string", "name": "goalName", "type": "string" }
+    ],
+    "name": "GroupCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint256", "name": "groupId", "type": "uint256" },
+      { "indexed": true, "internalType": "address", "name": "member", "type": "address" }
+    ],
+    "name": "MemberInvited",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint256", "name": "groupId", "type": "uint256" },
+      { "indexed": true, "internalType": "address", "name": "member", "type": "address" }
+    ],
+    "name": "InvitationAccepted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint256", "name": "groupId", "type": "uint256" },
+      { "indexed": true, "internalType": "address", "name": "depositor", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }
+    ],
+    "name": "GroupDeposit",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint256", "name": "groupId", "type": "uint256" },
+      { "indexed": true, "internalType": "address", "name": "destination", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }
+    ],
+    "name": "GroupCompleted",
+    "type": "event"
+  },
+  // Mutating functions
+  {
+    "inputs": [
+      { "internalType": "uint8", "name": "_accountType", "type": "uint8" },
+      { "internalType": "address", "name": "_destinationWallet", "type": "address" },
+      { "internalType": "string", "name": "_goalName", "type": "string" },
+      { "internalType": "uint256", "name": "_targetFiat", "type": "uint256" },
+      { "internalType": "uint8", "name": "_targetCurrency", "type": "uint8" },
+      { "internalType": "uint32", "name": "_unlockTime", "type": "uint32" },
+      { "internalType": "uint256", "name": "_initialDeposit", "type": "uint256" }
+    ],
+    "name": "createGroupAccount",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "groupId", "type": "uint256" },
+      { "internalType": "address", "name": "member", "type": "address" }
+    ],
+    "name": "inviteMember",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "groupId", "type": "uint256" }
+    ],
+    "name": "acceptInvitation",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "groupId", "type": "uint256" },
+      { "internalType": "uint256", "name": "amount", "type": "uint256" }
+    ],
+    "name": "depositToGroup",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "groupId", "type": "uint256" }
+    ],
+    "name": "processGroupAccount",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  // View functions
+  {
+    "inputs": [],
+    "name": "groupCount",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "groupId", "type": "uint256" }
+    ],
+    "name": "getGroupDetails",
+    "outputs": [
+      { "internalType": "address", "name": "creator", "type": "address" },
+      { "internalType": "address", "name": "destinationWallet", "type": "address" },
+      { "internalType": "uint8", "name": "accountType", "type": "uint8" },
+      { "internalType": "bool", "name": "isActive", "type": "bool" },
+      { "internalType": "uint256", "name": "totalBalance", "type": "uint256" },
+      { "internalType": "uint256", "name": "targetFiat", "type": "uint256" },
+      { "internalType": "uint8", "name": "targetCurrency", "type": "uint8" },
+      { "internalType": "uint32", "name": "unlockTime", "type": "uint32" },
+      { "internalType": "string", "name": "goalName", "type": "string" },
+      { "internalType": "uint256", "name": "memberCount", "type": "uint256" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "groupId", "type": "uint256" }
+    ],
+    "name": "getGroupMembers",
+    "outputs": [{ "internalType": "address[]", "name": "", "type": "address[]" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "groupId", "type": "uint256" },
+      { "internalType": "address", "name": "member", "type": "address" }
+    ],
+    "name": "getGroupContribution",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "groupId", "type": "uint256" },
+      { "internalType": "address", "name": "member", "type": "address" }
+    ],
+    "name": "isGroupMember",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "groupId", "type": "uint256" },
+      { "internalType": "address", "name": "member", "type": "address" }
+    ],
+    "name": "isGroupInvited",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "view",
+    "type": "function"
   }
 ];
 
