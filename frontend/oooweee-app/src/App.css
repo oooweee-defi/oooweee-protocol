@@ -335,6 +335,27 @@
   font-size: 0.875rem;
   color: var(--accent-success);
   font-variant-numeric: tabular-nums;
+  transition: color 0.3s ease;
+  padding: 0.125rem 0.25rem;
+  border-radius: 2px;
+}
+
+.price-value.flash-up {
+  animation: flash-green 1.5s ease-out;
+}
+
+.price-value.flash-down {
+  animation: flash-red 1.5s ease-out;
+}
+
+@keyframes flash-green {
+  0% { color: #10B981; background: rgba(16, 185, 129, 0.2); }
+  100% { color: var(--accent-success); background: transparent; }
+}
+
+@keyframes flash-red {
+  0% { color: #EF4444; background: rgba(239, 68, 68, 0.2); }
+  100% { color: var(--accent-success); background: transparent; }
 }
 
 /* ==========================================
@@ -690,6 +711,33 @@
   display: flex;
   gap: 0.5rem;
   margin-bottom: 1rem;
+}
+
+.currency-select {
+  flex: 1;
+  padding: 0.5rem 1rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-default);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  appearance: none;
+  text-align: center;
+  transition: all var(--transition-fast);
+}
+
+.currency-select.active {
+  background: var(--oooweee-purple);
+  color: var(--text-inverse);
+  border-color: var(--oooweee-purple);
+}
+
+.currency-select:focus {
+  outline: none;
+  border-color: var(--oooweee-purple);
 }
 
 .balance-row {

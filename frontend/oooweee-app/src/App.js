@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ethers } from 'ethers';
 import toast, { Toaster } from 'react-hot-toast';
 import './App.css';
@@ -74,7 +74,10 @@ function App() {
   const [showCompleted, setShowCompleted] = useState(false);
   const [isAppLoading, setIsAppLoading] = useState(true);
   const [ethPrice, setEthPrice] = useState(null);
-  const [displayCurrency, setDisplayCurrency] = useState('fiat');
+  const [showFiat, setShowFiat] = useState(true);
+  const [selectedCurrency, setSelectedCurrency] = useState(() => {
+    return localStorage.getItem('oooweee_currency') || 'EUR';
+  });
   const [web3Modal, setWeb3Modal] = useState(null);
   const [targetAmountInput, setTargetAmountInput] = useState('');
   const [initialDepositInput, setInitialDepositInput] = useState('');
@@ -83,7 +86,9 @@ function App() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [ethToBuy, setEthToBuy] = useState('0.01');
   const [estimatedOooweee, setEstimatedOooweee] = useState('0');
-  const [accountCurrency, setAccountCurrency] = useState('EUR');
+  const [accountCurrency, setAccountCurrency] = useState(() => {
+    return localStorage.getItem('oooweee_currency') || 'EUR';
+  });
   const [isConnecting, setIsConnecting] = useState(false);
   const [requiredOooweeeForPurchase, setRequiredOooweeeForPurchase] = useState(null);
   
@@ -120,6 +125,8 @@ function App() {
   
   // Price tracking
   const [oooweeePrice, setOooweeePrice] = useState(0.00001);
+  const [priceFlash, setPriceFlash] = useState(null); // 'up' | 'down' | null
+  const prevOooweeePriceRef = useRef(0.00001);
   
   // Admin Dashboard State
   const [adminStats, setAdminStats] = useState({
@@ -336,7 +343,43 @@ function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [web3Modal]);
-  
+
+  // Persist selected currency
+  useEffect(() => {
+    localStorage.setItem('oooweee_currency', selectedCurrency);
+  }, [selectedCurrency]);
+
+  // Refresh ETH/fiat prices every 60s (CoinGecko free tier safe)
+  useEffect(() => {
+    const refreshEthPrice = async () => {
+      try {
+        const response = await fetch(
+          'https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd,eur,gbp'
+        );
+        const data = await response.json();
+        if (data.ethereum) {
+          setEthPrice(data.ethereum);
+        }
+      } catch (error) {
+        console.error('ETH price refresh failed:', error);
+      }
+    };
+
+    const interval = setInterval(refreshEthPrice, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Price flash animation on OOOWEEE price change
+  useEffect(() => {
+    if (prevOooweeePriceRef.current !== oooweeePrice && oooweeePrice > 0 && prevOooweeePriceRef.current > 0) {
+      setPriceFlash(oooweeePrice > prevOooweeePriceRef.current ? 'up' : 'down');
+      prevOooweeePriceRef.current = oooweeePrice;
+      const timeout = setTimeout(() => setPriceFlash(null), 1500);
+      return () => clearTimeout(timeout);
+    }
+    prevOooweeePriceRef.current = oooweeePrice;
+  }, [oooweeePrice]);
+
   // Format currency
   const formatCurrency = (amount, currency = 'eur') => {
     const curr = Object.entries(CURRENCIES).find(([key, _]) => key.toLowerCase() === currency.toLowerCase()) || ['EUR', CURRENCIES.EUR];
@@ -1645,7 +1688,7 @@ function App() {
             <h4>Total Value Locked</h4>
             <p className="metric-value">{parseFloat(adminStats.totalValueLocked).toLocaleString()}</p>
             <span className="metric-label">OOOWEEE</span>
-            <span className="metric-usd">≈ {getOooweeeInFiat(adminStats.totalValueLocked, 'eur')}</span>
+            <span className="metric-usd">≈ {getOooweeeInFiat(adminStats.totalValueLocked, selectedCurrency.toLowerCase())}</span>
           </div>
           <div className="admin-card metric">
             <h4>Total Accounts</h4>
@@ -1878,7 +1921,7 @@ function App() {
                     <p>You will receive approximately:</p>
                     <h3>{parseFloat(estimatedOooweee).toLocaleString()} $OOOWEEE</h3>
                     {ethPrice && (
-                      <p className="fiat-value">≈ {getOooweeeInFiat(estimatedOooweee, 'eur')}</p>
+                      <p className="fiat-value">≈ {getOooweeeInFiat(estimatedOooweee, selectedCurrency.toLowerCase())}</p>
                     )}
                   </div>
                   
@@ -2185,15 +2228,25 @@ function App() {
               <div className="price-ticker">
                 <div className="price-item">
                   <span className="price-label">OOOWEEE/ETH</span>
-                  <span className="price-value">{oooweeePrice > 0 ? oooweeePrice.toFixed(10) : '...'}</span>
+                  <span className={`price-value ${priceFlash ? `flash-${priceFlash}` : ''}`}>
+                    {oooweeePrice > 0 ? oooweeePrice.toFixed(10) : '...'}
+                  </span>
                 </div>
                 <div className="price-item">
-                  <span className="price-label">OOOWEEE/EUR</span>
-                  <span className="price-value">€{ethPrice?.eur ? (oooweeePrice * ethPrice.eur).toFixed(6) : '...'}</span>
+                  <span className="price-label">OOOWEEE/{selectedCurrency}</span>
+                  <span className={`price-value ${priceFlash ? `flash-${priceFlash}` : ''}`}>
+                    {ethPrice?.[selectedCurrency.toLowerCase()]
+                      ? formatCurrency(oooweeePrice * ethPrice[selectedCurrency.toLowerCase()], selectedCurrency)
+                      : '...'}
+                  </span>
                 </div>
                 <div className="price-item">
-                  <span className="price-label">ETH/EUR</span>
-                  <span className="price-value">€{ethPrice?.eur ? ethPrice.eur.toLocaleString() : '...'}</span>
+                  <span className="price-label">ETH/{selectedCurrency}</span>
+                  <span className="price-value">
+                    {ethPrice?.[selectedCurrency.toLowerCase()]
+                      ? formatCurrency(ethPrice[selectedCurrency.toLowerCase()], selectedCurrency)
+                      : '...'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -2237,18 +2290,25 @@ function App() {
                     </div>
                     
                     <div className="currency-toggle">
-                      <button 
-                        className={`toggle-btn ${displayCurrency === 'crypto' ? 'active' : ''}`}
-                        onClick={() => setDisplayCurrency('crypto')}
+                      <button
+                        className={`toggle-btn ${!showFiat ? 'active' : ''}`}
+                        onClick={() => setShowFiat(false)}
                       >
                         Crypto
                       </button>
-                      <button 
-                        className={`toggle-btn ${displayCurrency === 'fiat' ? 'active' : ''}`}
-                        onClick={() => setDisplayCurrency('fiat')}
+                      <select
+                        className={`currency-select ${showFiat ? 'active' : ''}`}
+                        value={selectedCurrency}
+                        onChange={(e) => {
+                          setSelectedCurrency(e.target.value);
+                          setShowFiat(true);
+                        }}
+                        onClick={() => setShowFiat(true)}
                       >
-                        EUR
-                      </button>
+                        {Object.entries(CURRENCIES).map(([code, info]) => (
+                          <option key={code} value={code}>{info.symbol} {code}</option>
+                        ))}
+                      </select>
                     </div>
                     
                     <div className="balance-row">
@@ -2259,13 +2319,13 @@ function App() {
                     <div className="balance-row highlight">
                       <span>$OOOWEEE:</span>
                       <span>
-                        {displayCurrency === 'crypto' 
+                        {!showFiat
                           ? `${parseFloat(balance).toLocaleString()} $OOOWEEE`
-                          : getOooweeeInFiat(balance, 'eur')
+                          : getOooweeeInFiat(balance, selectedCurrency.toLowerCase())
                         }
                       </span>
                     </div>
-                    {displayCurrency === 'fiat' && (
+                    {showFiat && (
                       <p className="conversion-note">≈ {parseFloat(balance).toLocaleString()} $OOOWEEE</p>
                     )}
                     
@@ -2346,20 +2406,20 @@ function App() {
                                     <div className="detail-row">
                                       <span>Balance:</span>
                                       <span className="primary-amount">
-                                        {displayCurrency === 'crypto'
+                                        {!showFiat
                                           ? `${parseFloat(acc.balance).toLocaleString()} $OOOWEEE`
-                                          : getOooweeeInFiat(acc.balance, 'eur')
+                                          : getOooweeeInFiat(acc.balance, selectedCurrency.toLowerCase())
                                         }
                                       </span>
                                     </div>
-                                    {displayCurrency === 'fiat' && (
+                                    {showFiat && (
                                       <span className="secondary-amount">
                                         ≈ {parseFloat(acc.balance).toLocaleString()} $OOOWEEE
                                       </span>
                                     )}
                                   </div>
                                 )}
-                                
+
                                 {acc.type === 'Time' && (
                                   <div className="detail-row">
                                     <span>Days Remaining:</span>
@@ -2371,9 +2431,9 @@ function App() {
                                   <div className="detail-row">
                                     <span>Target:</span>
                                     <span className="value">
-                                      {displayCurrency === 'crypto'
+                                      {!showFiat
                                         ? `${parseFloat(acc.target).toLocaleString()} $OOOWEEE`
-                                        : getOooweeeInFiat(acc.target, 'eur')
+                                        : getOooweeeInFiat(acc.target, selectedCurrency.toLowerCase())
                                       }
                                     </span>
                                   </div>
@@ -2385,9 +2445,9 @@ function App() {
                                       <div className="detail-row">
                                         <span>Target:</span>
                                         <span className="value">
-                                          {displayCurrency === 'crypto'
+                                          {!showFiat
                                             ? `${parseFloat(acc.target).toLocaleString()} $OOOWEEE`
-                                            : getOooweeeInFiat(acc.target, 'eur')
+                                            : getOooweeeInFiat(acc.target, selectedCurrency.toLowerCase())
                                           }
                                         </span>
                                       </div>
@@ -2522,9 +2582,9 @@ function App() {
                                     <div className="detail-row">
                                       <span>Final Balance:</span>
                                       <span className="value">
-                                        {displayCurrency === 'crypto'
+                                        {!showFiat
                                           ? `${parseFloat(acc.balance).toLocaleString()} $OOOWEEE`
-                                          : getOooweeeInFiat(acc.balance, 'eur')
+                                          : getOooweeeInFiat(acc.balance, selectedCurrency.toLowerCase())
                                         }
                                       </span>
                                     </div>
