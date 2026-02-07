@@ -1625,7 +1625,7 @@ function App() {
         error: '❌ Failed to approve'
       });
       
-      const createTx = await savingsContract.createGrowthAccountFiat(
+      const createTx = await savingsContract.createGrowthAccount(
         targetInSmallestUnit,
         CURRENCIES[currency].code,
         goalName,
@@ -1680,7 +1680,7 @@ function App() {
         error: '❌ Failed to approve'
       });
       
-      const createTx = await savingsContract.createBalanceAccountFiat(
+      const createTx = await savingsContract.createBalanceAccount(
         targetInSmallestUnit,
         CURRENCIES[currency].code,
         recipientAddress,
