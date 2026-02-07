@@ -1,3 +1,7 @@
+// Module-level cache — persists across warm invocations on Vercel
+let cachedPrices = null;
+let cachedAt = 0;
+
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -14,11 +18,28 @@ export default async function handler(req, res) {
     }
 
     const data = await response.json();
-    res.status(200).json(data);
-  } catch (error) {
-    // Return fallback prices if CoinGecko is down
+
+    // Cache the successful response
+    cachedPrices = data.ethereum;
+    cachedAt = Date.now();
+
     res.status(200).json({
-      ethereum: { usd: 2000, eur: 1850, gbp: 1600 }
+      ethereum: data.ethereum,
+      _meta: { source: 'live', cachedAt }
+    });
+  } catch (error) {
+    // Return last cached price if available, otherwise hardcoded fallback
+    const fallback = cachedPrices || { usd: 2000, eur: 1850, gbp: 1600 };
+    const source = cachedPrices ? 'cached' : 'fallback';
+
+    res.status(200).json({
+      ethereum: fallback,
+      _meta: {
+        source,
+        cachedAt: cachedAt || null,
+        error: error.message,
+        downSince: Date.now()
+      }
     });
   }
 }

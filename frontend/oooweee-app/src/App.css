@@ -2670,6 +2670,13 @@ textarea:focus {
 .stability-metric.success .value { color: var(--accent-success); }
 
 /* Admin Grid Layouts */
+.admin-grid-5 {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
 .admin-grid-4 {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -2748,6 +2755,28 @@ textarea:focus {
 .admin-card.danger {
   background: #FEF2F2;
   border-color: #FECACA;
+}
+
+.admin-card.admin-card-warning {
+  background: #FFFBEB;
+  border-color: #FDE68A;
+  animation: pulse-warning 2s ease-in-out infinite;
+}
+
+@keyframes pulse-warning {
+  0%, 100% { border-color: #FDE68A; }
+  50% { border-color: #F59E0B; }
+}
+
+.admin-card-detail {
+  display: block;
+  font-size: 0.65rem;
+  color: var(--text-tertiary);
+  margin-top: 0.25rem;
+}
+
+.admin-card-detail.error {
+  color: #EF4444;
 }
 
 /* Admin Section Panels */
@@ -3034,6 +3063,10 @@ textarea:focus {
    RESPONSIVE: TABLET
    ========================================== */
 @media (max-width: 1024px) {
+  .admin-grid-5 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
   .admin-grid-4 {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -3134,6 +3167,10 @@ textarea:focus {
   }
 
   /* Admin Responsive */
+  .admin-grid-5 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
   .admin-grid-4 {
     grid-template-columns: repeat(2, 1fr);
   }
