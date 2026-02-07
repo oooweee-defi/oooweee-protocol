@@ -4,8 +4,59 @@ export const CONTRACT_ADDRESSES = {
   "OOOWEEEValidatorFund": "0x1706240479829e9eACDA35336527225DbF817e0a",
   "OOOWEEEStability": "0x706E4c306c29Acc6a6C7bE5ec8b9957cf07BE33D",
   "SavingsPriceOracle": "0x6A1f5eD53Ff87E7D955072e440E989cb588fa323",
-  "UniswapPair": "0x7f1bB15e09cEdFCA496B280Ff78815243821a598"
+  "UniswapPair": "0x7f1bB15e09cEdFCA496B280Ff78815243821a598",
+  "DonorRegistry": "0x69FE9A11274dF1531763fB4308534A5664b8f279"
 };
+
+// ============================================
+// DonorRegistry ABI (lightweight)
+// ============================================
+export const DonorRegistryABI = [
+  {
+    "inputs": [
+      { "internalType": "string", "name": "name", "type": "string" },
+      { "internalType": "string", "name": "message", "type": "string" },
+      { "internalType": "string", "name": "location", "type": "string" }
+    ],
+    "name": "registerDonation",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "donor", "type": "address" }],
+    "name": "getDonorInfo",
+    "outputs": [
+      { "internalType": "string", "name": "name", "type": "string" },
+      { "internalType": "string", "name": "message", "type": "string" },
+      { "internalType": "string", "name": "location", "type": "string" },
+      { "internalType": "uint256", "name": "timestamp", "type": "uint256" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getDonorCount",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "index", "type": "uint256" }],
+    "name": "getDonorAt",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalRegistrations",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  }
+];
 
 // ============================================
 // OOOWEEEToken ABI

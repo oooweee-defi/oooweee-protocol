@@ -3,7 +3,7 @@ import { ethers } from 'ethers';
 import toast, { Toaster } from 'react-hot-toast';
 import './App.css';
 import oooweeLogo from './assets/oooweee-logo.png';
-import { OOOWEEETokenABI, OOOWEEESavingsABI, OOOWEEEValidatorFundABI, OOOWEEEStabilityABI, CONTRACT_ADDRESSES } from './contracts/abis';
+import { OOOWEEETokenABI, OOOWEEESavingsABI, OOOWEEEValidatorFundABI, OOOWEEEStabilityABI, DonorRegistryABI, CONTRACT_ADDRESSES } from './contracts/abis';
 import Web3Modal from "web3modal";
 import WalletConnectProvider from "@walletconnect/web3-provider";
 
@@ -63,6 +63,7 @@ function App() {
   const [tokenContract, setTokenContract] = useState(null);
   const [savingsContract, setSavingsContract] = useState(null);
   const [validatorFundContract, setValidatorFundContract] = useState(null);
+  const [donorRegistryContract, setDonorRegistryContract] = useState(null);
   const [stabilityContract, setStabilityContract] = useState(null);
   const [routerContract, setRouterContract] = useState(null);
   const [balance, setBalance] = useState('0');
@@ -112,7 +113,9 @@ function App() {
     totalDonations: '0',
     donors: 0,
     fromStability: '0',
-    fromRewards: '0'
+    fromRewards: '0',
+    topDonor: null,
+    topDonorAmount: '0'
   });
   
   // Price tracking
@@ -409,6 +412,65 @@ function App() {
       // [6] validatorsProvisioned, [7] validatorsActive,
       // [8] totalDistributions, [9] donorCount
 
+      // Build on-chain leaderboard by iterating the donors array
+      let topDonor = null;
+      let topDonorAmount = ethers.BigNumber.from(0);
+      const donorCount = stats[9].toNumber();
+      const onChainDonors = [];
+
+      if (donorCount > 0 && donorCount <= 100) {
+        for (let i = 0; i < donorCount; i++) {
+          try {
+            const donorAddr = await validatorFundContract.donors(i);
+            const donorAmt = await validatorFundContract.donations(donorAddr);
+            onChainDonors.push({ address: donorAddr, amount: donorAmt });
+            if (donorAmt.gt(topDonorAmount)) {
+              topDonor = donorAddr;
+              topDonorAmount = donorAmt;
+            }
+          } catch (e) {
+            break;
+          }
+        }
+      }
+
+      // Build leaderboard — merge on-chain amounts with DonorRegistry names
+      // Create a read-only DonorRegistry instance for fetching metadata
+      const registryRead = new ethers.Contract(
+        CONTRACT_ADDRESSES.DonorRegistry,
+        DonorRegistryABI,
+        validatorFundContract.provider
+      );
+
+      const sortedDonors = onChainDonors
+        .sort((a, b) => (b.amount.gt(a.amount) ? 1 : b.amount.lt(a.amount) ? -1 : 0))
+        .slice(0, 10);
+
+      const leaderboard = await Promise.all(
+        sortedDonors.map(async (d) => {
+          let name = null, message = null, location = null;
+          try {
+            const info = await registryRead.getDonorInfo(d.address);
+            if (info.timestamp && info.timestamp.toNumber() > 0) {
+              name = info.name || null;
+              message = info.message || null;
+              location = info.location || null;
+            }
+          } catch (e) {
+            // DonorRegistry might not have this donor
+          }
+          return {
+            address: d.address,
+            shortAddress: `${d.address.slice(0, 6)}...${d.address.slice(-4)}`,
+            name,
+            message,
+            location,
+            amount: parseFloat(ethers.utils.formatEther(d.amount)).toFixed(4)
+          };
+        })
+      );
+      setDonorLeaderboard(leaderboard);
+
       setValidatorStats({
         validators: stats[7].toString(),
         nextValidatorIn: ethers.utils.formatEther(ethNeeded),
@@ -417,7 +479,9 @@ function App() {
         totalDonations: ethers.utils.formatEther(stats[2]),
         donors: stats[9].toString(),
         fromStability: ethers.utils.formatEther(stats[1]),
-        fromRewards: ethers.utils.formatEther(stats[3])
+        fromRewards: ethers.utils.formatEther(stats[3]),
+        topDonor: topDonor,
+        topDonorAmount: ethers.utils.formatEther(topDonorAmount)
       });
     } catch (error) {
       console.error('Error loading validator stats:', error);
@@ -605,13 +669,15 @@ function App() {
       const savings = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEESavings, OOOWEEESavingsABI, signer);
       const validatorFund = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEValidatorFund, OOOWEEEValidatorFundABI, signer);
       const stability = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEStability, OOOWEEEStabilityABI, signer);
+      const donorRegistry = new ethers.Contract(CONTRACT_ADDRESSES.DonorRegistry, DonorRegistryABI, signer);
       const router = new ethers.Contract(UNISWAP_ROUTER, UNISWAP_ROUTER_ABI, signer);
-      
+
       setAccount(address);
       setProvider(web3Provider);
       setTokenContract(token);
       setSavingsContract(savings);
       setValidatorFundContract(validatorFund);
+      setDonorRegistryContract(donorRegistry);
       setStabilityContract(stability);
       setRouterContract(router);
       
@@ -672,25 +738,28 @@ function App() {
         error: '❌ Donation failed'
       });
       
-      // Create donor entry for leaderboard
-      const donorEntry = {
-        amount: amount,
-        name: donorName.trim().slice(0, 50) || 'Anonymous',
-        location: donorLocation.trim().slice(0, 50) || '',
-        sender: `${account.slice(0, 6)}...${account.slice(-4)}`,
-        message: donorMessage.trim().slice(0, 180),
-        timestamp: Date.now()
-      };
-      
-      // Update leaderboard (top 3 biggest donations)
-      const updatedLeaderboard = [...donorLeaderboard, donorEntry]
-        .sort((a, b) => b.amount - a.amount)
-        .slice(0, 3);
-      setDonorLeaderboard(updatedLeaderboard);
-      localStorage.setItem('oooweee_donor_leaderboard', JSON.stringify(updatedLeaderboard));
-      
-      // If donation > 0.1 ETH and has a message, save shoutout
-      if (amount >= 0.1 && donorMessage.trim()) {
+      // Register donor metadata on-chain via DonorRegistry
+      if (donorRegistryContract) {
+        try {
+          const regTx = await donorRegistryContract.registerDonation(
+            donorName.trim().slice(0, 50) || 'Anonymous',
+            donorMessage.trim().slice(0, 180),
+            donorLocation.trim().slice(0, 50)
+          );
+          await toast.promise(regTx.wait(), {
+            loading: '📝 Saving your name & message on-chain...',
+            success: '✅ Donor info saved on-chain!',
+            error: '⚠️ Donation sent but name registration failed'
+          });
+        } catch (regError) {
+          console.error('Donor registration failed:', regError);
+          // Donation already went through — this is just metadata
+          toast.error('Donation sent! Name registration failed (metadata only)');
+        }
+      }
+
+      // Save shoutout locally for immediate display
+      if (donorMessage.trim()) {
         const newShoutout = {
           message: donorMessage.trim().slice(0, 180),
           amount: donateAmount,
@@ -736,6 +805,7 @@ function App() {
     setTokenContract(null);
     setSavingsContract(null);
     setValidatorFundContract(null);
+    setDonorRegistryContract(null);
     setStabilityContract(null);
     setRouterContract(null);
     setBalance('0');
@@ -1344,25 +1414,55 @@ function App() {
             </div>
           </div>
         </div>
-        
+
         <div className="validator-progress-section">
           <h3>Progress to Next Validator</h3>
           <div className="progress-bar">
-            <div 
+            <div
               className="progress-fill validator-progress"
               style={{ width: `${validatorStats.progress}%` }}
             />
           </div>
           <p className="progress-text">{parseFloat(validatorStats.pendingETH).toFixed(4)} / 32 ETH ({validatorStats.progress.toFixed(1)}%)</p>
         </div>
-        
-        <div className="donation-stats">
-          <p>Total Community Donations: {parseFloat(validatorStats.totalDonations).toFixed(4)} ETH</p>
-          <p>👥 Total Donors: {validatorStats.donors}</p>
+      </div>
+
+      {/* Community Donations */}
+      <div className="community-card donations-card">
+        <h2>Community Donations</h2>
+        <div className="validator-metrics">
+          <div className="metric-item">
+            <span className="metric-icon">💰</span>
+            <div className="metric-content">
+              <h4>Total Donated</h4>
+              <p className="metric-value">{parseFloat(validatorStats.totalDonations).toFixed(4)} ETH</p>
+            </div>
+          </div>
+          <div className="metric-item">
+            <span className="metric-icon">👥</span>
+            <div className="metric-content">
+              <h4>Total Donors</h4>
+              <p className="metric-value">{validatorStats.donors}</p>
+            </div>
+          </div>
+          <div className="metric-item">
+            <span className="metric-icon">🏆</span>
+            <div className="metric-content">
+              <h4>Top Donor</h4>
+              {validatorStats.topDonor ? (
+                <>
+                  <p className="metric-value">{parseFloat(validatorStats.topDonorAmount).toFixed(4)} ETH</p>
+                  <p className="metric-sub">{validatorStats.topDonor.slice(0, 6)}...{validatorStats.topDonor.slice(-4)}</p>
+                </>
+              ) : (
+                <p className="metric-value">—</p>
+              )}
+            </div>
+          </div>
         </div>
-        
+
         {account && (
-          <button className="donate-btn rainbow-btn" onClick={donateToValidators} disabled={loading}>
+          <button className="donate-btn" onClick={donateToValidators} disabled={loading}>
             💰 Donate to Validators
           </button>
         )}
@@ -1374,13 +1474,15 @@ function App() {
           <h2>Top Donors</h2>
           <div className="leaderboard-list">
             {donorLeaderboard.map((donor, index) => (
-              <div key={index} className={`leaderboard-entry ${index === 0 ? 'gold' : index === 1 ? 'silver' : 'bronze'}`}>
+              <div key={donor.address || index} className={`leaderboard-entry ${index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : ''}`}>
                 <span className="medal">
-                  {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
+                  {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}
                 </span>
                 <div className="donor-info">
-                  <span className="donor-name">{donor.name}</span>
-                  {donor.location && <span className="donor-location">{donor.location}</span>}
+                  <span className="donor-name">{donor.name || donor.shortAddress}</span>
+                  {donor.name && <span className="donor-address">{donor.shortAddress}</span>}
+                  {donor.message && <span className="donor-message">"{donor.message}"</span>}
+                  {donor.location && <span className="donor-location">📍 {donor.location}</span>}
                 </div>
                 <span className="donor-amount">{donor.amount} ETH</span>
               </div>
