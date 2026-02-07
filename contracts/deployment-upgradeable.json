@@ -30,5 +30,10 @@
     "tokenAmount": "10000000",
     "ethAmount": "0.5",
     "pair": "0xd0F4Ae7c575918B7Bccd67EB4F04D317C97B07C2"
+  },
+  "savingsV3Upgrade": {
+    "timestamp": "2026-02-07T17:39:25.653Z",
+    "implementationUpgraded": true,
+    "fixedRewardsInflationBug": true
   }
 }

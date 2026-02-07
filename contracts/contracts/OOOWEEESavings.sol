@@ -47,9 +47,9 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
         // Slot 2: 24 bytes used
         address recipient;                              // 20 bytes
         uint32 unlockTime;                              // 4 bytes
-        // Slot 3: 32 bytes (was uint64, now uint256 to prevent truncation)
-        uint256 lastRewardUpdate;
-        // Slot 4-7: 32 bytes each
+        // Slot 2 continued: packed with recipient + unlockTime (8 bytes remaining)
+        uint64 lastRewardUpdate;
+        // Slot 3-6: 32 bytes each
         uint256 balance;
         uint256 targetAmount;
         uint256 targetFiat;
@@ -245,7 +245,7 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
             completedAt: 0,
             recipient: address(0),
             unlockTime: uint32(unlockTime),
-            lastRewardUpdate: globalRewardPerToken,
+            lastRewardUpdate: uint64(globalRewardPerToken),
             balance: depositAfterFee,
             targetAmount: 0,
             targetFiat: 0,
@@ -292,7 +292,7 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
             completedAt: 0,
             recipient: address(0),
             unlockTime: 0,
-            lastRewardUpdate: globalRewardPerToken,
+            lastRewardUpdate: uint64(globalRewardPerToken),
             balance: depositAfterFee,
             targetAmount: 0,
             targetFiat: targetFiatAmount,
@@ -340,7 +340,7 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
             completedAt: 0,
             recipient: recipient,
             unlockTime: 0,
-            lastRewardUpdate: globalRewardPerToken,
+            lastRewardUpdate: uint64(globalRewardPerToken),
             balance: depositAfterFee,
             targetAmount: 0,
             targetFiat: targetFiatAmount,
@@ -358,7 +358,7 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
 
     // ============ Deposit ============
 
-    function deposit(uint256 accountId, uint256 amount) external nonReentrant {
+    function deposit(uint256 accountId, uint256 amount) external virtual nonReentrant {
         require(accountId < userAccounts[msg.sender].length, "Invalid account");
         require(amount > 0, "Amount must be > 0");
 
@@ -399,7 +399,7 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
      *      If conditions aren't met, transaction reverts. User loses gas only.
      *      Use canWithdraw() view function first to check without spending gas.
      */
-    function manualWithdraw(uint256 accountId) external nonReentrant {
+    function manualWithdraw(uint256 accountId) external virtual nonReentrant {
         require(accountId < userAccounts[msg.sender].length, "Invalid account");
 
         SavingsAccount storage account = userAccounts[msg.sender][accountId];
@@ -442,7 +442,7 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
      * @notice Check if an account can be withdrawn — free view call, no gas
      * @dev Frontend calls this to show a "Withdraw" button when ready
      */
-    function canWithdraw(address owner, uint256 accountId) external view returns (bool) {
+    function canWithdraw(address owner, uint256 accountId) external virtual view returns (bool) {
         if (accountId >= userAccounts[owner].length) return false;
 
         SavingsAccount memory account = userAccounts[owner][accountId];
@@ -479,7 +479,7 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
      * @notice Receive OOOWEEE reward tokens from ValidatorFund
      * @dev Called by the ValidatorFund after swapping ETH→OOOWEEE
      */
-    function receiveRewards(uint256 amount) external {
+    function receiveRewards(uint256 amount) external virtual {
         require(msg.sender == rewardsDistributor, "Only rewards distributor");
         require(amount > 0, "Amount must be > 0");
 
@@ -543,7 +543,7 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
 
     // ============ Internal Logic ============
 
-    function _updateAccountRewards(address owner, uint256 accountId) internal {
+    function _updateAccountRewards(address owner, uint256 accountId) internal virtual {
         SavingsAccount storage account = userAccounts[owner][accountId];
         if (!account.isActive) return;
 
@@ -565,7 +565,7 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
                 totalActiveBalance += earned;
                 emit RewardsClaimed(owner, accountId, earned);
             }
-            account.lastRewardUpdate = currentGlobalReward;
+            account.lastRewardUpdate = uint64(currentGlobalReward);
         }
     }
 
@@ -689,7 +689,7 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
     }
 
     function getAccountDetails(address owner, uint256 accountId)
-        external view returns (
+        external virtual view returns (
             AccountType accountType,
             bool isActive,
             uint256 balance,
@@ -717,7 +717,7 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
     }
 
     function getAccountFiatProgressView(address owner, uint256 accountId)
-        external view returns (
+        external virtual view returns (
             uint256 currentValue,
             uint256 targetValue,
             uint256 percentComplete,
@@ -748,7 +748,7 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
     }
 
     function _calculatePendingRewards(address owner, uint256 accountId)
-        internal view returns (uint256)
+        internal virtual view returns (uint256)
     {
         SavingsAccount memory account = userAccounts[owner][accountId];
         if (!account.isActive) return 0;
