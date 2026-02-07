@@ -91,20 +91,6 @@ function App() {
   const [sendRecipient, setSendRecipient] = useState('');
   const [sendAmount, setSendAmount] = useState('');
 
-  // Group savings state
-  const [showGroupModal, setShowGroupModal] = useState(false);
-  const [groupGoalName, setGroupGoalName] = useState('');
-  const [groupDestination, setGroupDestination] = useState('');
-  const [groupTargetFiat, setGroupTargetFiat] = useState('');
-  const [groupAccountType, setGroupAccountType] = useState('time');
-  const [groupUnlockTime, setGroupUnlockTime] = useState('');
-  const [groupInitialDeposit, setGroupInitialDeposit] = useState('');
-  const [groupCurrency, setGroupCurrency] = useState('EUR');
-  const [userGroups, setUserGroups] = useState([]);
-  const [groupInviteAddress, setGroupInviteAddress] = useState('');
-  const [groupDepositAmount, setGroupDepositAmount] = useState('');
-  const [pendingInvitations, setPendingInvitations] = useState([]);
-
   // Donate modal state
   const [showDonateModal, setShowDonateModal] = useState(false);
   const [donateAmount, setDonateAmount] = useState('0.05');
