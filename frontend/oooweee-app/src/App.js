@@ -1947,7 +1947,7 @@ function App() {
 
               {(donorName.trim() || donorMessage.trim() || donorLocation.trim()) && (
                 <div className="info-notice">
-                  <p>ℹ️ 2 transactions: (1) donation (2) save name on-chain. A small gas fee for the name save is deducted from your donation — you won't pay anything extra.</p>
+                  <p>ℹ️ Donation includes gas fees for sponsor registration.</p>
                 </div>
               )}
 
