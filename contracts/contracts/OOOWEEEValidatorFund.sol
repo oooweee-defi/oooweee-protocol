@@ -27,10 +27,12 @@ interface IOOOWEEESavings {
  * - Validator withdrawal address is set to THIS contract
  *
  * When validator rewards arrive (ETH sent to this contract from consensus layer):
+ * - They arrive as plain ETH transfers (no function call)
+ * - receive() classifies them as validator rewards (pendingRewards)
  * - Owner calls distributeRewards() to split:
  *   33% → operations wallet (ETH)
  *   33% → stays in fund (accumulates toward more validators)
- *   33% → swapped to OOOWEEE tokens → sent to Savings contract for savers
+ *   34% → swapped to OOOWEEE tokens → sent to Savings contract for savers
  *
  * All flows are visible on Etherscan. No bridging. No cross-chain messaging.
  */
@@ -81,6 +83,10 @@ contract OOOWEEEValidatorFund is Initializable, OwnableUpgradeable, ReentrancyGu
 
     uint256 public constant SLIPPAGE_TOLERANCE = 300; // 3%
 
+    // ============ Failed Swap Tracking ============
+
+    uint256 public failedSwapETH;            // ETH from failed swaps awaiting retry
+
     // ============ Donation Tracking ============
 
     uint256 public totalDonations;
@@ -105,6 +111,9 @@ contract OOOWEEEValidatorFund is Initializable, OwnableUpgradeable, ReentrancyGu
     event OperationsWalletUpdated(address indexed newWallet);
     event StabilityContractUpdated(address indexed newContract);
     event EmergencyWithdrawal(address indexed to, uint256 amount);
+    event SwapFailed(uint256 ethAmount, uint256 timestamp);
+    event SwapRetried(uint256 ethAmount, uint256 tokensReceived, uint256 timestamp);
+    event RewardsReclassified(uint256 amount, string direction);
 
     // ============ Errors ============
 
@@ -112,7 +121,7 @@ contract OOOWEEEValidatorFund is Initializable, OwnableUpgradeable, ReentrancyGu
     error InvalidAddress();
     error TransferFailed();
     error NoRewardsToDistribute();
-    error SwapFailed();
+    error SwapFailedError();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -137,29 +146,31 @@ contract OOOWEEEValidatorFund is Initializable, OwnableUpgradeable, ReentrancyGu
     // ============ Receive ETH ============
 
     /**
-     * @notice Receive ETH from stability mechanism, validator rewards, or anyone
-     * @dev All ETH arrives here. The source is tracked by which function was called.
-     *      ETH from stability goes to the general fund for validator provisioning.
-     *      ETH from validator rewards goes to pendingRewards for distribution.
-     *      Direct sends (fallback) are treated as stability/general income.
+     * @notice Receive ETH — classifies by sender
+     * @dev Stability contract is the only known sender that uses plain ETH transfers.
+     *      Ethereum consensus-layer validator rewards also arrive as plain ETH transfers
+     *      (no function call). Since donations use donate() explicitly, unknown senders
+     *      are treated as validator rewards and added to pendingRewards for distribution.
      */
     receive() external payable {
         totalETHReceived += msg.value;
 
         if (msg.sender == stabilityContract) {
+            // ETH from stability interventions — accumulates toward validator provisioning
             totalETHFromStability += msg.value;
             emit ETHReceivedFromStability(msg.value);
         } else {
-            // Unknown source — treat as general income
-            emit ETHReceivedFromStability(msg.value);
+            // Unknown sender — likely validator consensus-layer rewards.
+            // Treat as validator rewards so they enter the 33/33/34 distribution.
+            totalETHFromRewards += msg.value;
+            pendingRewards += msg.value;
+            emit ETHReceivedFromRewards(msg.value);
         }
     }
 
     /**
-     * @notice Explicitly receive validator rewards (call this from reward distribution)
-     * @dev Marks incoming ETH as validator rewards, which go to pendingRewards
-     *      for 33/33/34 splitting. Different from stability ETH which accumulates
-     *      toward the next 32 ETH validator stake.
+     * @notice Explicitly receive validator rewards (alternative to plain ETH transfer)
+     * @dev Can be used by automated systems that can call a specific function.
      */
     function receiveValidatorRewards() external payable {
         require(msg.value > 0, "No ETH sent");
@@ -197,11 +208,12 @@ contract OOOWEEEValidatorFund is Initializable, OwnableUpgradeable, ReentrancyGu
      *      The validator's withdrawal address MUST be set to this contract
      *      so rewards flow back here for distribution.
      *
-     *      Only callable when the fund has 32+ ETH available (excluding pendingRewards).
+     *      Only callable when the fund has 32+ ETH available (excluding pendingRewards
+     *      and failedSwapETH).
      */
     function provisionValidator() external onlyOwner nonReentrant {
-        uint256 availableForValidators = address(this).balance - pendingRewards;
-        if (availableForValidators < VALIDATOR_STAKE) revert InsufficientETH();
+        uint256 available = availableForValidators();
+        if (available < VALIDATOR_STAKE) revert InsufficientETH();
         if (operationsWallet == address(0)) revert InvalidAddress();
 
         validatorsProvisioned++;
@@ -274,6 +286,10 @@ contract OOOWEEEValidatorFund is Initializable, OwnableUpgradeable, ReentrancyGu
                     // Tokens stay in this contract for manual recovery
                     oooweeeToken.approve(address(savingsContract), 0);
                 }
+            } else {
+                // Swap failed — track the ETH for retry
+                failedSwapETH += saversAmount;
+                emit SwapFailed(saversAmount, block.timestamp);
             }
         }
 
@@ -288,6 +304,37 @@ contract OOOWEEEValidatorFund is Initializable, OwnableUpgradeable, ReentrancyGu
             oooweeeTokensBought,
             block.timestamp
         );
+    }
+
+    /**
+     * @notice Retry failed swaps for the savers' share
+     * @dev Call when market conditions improve (liquidity restored, etc.)
+     */
+    function retryFailedSwaps() external onlyOwner nonReentrant {
+        require(failedSwapETH > 0, "No failed swaps to retry");
+        require(address(savingsContract) != address(0), "Savings contract not set");
+
+        uint256 ethToSwap = failedSwapETH;
+        failedSwapETH = 0;
+
+        uint256 oooweeeTokensBought = _swapETHForOOOWEEE(ethToSwap);
+
+        if (oooweeeTokensBought > 0) {
+            oooweeeToken.approve(address(savingsContract), oooweeeTokensBought);
+
+            try savingsContract.receiveRewards(oooweeeTokensBought) {
+                totalETHToSavers += ethToSwap;
+                totalOOOWEEEToSavers += oooweeeTokensBought;
+                emit SwapRetried(ethToSwap, oooweeeTokensBought, block.timestamp);
+            } catch {
+                oooweeeToken.approve(address(savingsContract), 0);
+                failedSwapETH += ethToSwap; // Re-track for next retry
+            }
+        } else {
+            // Swap failed again — re-track
+            failedSwapETH += ethToSwap;
+            emit SwapFailed(ethToSwap, block.timestamp);
+        }
     }
 
     /**
@@ -342,6 +389,20 @@ contract OOOWEEEValidatorFund is Initializable, OwnableUpgradeable, ReentrancyGu
     }
 
     /**
+     * @notice Reclassify ETH between stability income and pending rewards
+     * @dev Use if ETH was misclassified (e.g., a manual ETH send that should
+     *      count as stability income rather than validator rewards)
+     * @param amount Amount to reclassify from pendingRewards to general fund
+     */
+    function reclassifyRewardsAsStability(uint256 amount) external onlyOwner {
+        require(amount <= pendingRewards, "Amount exceeds pending rewards");
+        pendingRewards -= amount;
+        totalETHFromRewards -= amount;
+        totalETHFromStability += amount;
+        emit RewardsReclassified(amount, "rewards_to_stability");
+    }
+
+    /**
      * @notice Emergency withdrawal — last resort only
      */
     function emergencyWithdraw() external onlyOwner {
@@ -349,6 +410,7 @@ contract OOOWEEEValidatorFund is Initializable, OwnableUpgradeable, ReentrancyGu
         (bool success,) = owner().call{value: balance}("");
         if (!success) revert TransferFailed();
         pendingRewards = 0;
+        failedSwapETH = 0;
         emit EmergencyWithdrawal(owner(), balance);
     }
 
@@ -362,12 +424,13 @@ contract OOOWEEEValidatorFund is Initializable, OwnableUpgradeable, ReentrancyGu
     // ============ View Functions ============
 
     /**
-     * @notice ETH available for validator provisioning (excludes pending rewards)
+     * @notice ETH available for validator provisioning (excludes pending rewards and failed swaps)
      */
     function availableForValidators() public view returns (uint256) {
         uint256 balance = address(this).balance;
-        if (balance <= pendingRewards) return 0;
-        return balance - pendingRewards;
+        uint256 reserved = pendingRewards + failedSwapETH;
+        if (balance <= reserved) return 0;
+        return balance - reserved;
     }
 
     /**

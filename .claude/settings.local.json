@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(PRIVATE_KEY=0x0000000000000000000000000000000000000000000000000000000000000001 npx hardhat compile:*)",
+      "Bash(npx react-app-rewired build:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nUUPS upgradeable contracts + SavingsV2 + frontend send\n\n- Convert all 6 contracts to UUPS upgradeable pattern \\(OZ v4\\)\n- Add DonorRegistry.sol as new UUPS upgradeable contract\n- Create OOOWEEESavingsV2 with auto-unlock \\(Chainlink Automation\\)\n  and group savings \\(create/invite/deposit/process\\)\n- Add deploy-upgradeable.js \\(deployProxy for all 6 contracts\\)\n- Add upgrade-savings-v2.js \\(upgradeProxy V1→V2\\)\n- Frontend: Send modal for wallet-to-wallet ERC-20 transfers\n- Enable viaIR + optimizer runs=50 to fit V2 under 24KB limit\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push:*)",
+      "Bash(gh pr create:*)",
+      "Bash(set CI=true)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nFix Vercel build: remove unused group savings state variables\n\nESLint no-unused-vars errors caused CI build failure on Vercel.\nRemoved 12 group savings state declarations that were scaffolded\nbut not yet used in JSX.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit:*)",
+      "Bash(npx hardhat run:*)",
+      "Bash(npx hardhat verify:*)",
+      "Bash(npx hardhat:*)",
+      "Bash(node:*)",
+      "Bash(npm view:*)",
+      "Bash(git pull:*)",
+      "Bash(CI=true npx react-app-rewired build:*)",
+      "WebFetch(domain:6pak8sbcz-oooweees-projects.vercel.app)",
+      "Bash(gh api:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(git fetch:*)",
+      "Bash(git merge:*)"
+    ]
+  }
+}
