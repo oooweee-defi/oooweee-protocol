@@ -1,0 +1,33 @@
+name: OOOWEEE Protocol Monitor
+
+on:
+  schedule:
+    # Run every 5 minutes
+    - cron: '*/5 * * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        working-directory: contracts
+        run: npm ci
+
+      - name: Run monitor check
+        working-directory: contracts
+        env:
+          SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+          ALERT_EMAIL_FROM: ${{ secrets.ALERT_EMAIL_FROM }}
+          ALERT_EMAIL_PASS: ${{ secrets.ALERT_EMAIL_PASS }}
+          ALERT_THRESHOLD: '8'
+        run: node scripts/monitor.js --once
+        # Exit code 0 = all clear, 1 = alerts sent, 2 = error
+        continue-on-error: true
