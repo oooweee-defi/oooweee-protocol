@@ -252,9 +252,10 @@ contract OOOWEEEStability is Initializable, OwnableUpgradeable, ReentrancyGuardU
         _updateMarketConditions(priceIncrease);
         emit SystemCheck(block.number, currentPrice, priceIncrease, intervened);
 
-        // Refund excess ETH
+        // Refund excess ETH — AUDIT FIX L-6 NEW: use call instead of transfer (2300 gas limit)
         if (msg.value > 0.01 ether) {
-            payable(msg.sender).transfer(msg.value - 0.01 ether);
+            (bool refundSuccess,) = payable(msg.sender).call{value: msg.value - 0.01 ether}("");
+            require(refundSuccess, "Refund failed");
         }
     }
 
