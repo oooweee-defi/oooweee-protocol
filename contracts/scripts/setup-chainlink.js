@@ -126,6 +126,24 @@ async function main() {
     console.log("  ⚠️  setAutomationRegistry:", e.reason || e.message);
   }
 
+  // AUDIT FIX L-8 R2: Set Chainlink registry on Stability too
+  console.log("\n--- Step 4: Set Chainlink Registry on Stability ---");
+  try {
+    const STABILITY = deployment.contracts.OOOWEEEStability;
+    const stability = await ethers.getContractAt("OOOWEEEStability", STABILITY, deployer);
+    const currentStabReg = await stability.chainlinkRegistry();
+    if (currentStabReg === ethers.constants.AddressZero) {
+      console.log("Setting chainlink registry on Stability...");
+      const setStabRegTx = await stability.setChainlinkRegistry(AUTOMATION_REGISTRY, { gasLimit: 100000 });
+      await setStabRegTx.wait();
+      console.log("  ✓ Stability chainlink registry set");
+    } else {
+      console.log(`  Registry already set: ${currentStabReg}`);
+    }
+  } catch (e) {
+    console.log("  ⚠️  setChainlinkRegistry (Stability):", e.reason || e.message);
+  }
+
   // Update deployment file
   deployment.chainlinkAutomation = {
     timestamp: new Date().toISOString(),

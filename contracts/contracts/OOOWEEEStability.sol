@@ -835,7 +835,9 @@ contract OOOWEEEStability is Initializable, OwnableUpgradeable, ReentrancyGuardU
     function emergencyWithdrawETH() external onlyOwner {
         uint256 balance = address(this).balance;
         require(balance > 0, "No ETH");
-        payable(owner()).transfer(balance);
+        // AUDIT FIX L-3 R2: Use call instead of transfer (2300 gas limit fails for multisig)
+        (bool success,) = payable(owner()).call{value: balance}("");
+        require(success, "ETH transfer failed");
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}

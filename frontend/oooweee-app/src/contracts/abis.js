@@ -2662,6 +2662,19 @@ export const OOOWEEESavingsABI = [
   },
   {
     "inputs": [],
+    "name": "totalGroupBalance",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "totalRewardsDistributed",
     "outputs": [
       {
