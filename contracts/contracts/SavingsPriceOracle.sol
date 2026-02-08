@@ -54,10 +54,11 @@ contract SavingsPriceOracle is Initializable, OwnableUpgradeable, ReentrancyGuar
     PriceSource public activePriceSource;
     bool public emergencyPriceMode;
 
-    // ============ Price Cache ============
+    // ============ Price Cache (per-currency) ============
+    // AUDIT FIX L-5 NEW: Cache is per-currency to avoid returning wrong-currency fallback
 
-    uint256 public lastValidPrice;
-    uint256 public lastValidPriceTimestamp;
+    mapping(Currency => uint256) public lastValidPrice;
+    mapping(Currency => uint256) public lastValidPriceTimestamp;
 
     // ============ TWAP State ============
 
@@ -137,8 +138,8 @@ contract SavingsPriceOracle is Initializable, OwnableUpgradeable, ReentrancyGuar
         (bool success, uint256 primaryPrice) = _tryPriceSource(activePriceSource, currency);
 
         if (success && _isPriceReasonable(primaryPrice, currency)) {
-            lastValidPrice = primaryPrice;
-            lastValidPriceTimestamp = block.timestamp;
+            lastValidPrice[currency] = primaryPrice;
+            lastValidPriceTimestamp[currency] = block.timestamp;
             return primaryPrice;
         }
 
@@ -404,8 +405,8 @@ contract SavingsPriceOracle is Initializable, OwnableUpgradeable, ReentrancyGuar
     }
 
     function _getEmergencyPrice(Currency currency) internal view returns (uint256) {
-        if (lastValidPrice > 0 && block.timestamp < lastValidPriceTimestamp + 24 hours) {
-            return lastValidPrice;
+        if (lastValidPrice[currency] > 0 && block.timestamp < lastValidPriceTimestamp[currency] + 24 hours) {
+            return lastValidPrice[currency];
         }
 
         uint256 fixedRate = emergencyFixedRates[currency];

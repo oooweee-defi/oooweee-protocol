@@ -320,7 +320,7 @@ contract OOOWEEESavings is
         string memory goalName,
         uint256 initialDeposit,
         SavingsPriceOracle.Currency displayCurrency
-    ) external returns (uint256) {
+    ) external nonReentrant returns (uint256) {
         require(unlockTime > block.timestamp, "E7");
         require(unlockTime <= block.timestamp + MAX_LOCK_DURATION, "E8");
         require(initialDeposit > 0, "E4");
@@ -376,7 +376,7 @@ contract OOOWEEESavings is
         SavingsPriceOracle.Currency targetCurrency,
         string memory goalName,
         uint256 initialDeposit
-    ) external returns (uint256) {
+    ) external nonReentrant returns (uint256) {
         require(targetFiatAmount > 0, "E5");
         require(initialDeposit > 0, "E4");
 
@@ -435,7 +435,7 @@ contract OOOWEEESavings is
         address recipient,
         string memory goalName,
         uint256 initialDeposit
-    ) external returns (uint256) {
+    ) external nonReentrant returns (uint256) {
         require(targetFiatAmount > 0, "E5");
         require(recipient != address(0), "E1");
         require(recipient != msg.sender, "E11");
@@ -576,7 +576,7 @@ contract OOOWEEESavings is
      * @notice Receive OOOWEEE reward tokens from ValidatorFund
      * @dev Uses totalDepositedBalance as denominator (not totalActiveBalance)
      */
-    function receiveRewards(uint256 amount) external {
+    function receiveRewards(uint256 amount) external nonReentrant {
         require(msg.sender == rewardsDistributor, "E14");
         require(amount > 0, "E4");
 
@@ -686,7 +686,7 @@ contract OOOWEEESavings is
     /**
      * @notice Anyone can trigger auto-unlock for matured accounts
      */
-    function processMaturedAccounts() external {
+    function processMaturedAccounts() external nonReentrant {
         uint256 batch = maxAutoProcessBatch > 0 ? maxAutoProcessBatch : 20;
         uint256 processed = 0;
 
@@ -705,7 +705,7 @@ contract OOOWEEESavings is
 
     /**
      * @notice Create a group savings account
-     * @dev AUDIT FIX H-3: totalDepositedBalance += depositAfterFee
+     * @dev AUDIT FIX M-2 NEW: Group deposits excluded from totalDepositedBalance (no reward dilution).
      */
     function createGroupAccount(
         AccountType _accountType,
@@ -715,7 +715,7 @@ contract OOOWEEESavings is
         SavingsPriceOracle.Currency _targetCurrency,
         uint32 _unlockTime,
         uint256 _initialDeposit
-    ) external returns (uint256) {
+    ) external nonReentrant returns (uint256) {
         require(_destinationWallet != address(0), "E1");
         require(bytes(_goalName).length > 0, "E19");
         require(_initialDeposit > 0, "E4");
@@ -754,8 +754,8 @@ contract OOOWEEESavings is
 
         totalValueLocked += depositAfterFee;
         totalActiveBalance += depositAfterFee;
-        // AUDIT FIX H-3: Track group deposits in totalDepositedBalance
-        totalDepositedBalance += depositAfterFee;
+        // AUDIT FIX M-2 NEW: Group deposits excluded from totalDepositedBalance
+        // to avoid diluting individual account rewards. Groups don't earn rewards.
 
         emit GroupCreated(groupId, msg.sender, _goalName);
         return groupId;
@@ -788,33 +788,41 @@ contract OOOWEEESavings is
 
     /**
      * @notice Deposit tokens into a group account
-     * @dev AUDIT FIX H-3: totalDepositedBalance += amount
+     * @dev AUDIT FIX M-1 NEW: Applies deposit fee (matches individual deposit()).
+     *      AUDIT FIX M-2 NEW: Group deposits excluded from totalDepositedBalance.
      */
-    function depositToGroup(uint256 groupId, uint256 amount) external {
+    function depositToGroup(uint256 groupId, uint256 amount) external nonReentrant {
         GroupAccount storage group = groups[groupId];
         require(group.isActive, "E21");
         require(group.isMember[msg.sender], "E25");
         require(amount > 0, "E4");
 
+        // AUDIT FIX M-1 NEW: Apply deposit fee (matches individual deposit())
+        uint256 depositFee = (amount * creationFeeRate) / FEE_DIVISOR;
+        uint256 depositAfterFee = amount - depositFee;
+
         require(oooweeeToken.transferFrom(msg.sender, address(this), amount), "TF");
 
-        group.totalBalance += amount;
-        group.contributions[msg.sender] += amount;
-        totalValueLocked += amount;
-        totalActiveBalance += amount;
-        // AUDIT FIX H-3: Track group deposits
-        totalDepositedBalance += amount;
+        if (depositFee > 0) {
+            oooweeeToken.transfer(feeCollector, depositFee);
+            totalFeesCollected += depositFee;
+        }
 
-        emit GroupDeposit(groupId, msg.sender, amount);
+        group.totalBalance += depositAfterFee;
+        group.contributions[msg.sender] += depositAfterFee;
+        totalValueLocked += depositAfterFee;
+        totalActiveBalance += depositAfterFee;
+
+        emit GroupDeposit(groupId, msg.sender, depositAfterFee);
     }
 
     /**
      * @notice Process a group account when conditions are met
      * @dev AUDIT FIX H-2: Only creator or owner can call.
      *      Uses getValidatedOooweeePrice (TWAP) instead of spot price.
-     * @dev AUDIT FIX H-3: totalDepositedBalance subtracted with underflow protection.
+     * @dev AUDIT FIX M-2 NEW: Groups excluded from totalDepositedBalance — no subtraction needed.
      */
-    function processGroupAccount(uint256 groupId) external {
+    function processGroupAccount(uint256 groupId) external nonReentrant {
         GroupAccount storage group = groups[groupId];
         require(group.isActive, "E21");
         // AUDIT FIX H-2: Access control
@@ -848,8 +856,7 @@ contract OOOWEEESavings is
 
         totalValueLocked = totalValueLocked >= bal ? totalValueLocked - bal : 0;
         totalActiveBalance = totalActiveBalance >= bal ? totalActiveBalance - bal : 0;
-        // AUDIT FIX H-3: Subtract from totalDepositedBalance with underflow protection
-        totalDepositedBalance = totalDepositedBalance >= bal ? totalDepositedBalance - bal : 0;
+        // AUDIT FIX M-2 NEW: Groups excluded from totalDepositedBalance — no subtraction needed
         totalGoalsCompleted++;
         totalFeesCollected += fee;
 
@@ -904,7 +911,7 @@ contract OOOWEEESavings is
 
         totalValueLocked = totalValueLocked >= bal ? totalValueLocked - bal : 0;
         totalActiveBalance = totalActiveBalance >= bal ? totalActiveBalance - bal : 0;
-        totalDepositedBalance = totalDepositedBalance >= bal ? totalDepositedBalance - bal : 0;
+        // AUDIT FIX M-2 NEW: Groups excluded from totalDepositedBalance — no subtraction needed
 
         // Return contributions proportionally to members
         uint256 totalReturned = 0;
@@ -1097,8 +1104,9 @@ contract OOOWEEESavings is
         uint256 fee = (totalBal * withdrawalFeeRate) / FEE_DIVISOR;
         uint256 balanceAfterFee = totalBal - fee;
 
+        // AUDIT FIX M-3 NEW: Use view price (Chainlink-only, not spot-manipulable)
         uint256 transferAmount = account.isFiatTarget
-            ? getFiatToTokens(account.targetFiat, account.targetCurrency)
+            ? getFiatToTokensView(account.targetFiat, account.targetCurrency)
             : account.targetAmount;
 
         uint256 amountToRecipient = transferAmount;
