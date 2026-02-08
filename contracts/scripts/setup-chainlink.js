@@ -112,7 +112,7 @@ async function main() {
   // Step 3: Set automation registry on Savings
   console.log("\n--- Step 3: Set Automation Registry ---");
   try {
-    const savings = await ethers.getContractAt("OOOWEEESavingsV3", SAVINGS, deployer);
+    const savings = await ethers.getContractAt("OOOWEEESavings", SAVINGS, deployer);
     const currentReg = await savings.automationRegistry();
     if (currentReg === ethers.constants.AddressZero) {
       console.log("Setting automation registry on Savings...");

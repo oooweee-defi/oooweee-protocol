@@ -838,4 +838,10 @@ contract OOOWEEEStability is Initializable, OwnableUpgradeable, ReentrancyGuardU
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+
+    function renounceOwnership() public virtual override {
+        revert("Renounce disabled");
+    }
+
+    uint256[50] private __gap;
 }

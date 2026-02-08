@@ -359,15 +359,27 @@ contract SavingsPriceOracle is Initializable, OwnableUpgradeable, ReentrancyGuar
             return (false, 0);
         }
 
-        uint256 ethPrice = getETHPrice(currency);
-        if (ethPrice == 0) return (false, 0);
+        // Always use ETH/USD as the base price (M-2 fix)
+        uint256 ethUsdPrice = getETHPrice(Currency.USD);
+        if (ethUsdPrice == 0) return (false, 0);
 
         uint8 targetDecimals = currencyDecimals[currency];
         if (targetDecimals == 0) targetDecimals = 4;
 
         uint256 divisor = 10 ** (18 + CHAINLINK_DECIMALS - targetDecimals);
-        uint256 twapFiatPrice = (twapPriceAverage * ethPrice) / divisor;
 
+        // OOOWEEE/USD = OOOWEEE/ETH_twap * ETH/USD
+        uint256 twapUsdPrice = (twapPriceAverage * ethUsdPrice) / divisor;
+
+        if (currency == Currency.USD) {
+            return (true, twapUsdPrice);
+        }
+
+        // For EUR/GBP: cross-rate division (mirrors _getChainlinkUniswapPrice)
+        uint256 crossRate = getETHPrice(currency); // EUR/USD or GBP/USD (8 decimals)
+        if (crossRate == 0) return (false, 0);
+
+        uint256 twapFiatPrice = (twapUsdPrice * (10 ** CHAINLINK_DECIMALS)) / crossRate;
         return (true, twapFiatPrice);
     }
 
@@ -445,4 +457,10 @@ contract SavingsPriceOracle is Initializable, OwnableUpgradeable, ReentrancyGuar
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+
+    function renounceOwnership() public virtual override {
+        revert("Renounce disabled");
+    }
+
+    uint256[50] private __gap;
 }

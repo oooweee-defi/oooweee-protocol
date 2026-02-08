@@ -9,32 +9,50 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./SavingsPriceOracle.sol";
 
 /**
- * @title OOOWEEESavings
- * @notice L1-native savings accounts with fiat-denominated targets
- * @dev Users deposit OOOWEEE tokens, set goals in EUR/USD/GBP, and withdraw
- *      when their target is met. All checks are user-initiated (self-paid gas).
- *
- * Three account types:
- * - Time:    Locks tokens until a specific date. User calls manualWithdraw after unlock.
- * - Growth:  Locks tokens until fiat value hits target. User calls manualWithdraw when ready.
- * - Balance: Like Growth, but sends tokens to a recipient address when target is hit.
- *
- * Rewards from validator yield are distributed proportionally based on TVL.
- * Users claim rewards by calling claimRewards() — again, self-paid gas.
- *
- * No automation needed. The frontend shows users their current fiat value.
- * When they see it's hit target, they submit the withdrawal transaction.
- * The contract checks the oracle on-chain and either releases or reverts.
- *
- * Withdrawal checks use TWAP-validated prices to prevent flash loan manipulation.
+ * @title AutomationCompatibleInterface
+ * @notice Chainlink Automation interface for checkUpkeep/performUpkeep
  */
-contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpgradeable, UUPSUpgradeable {
+interface AutomationCompatibleInterface {
+    function checkUpkeep(bytes calldata checkData) external returns (bool upkeepNeeded, bytes memory performData);
+    function performUpkeep(bytes calldata performData) external;
+}
+
+/**
+ * @title OOOWEEESavings
+ * @notice Flattened V1+V2+V3 savings contract for fresh mainnet deployment.
+ *         Includes individual savings accounts (Time, Growth, Balance),
+ *         group savings, Chainlink Automation auto-unlock, and a clean
+ *         rewards system with separate deposit/reward tracking.
+ *
+ * @dev All audit findings (C-1, C-2, H-1, H-2, H-3, M-3, L-6) are addressed.
+ *      No storage layout compatibility with any previous deployment is needed.
+ *
+ * Reward system:
+ *   - rewardPerToken accumulates rewards per deposited token
+ *   - totalDepositedBalance tracks only user deposits (not rewards)
+ *   - accountEarnedRewards tracks earned but unclaimed rewards per account
+ *   - Rewards never merge into account.balance
+ *   - Solvency check: earned rewards capped at (contract balance - totalDepositedBalance)
+ */
+contract OOOWEEESavings is
+    Initializable,
+    ReentrancyGuardUpgradeable,
+    OwnableUpgradeable,
+    UUPSUpgradeable,
+    AutomationCompatibleInterface
+{
+    // ============ Token & Oracle ============
+
     IERC20 public oooweeeToken;
     SavingsPriceOracle public priceOracle;
 
+    // ============ Enums ============
+
     enum AccountType { Time, Balance, Growth }
 
-    // Struct packing optimised for minimal storage slots
+    // ============ SavingsAccount Struct ============
+    // NOTE: lastRewardUpdate removed from struct; tracked via mapping instead.
+
     struct SavingsAccount {
         // Slot 1: 32 bytes
         address owner;                                  // 20 bytes
@@ -47,10 +65,8 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
         // Slot 2: 24 bytes used
         address recipient;                              // 20 bytes
         uint32 unlockTime;                              // 4 bytes
-        // Slot 2 continued: packed with recipient + unlockTime (8 bytes remaining)
-        uint64 lastRewardUpdate;
         // Slot 3-6: 32 bytes each
-        uint256 balance;
+        uint256 balance;        // deposits only, rewards never merged in
         uint256 targetAmount;
         uint256 targetFiat;
         string goalName;
@@ -74,13 +90,61 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
     uint256 public totalFeesCollected;
     uint256 public totalRewardsDistributed;
 
-    // ============ Reward State ============
+    // ============ Account Storage ============
 
     mapping(address => SavingsAccount[]) public userAccounts;
-    uint256 public totalActiveBalance;
-    uint256 public globalRewardPerToken;
+
+    // ============ Rewards (clean, single system) ============
+
+    uint256 public rewardPerToken;
+    uint256 public totalDepositedBalance;
     uint256 public pendingRewards;
     uint256 public lastRewardDistribution;
+
+    mapping(address => mapping(uint256 => uint256)) public lastRewardUpdate;
+    mapping(address => mapping(uint256 => uint256)) public accountEarnedRewards;
+
+    uint256 public totalActiveBalance;  // kept for stats view compatibility
+
+    // ============ Auto-Unlock ============
+
+    address public automationRegistry;
+    uint256 public maxAutoProcessBatch;
+
+    struct ActiveAccountRef {
+        address owner;
+        uint256 accountId;
+    }
+
+    ActiveAccountRef[] public activeAccountRefs;
+    mapping(address => mapping(uint256 => uint256)) public activeAccountIndex;
+
+    // ============ Group Savings ============
+
+    struct GroupAccount {
+        address creator;
+        address destinationWallet;
+        AccountType accountType;
+        SavingsPriceOracle.Currency targetCurrency;
+        bool isActive;
+        uint32 createdAt;
+        uint32 completedAt;
+        uint32 unlockTime;
+        uint256 totalBalance;
+        uint256 targetFiat;
+        string goalName;
+        address[] members;
+        mapping(address => bool) isMember;
+        mapping(address => bool) isInvited;
+        mapping(address => uint256) contributions;
+    }
+
+    uint256 public groupCount;
+    mapping(uint256 => GroupAccount) public groups;
+
+    // ============ Storage Gap ============
+
+    uint256[50] private __gap;
 
     // ============ Events ============
 
@@ -125,17 +189,33 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
     event FeesUpdated(uint256 creationFee, uint256 withdrawalFee);
     event PriceOracleUpdated(address indexed newOracle);
 
+    // V2 events
+    event AutoUnlockProcessed(address indexed owner, uint256 indexed accountId, uint256 amount);
+    event AutomationRegistryUpdated(address indexed registry);
+    event GroupCreated(uint256 indexed groupId, address indexed creator, string goalName);
+    event MemberInvited(uint256 indexed groupId, address indexed member);
+    event InvitationAccepted(uint256 indexed groupId, address indexed member);
+    event GroupDeposit(uint256 indexed groupId, address indexed depositor, uint256 amount);
+    event GroupCompleted(uint256 indexed groupId, address indexed destination, uint256 amount);
+
+    // New: M-3 audit fix
+    event GroupCancelled(uint256 indexed groupId, address indexed cancelledBy, uint256 totalReturned);
+
+    // ============ Constructor ============
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
 
+    // ============ Initializer ============
+
     function initialize(
         address _tokenAddress,
         address _priceOracle
     ) public initializer {
-        require(_tokenAddress != address(0), "Invalid token");
-        require(_priceOracle != address(0), "Invalid oracle");
+        require(_tokenAddress != address(0), "E1");
+        require(_priceOracle != address(0), "E1");
 
         __ReentrancyGuard_init();
         __Ownable_init();
@@ -144,36 +224,53 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
         oooweeeToken = IERC20(_tokenAddress);
         priceOracle = SavingsPriceOracle(_priceOracle);
         feeCollector = msg.sender;
-        creationFeeRate = 100;     // 1%
-        withdrawalFeeRate = 100;   // 1%
+        creationFeeRate = 100;          // 1%
+        withdrawalFeeRate = 100;        // 1%
+        maxAutoProcessBatch = 20;
+    }
+
+    // ============ AUDIT FIX L-6: Disable renounceOwnership ============
+
+    function renounceOwnership() public virtual override {
+        revert("E32");
     }
 
     // ============ Admin Functions ============
 
     function setRewardsDistributor(address _distributor) external onlyOwner {
-        require(_distributor != address(0), "Invalid address");
+        require(_distributor != address(0), "E1");
         rewardsDistributor = _distributor;
         emit RewardsDistributorSet(_distributor);
     }
 
     function setFeeCollector(address _feeCollector) external onlyOwner {
-        require(_feeCollector != address(0), "Invalid address");
+        require(_feeCollector != address(0), "E1");
         feeCollector = _feeCollector;
         emit FeeCollectorSet(_feeCollector);
     }
 
     function setFees(uint256 _creationFeeRate, uint256 _withdrawalFeeRate) external onlyOwner {
-        require(_creationFeeRate <= 500, "Max 5% creation fee");
-        require(_withdrawalFeeRate <= 500, "Max 5% withdrawal fee");
+        require(_creationFeeRate <= 500, "E30");
+        require(_withdrawalFeeRate <= 500, "E31");
         creationFeeRate = _creationFeeRate;
         withdrawalFeeRate = _withdrawalFeeRate;
         emit FeesUpdated(_creationFeeRate, _withdrawalFeeRate);
     }
 
     function setPriceOracle(address _priceOracle) external onlyOwner {
-        require(_priceOracle != address(0), "Invalid address");
+        require(_priceOracle != address(0), "E1");
         priceOracle = SavingsPriceOracle(_priceOracle);
         emit PriceOracleUpdated(_priceOracle);
+    }
+
+    function setAutomationRegistry(address _registry) external onlyOwner {
+        automationRegistry = _registry;
+        emit AutomationRegistryUpdated(_registry);
+    }
+
+    function setMaxAutoProcessBatch(uint256 _max) external onlyOwner {
+        require(_max > 0 && _max <= 50, "Batch 1-50");
+        maxAutoProcessBatch = _max;
     }
 
     // ============ Price Functions ============
@@ -214,21 +311,25 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
 
     // ============ Account Creation ============
 
+    /**
+     * @notice Create a time-locked savings account
+     * @dev AUDIT FIX C-1: Sets lastRewardUpdate[msg.sender][accountId] = rewardPerToken
+     */
     function createTimeAccount(
         uint256 unlockTime,
         string memory goalName,
         uint256 initialDeposit,
         SavingsPriceOracle.Currency displayCurrency
-    ) external virtual returns (uint256) {
-        require(unlockTime > block.timestamp, "Unlock must be future");
-        require(unlockTime <= block.timestamp + MAX_LOCK_DURATION, "Max 100 years");
-        require(initialDeposit > 0, "Must deposit");
-        require(unlockTime <= type(uint32).max, "Overflow");
+    ) external returns (uint256) {
+        require(unlockTime > block.timestamp, "E7");
+        require(unlockTime <= block.timestamp + MAX_LOCK_DURATION, "E8");
+        require(initialDeposit > 0, "E4");
+        require(unlockTime <= type(uint32).max, "E9");
 
         uint256 creationFee = (initialDeposit * creationFeeRate) / FEE_DIVISOR;
         uint256 depositAfterFee = initialDeposit - creationFee;
 
-        require(oooweeeToken.transferFrom(msg.sender, address(this), initialDeposit), "Transfer failed");
+        require(oooweeeToken.transferFrom(msg.sender, address(this), initialDeposit), "TF");
         if (creationFee > 0) {
             oooweeeToken.transfer(feeCollector, creationFee);
             totalFeesCollected += creationFee;
@@ -245,37 +346,48 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
             completedAt: 0,
             recipient: address(0),
             unlockTime: uint32(unlockTime),
-            lastRewardUpdate: uint64(globalRewardPerToken),
             balance: depositAfterFee,
             targetAmount: 0,
             targetFiat: 0,
             goalName: goalName
         }));
 
+        // AUDIT FIX C-1: Checkpoint reward state at creation
+        lastRewardUpdate[msg.sender][accountId] = rewardPerToken;
+
         totalValueLocked += depositAfterFee;
         totalActiveBalance += depositAfterFee;
+        totalDepositedBalance += depositAfterFee;
         totalAccountsCreated++;
+
+        _addActiveRef(msg.sender, accountId);
 
         emit AccountCreated(msg.sender, accountId, AccountType.Time, goalName, initialDeposit, creationFee);
         return accountId;
     }
 
+    /**
+     * @notice Create a growth savings account targeting a fiat value
+     * @dev AUDIT FIX H-1: Uses getBalanceInFiatView() instead of getBalanceInFiat()
+     * @dev AUDIT FIX C-1: Sets lastRewardUpdate[msg.sender][accountId] = rewardPerToken
+     */
     function createGrowthAccount(
         uint256 targetFiatAmount,
         SavingsPriceOracle.Currency targetCurrency,
         string memory goalName,
         uint256 initialDeposit
-    ) external virtual returns (uint256) {
-        require(targetFiatAmount > 0, "Target required");
-        require(initialDeposit > 0, "Must deposit");
+    ) external returns (uint256) {
+        require(targetFiatAmount > 0, "E5");
+        require(initialDeposit > 0, "E4");
 
-        uint256 currentValue = getBalanceInFiat(initialDeposit, targetCurrency);
-        require(targetFiatAmount > currentValue, "Target must exceed initial value");
+        // AUDIT FIX H-1: Use view function to prevent state changes during creation check
+        uint256 currentValue = getBalanceInFiatView(initialDeposit, targetCurrency);
+        require(targetFiatAmount > currentValue, "E10");
 
         uint256 creationFee = (initialDeposit * creationFeeRate) / FEE_DIVISOR;
         uint256 depositAfterFee = initialDeposit - creationFee;
 
-        require(oooweeeToken.transferFrom(msg.sender, address(this), initialDeposit), "Transfer failed");
+        require(oooweeeToken.transferFrom(msg.sender, address(this), initialDeposit), "TF");
         if (creationFee > 0) {
             oooweeeToken.transfer(feeCollector, creationFee);
             totalFeesCollected += creationFee;
@@ -292,38 +404,47 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
             completedAt: 0,
             recipient: address(0),
             unlockTime: 0,
-            lastRewardUpdate: uint64(globalRewardPerToken),
             balance: depositAfterFee,
             targetAmount: 0,
             targetFiat: targetFiatAmount,
             goalName: goalName
         }));
 
+        // AUDIT FIX C-1: Checkpoint reward state at creation
+        lastRewardUpdate[msg.sender][accountId] = rewardPerToken;
+
         totalValueLocked += depositAfterFee;
         totalActiveBalance += depositAfterFee;
+        totalDepositedBalance += depositAfterFee;
         totalAccountsCreated++;
+
+        _addActiveRef(msg.sender, accountId);
 
         emit AccountCreated(msg.sender, accountId, AccountType.Growth, goalName, initialDeposit, creationFee);
         emit FiatAccountCreated(msg.sender, accountId, targetCurrency, targetFiatAmount);
         return accountId;
     }
 
+    /**
+     * @notice Create a balance account that transfers to a recipient when target is met
+     * @dev AUDIT FIX C-1: Sets lastRewardUpdate[msg.sender][accountId] = rewardPerToken
+     */
     function createBalanceAccount(
         uint256 targetFiatAmount,
         SavingsPriceOracle.Currency targetCurrency,
         address recipient,
         string memory goalName,
         uint256 initialDeposit
-    ) external virtual returns (uint256) {
-        require(targetFiatAmount > 0, "Target required");
-        require(recipient != address(0), "Invalid recipient");
-        require(recipient != msg.sender, "Cannot send to self");
-        require(initialDeposit > 0, "Must deposit");
+    ) external returns (uint256) {
+        require(targetFiatAmount > 0, "E5");
+        require(recipient != address(0), "E1");
+        require(recipient != msg.sender, "E11");
+        require(initialDeposit > 0, "E4");
 
         uint256 creationFee = (initialDeposit * creationFeeRate) / FEE_DIVISOR;
         uint256 depositAfterFee = initialDeposit - creationFee;
 
-        require(oooweeeToken.transferFrom(msg.sender, address(this), initialDeposit), "Transfer failed");
+        require(oooweeeToken.transferFrom(msg.sender, address(this), initialDeposit), "TF");
         if (creationFee > 0) {
             oooweeeToken.transfer(feeCollector, creationFee);
             totalFeesCollected += creationFee;
@@ -340,16 +461,21 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
             completedAt: 0,
             recipient: recipient,
             unlockTime: 0,
-            lastRewardUpdate: uint64(globalRewardPerToken),
             balance: depositAfterFee,
             targetAmount: 0,
             targetFiat: targetFiatAmount,
             goalName: goalName
         }));
 
+        // AUDIT FIX C-1: Checkpoint reward state at creation
+        lastRewardUpdate[msg.sender][accountId] = rewardPerToken;
+
         totalValueLocked += depositAfterFee;
         totalActiveBalance += depositAfterFee;
+        totalDepositedBalance += depositAfterFee;
         totalAccountsCreated++;
+
+        _addActiveRef(msg.sender, accountId);
 
         emit AccountCreated(msg.sender, accountId, AccountType.Balance, goalName, initialDeposit, creationFee);
         emit FiatAccountCreated(msg.sender, accountId, targetCurrency, targetFiatAmount);
@@ -358,20 +484,19 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
 
     // ============ Deposit ============
 
-    function deposit(uint256 accountId, uint256 amount) external virtual nonReentrant {
-        require(accountId < userAccounts[msg.sender].length, "Invalid account");
-        require(amount > 0, "Amount must be > 0");
+    function deposit(uint256 accountId, uint256 amount) external nonReentrant {
+        require(accountId < userAccounts[msg.sender].length, "E2");
+        require(amount > 0, "E4");
 
         SavingsAccount storage account = userAccounts[msg.sender][accountId];
-        require(account.isActive, "Account not active");
+        require(account.isActive, "E3");
 
         _updateAccountRewards(msg.sender, accountId);
 
-        // Charge the same fee rate as account creation to prevent bypass
         uint256 depositFee = (amount * creationFeeRate) / FEE_DIVISOR;
         uint256 depositAfterFee = amount - depositFee;
 
-        require(oooweeeToken.transferFrom(msg.sender, address(this), amount), "Transfer failed");
+        require(oooweeeToken.transferFrom(msg.sender, address(this), amount), "TF");
 
         if (depositFee > 0) {
             oooweeeToken.transfer(feeCollector, depositFee);
@@ -381,45 +506,42 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
         account.balance += depositAfterFee;
         totalValueLocked += depositAfterFee;
         totalActiveBalance += depositAfterFee;
+        totalDepositedBalance += depositAfterFee;
 
         emit Deposited(msg.sender, accountId, depositAfterFee, depositFee, account.balance);
     }
 
-    // ============ Withdrawal (User-Initiated, Self-Paid Gas) ============
+    // ============ Withdrawal ============
 
     /**
-     * @notice Withdraw from any account type — user checks and pays gas
-     * @dev The frontend shows the user their fiat value. When they believe
-     *      their target is met, they call this. The contract verifies on-chain:
-     *      - Time accounts: checks block.timestamp >= unlockTime
-     *      - Growth accounts: checks fiat value >= targetFiat via TWAP-validated oracle
-     *      - Balance accounts: checks fiat value >= targetFiat + 1% buffer,
-     *        then sends target amount to recipient, remainder back to owner
-     *
-     *      If conditions aren't met, transaction reverts. User loses gas only.
-     *      Use canWithdraw() view function first to check without spending gas.
+     * @notice Withdraw from any account type — user checks and pays gas.
+     * @dev AUDIT FIX C-2: No _merge function. totalBal = balance + earnedRewards.
+     *      Withdrawal uses _fullBalance for condition checks and clean tracker subtraction.
      */
-    function manualWithdraw(uint256 accountId) external virtual nonReentrant {
-        require(accountId < userAccounts[msg.sender].length, "Invalid account");
+    function manualWithdraw(uint256 accountId) external nonReentrant {
+        require(accountId < userAccounts[msg.sender].length, "E2");
 
         SavingsAccount storage account = userAccounts[msg.sender][accountId];
-        require(account.isActive, "Account not active");
-        require(account.owner == msg.sender, "Not owner");
+        require(account.isActive, "E3");
+        require(account.owner == msg.sender, "E12");
 
         _updateAccountRewards(msg.sender, accountId);
 
+        // AUDIT FIX C-2: Use totalBal (deposits + earned rewards) for condition checks
+        uint256 totalBal = account.balance + accountEarnedRewards[msg.sender][accountId];
+
         if (account.accountType == AccountType.Time) {
-            require(block.timestamp >= account.unlockTime, "Still locked");
+            require(block.timestamp >= account.unlockTime, "E13");
             _executeReturn(msg.sender, accountId);
 
         } else if (account.accountType == AccountType.Growth) {
             if (account.isFiatTarget) {
                 require(
-                    _checkFiatTarget(account.balance, account.targetFiat, account.targetCurrency),
-                    "Target not reached"
+                    _checkFiatTarget(totalBal, account.targetFiat, account.targetCurrency),
+                    "E6"
                 );
             } else {
-                require(account.balance >= account.targetAmount, "Target not reached");
+                require(totalBal >= account.targetAmount, "E6");
             }
             _executeReturn(msg.sender, accountId);
 
@@ -427,12 +549,12 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
             if (account.isFiatTarget) {
                 uint256 requiredFiat = account.targetFiat + (account.targetFiat / 100);
                 require(
-                    _checkFiatTarget(account.balance, requiredFiat, account.targetCurrency),
-                    "Target not reached (need +1% buffer for fees)"
+                    _checkFiatTarget(totalBal, requiredFiat, account.targetCurrency),
+                    "E6"
                 );
             } else {
                 uint256 requiredBalance = account.targetAmount + (account.targetAmount / 100);
-                require(account.balance >= requiredBalance, "Target not reached");
+                require(totalBal >= requiredBalance, "E6");
             }
             _executeBalanceTransfer(msg.sender, accountId);
         }
@@ -440,53 +562,28 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
 
     /**
      * @notice Check if an account can be withdrawn — free view call, no gas
-     * @dev Frontend calls this to show a "Withdraw" button when ready
      */
-    function canWithdraw(address owner, uint256 accountId) external virtual view returns (bool) {
+    function canWithdraw(address owner, uint256 accountId) external view returns (bool) {
         if (accountId >= userAccounts[owner].length) return false;
-
         SavingsAccount memory account = userAccounts[owner][accountId];
         if (!account.isActive) return false;
-
-        uint256 totalBalance = account.balance + _calculatePendingRewards(owner, accountId);
-
-        if (account.accountType == AccountType.Time) {
-            return block.timestamp >= account.unlockTime;
-
-        } else if (account.accountType == AccountType.Growth) {
-            if (account.isFiatTarget) {
-                uint256 currentValue = getBalanceInFiatView(totalBalance, account.targetCurrency);
-                return currentValue >= account.targetFiat;
-            }
-            return totalBalance >= account.targetAmount;
-
-        } else if (account.accountType == AccountType.Balance) {
-            if (account.isFiatTarget) {
-                uint256 requiredFiat = account.targetFiat + (account.targetFiat / 100);
-                uint256 currentValue = getBalanceInFiatView(totalBalance, account.targetCurrency);
-                return currentValue >= requiredFiat;
-            }
-            uint256 requiredBalance = account.targetAmount + (account.targetAmount / 100);
-            return totalBalance >= requiredBalance;
-        }
-
-        return false;
+        return _checkWithdraw(account, _fullBalance(owner, accountId));
     }
 
     // ============ Rewards ============
 
     /**
      * @notice Receive OOOWEEE reward tokens from ValidatorFund
-     * @dev Called by the ValidatorFund after swapping ETH→OOOWEEE
+     * @dev Uses totalDepositedBalance as denominator (not totalActiveBalance)
      */
-    function receiveRewards(uint256 amount) external virtual {
-        require(msg.sender == rewardsDistributor, "Only rewards distributor");
-        require(amount > 0, "Amount must be > 0");
+    function receiveRewards(uint256 amount) external {
+        require(msg.sender == rewardsDistributor, "E14");
+        require(amount > 0, "E4");
 
-        require(oooweeeToken.transferFrom(msg.sender, address(this), amount), "Transfer failed");
+        require(oooweeeToken.transferFrom(msg.sender, address(this), amount), "TF");
 
-        if (totalActiveBalance > 0) {
-            globalRewardPerToken += (amount * 1e18) / totalActiveBalance;
+        if (totalDepositedBalance > 0) {
+            rewardPerToken += (amount * 1e18) / totalDepositedBalance;
             totalRewardsDistributed += amount;
         } else {
             pendingRewards += amount;
@@ -497,7 +594,7 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
     }
 
     function claimRewards(uint256 accountId) external nonReentrant {
-        require(accountId < userAccounts[msg.sender].length, "Invalid account");
+        require(accountId < userAccounts[msg.sender].length, "E2");
         _updateAccountRewards(msg.sender, accountId);
     }
 
@@ -505,15 +602,12 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
      * @notice Claim rewards for multiple accounts with pagination
      * @param startIndex First account index to process
      * @param count Maximum number of accounts to process (capped at 20 per call)
-     * @dev Call multiple times with different startIndex values to claim all rewards
-     *      when the user has more than 20 accounts.
      */
     function claimAllRewards(uint256 startIndex, uint256 count) external nonReentrant {
         uint256 accountCount = userAccounts[msg.sender].length;
-        require(accountCount > 0, "No accounts");
-        require(startIndex < accountCount, "Start index out of bounds");
+        require(accountCount > 0, "E15");
+        require(startIndex < accountCount, "E16");
 
-        // Cap at 20 per call to prevent gas limit issues
         if (count > 20) count = 20;
         uint256 endIndex = startIndex + count;
         if (endIndex > accountCount) endIndex = accountCount;
@@ -527,11 +621,10 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
 
     /**
      * @notice Convenience: claim rewards for first 20 accounts
-     * @dev For users with more than 20 accounts, use claimAllRewards(startIndex, count)
      */
     function claimAllRewards() external nonReentrant {
         uint256 accountCount = userAccounts[msg.sender].length;
-        require(accountCount > 0, "No accounts");
+        require(accountCount > 0, "E15");
 
         uint256 maxClaims = accountCount > 20 ? 20 : accountCount;
         for (uint256 i = 0; i < maxClaims; i++) {
@@ -541,32 +634,388 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
         }
     }
 
+    // ============ Chainlink Automation ============
+
+    /**
+     * @notice Chainlink Automation: check if any accounts are ready for auto-unlock
+     */
+    function checkUpkeep(bytes calldata /* checkData */)
+        external
+        view
+        override
+        returns (bool upkeepNeeded, bytes memory performData)
+    {
+        uint256 batch = maxAutoProcessBatch > 0 ? maxAutoProcessBatch : 20;
+        uint256 count = 0;
+
+        address[] memory owners = new address[](batch);
+        uint256[] memory ids = new uint256[](batch);
+
+        for (uint256 i = 0; i < activeAccountRefs.length && count < batch; i++) {
+            ActiveAccountRef memory ref = activeAccountRefs[i];
+            if (ref.owner == address(0)) continue;
+
+            if (_isAccountMatured(ref.owner, ref.accountId)) {
+                owners[count] = ref.owner;
+                ids[count] = ref.accountId;
+                count++;
+            }
+        }
+
+        if (count > 0) {
+            upkeepNeeded = true;
+            performData = abi.encode(owners, ids, count);
+        }
+    }
+
+    /**
+     * @notice Chainlink Automation: process matured accounts
+     */
+    function performUpkeep(bytes calldata performData) external override {
+        require(automationRegistry != address(0), "E17");
+        require(msg.sender == automationRegistry, "E18");
+
+        (address[] memory owners, uint256[] memory ids, uint256 count) =
+            abi.decode(performData, (address[], uint256[], uint256));
+
+        for (uint256 i = 0; i < count; i++) {
+            _autoProcess(owners[i], ids[i]);
+        }
+    }
+
+    /**
+     * @notice Anyone can trigger auto-unlock for matured accounts
+     */
+    function processMaturedAccounts() external {
+        uint256 batch = maxAutoProcessBatch > 0 ? maxAutoProcessBatch : 20;
+        uint256 processed = 0;
+
+        for (uint256 i = 0; i < activeAccountRefs.length && processed < batch; i++) {
+            ActiveAccountRef memory ref = activeAccountRefs[i];
+            if (ref.owner == address(0)) continue;
+
+            if (_isAccountMatured(ref.owner, ref.accountId)) {
+                _autoProcess(ref.owner, ref.accountId);
+                processed++;
+            }
+        }
+    }
+
+    // ============ Group Savings ============
+
+    /**
+     * @notice Create a group savings account
+     * @dev AUDIT FIX H-3: totalDepositedBalance += depositAfterFee
+     */
+    function createGroupAccount(
+        AccountType _accountType,
+        address _destinationWallet,
+        string memory _goalName,
+        uint256 _targetFiat,
+        SavingsPriceOracle.Currency _targetCurrency,
+        uint32 _unlockTime,
+        uint256 _initialDeposit
+    ) external returns (uint256) {
+        require(_destinationWallet != address(0), "E1");
+        require(bytes(_goalName).length > 0, "E19");
+        require(_initialDeposit > 0, "E4");
+
+        if (_accountType == AccountType.Time) {
+            require(_unlockTime > block.timestamp, "E7");
+        } else {
+            require(_targetFiat > 0, "E5");
+        }
+
+        uint256 creationFee = (_initialDeposit * creationFeeRate) / FEE_DIVISOR;
+        uint256 depositAfterFee = _initialDeposit - creationFee;
+
+        require(oooweeeToken.transferFrom(msg.sender, address(this), _initialDeposit), "TF");
+        if (creationFee > 0) {
+            oooweeeToken.transfer(feeCollector, creationFee);
+            totalFeesCollected += creationFee;
+        }
+
+        uint256 groupId = groupCount++;
+        GroupAccount storage group = groups[groupId];
+        group.creator = msg.sender;
+        group.destinationWallet = _destinationWallet;
+        group.accountType = _accountType;
+        group.targetCurrency = _targetCurrency;
+        group.isActive = true;
+        group.createdAt = uint32(block.timestamp);
+        group.unlockTime = _unlockTime;
+        group.totalBalance = depositAfterFee;
+        group.targetFiat = _targetFiat;
+        group.goalName = _goalName;
+
+        group.members.push(msg.sender);
+        group.isMember[msg.sender] = true;
+        group.contributions[msg.sender] = depositAfterFee;
+
+        totalValueLocked += depositAfterFee;
+        totalActiveBalance += depositAfterFee;
+        // AUDIT FIX H-3: Track group deposits in totalDepositedBalance
+        totalDepositedBalance += depositAfterFee;
+
+        emit GroupCreated(groupId, msg.sender, _goalName);
+        return groupId;
+    }
+
+    function inviteMember(uint256 groupId, address member) external {
+        GroupAccount storage group = groups[groupId];
+        require(group.creator == msg.sender, "E20");
+        require(group.isActive, "E21");
+        require(member != address(0), "E1");
+        require(!group.isMember[member], "E22");
+        require(!group.isInvited[member], "E23");
+
+        group.isInvited[member] = true;
+        emit MemberInvited(groupId, member);
+    }
+
+    function acceptInvitation(uint256 groupId) external {
+        GroupAccount storage group = groups[groupId];
+        require(group.isActive, "E21");
+        require(group.isInvited[msg.sender], "E24");
+        require(!group.isMember[msg.sender], "E22");
+
+        group.isMember[msg.sender] = true;
+        group.isInvited[msg.sender] = false;
+        group.members.push(msg.sender);
+
+        emit InvitationAccepted(groupId, msg.sender);
+    }
+
+    /**
+     * @notice Deposit tokens into a group account
+     * @dev AUDIT FIX H-3: totalDepositedBalance += amount
+     */
+    function depositToGroup(uint256 groupId, uint256 amount) external {
+        GroupAccount storage group = groups[groupId];
+        require(group.isActive, "E21");
+        require(group.isMember[msg.sender], "E25");
+        require(amount > 0, "E4");
+
+        require(oooweeeToken.transferFrom(msg.sender, address(this), amount), "TF");
+
+        group.totalBalance += amount;
+        group.contributions[msg.sender] += amount;
+        totalValueLocked += amount;
+        totalActiveBalance += amount;
+        // AUDIT FIX H-3: Track group deposits
+        totalDepositedBalance += amount;
+
+        emit GroupDeposit(groupId, msg.sender, amount);
+    }
+
+    /**
+     * @notice Process a group account when conditions are met
+     * @dev AUDIT FIX H-2: Only creator or owner can call.
+     *      Uses getValidatedOooweeePrice (TWAP) instead of spot price.
+     * @dev AUDIT FIX H-3: totalDepositedBalance subtracted with underflow protection.
+     */
+    function processGroupAccount(uint256 groupId) external {
+        GroupAccount storage group = groups[groupId];
+        require(group.isActive, "E21");
+        // AUDIT FIX H-2: Access control
+        require(msg.sender == group.creator || msg.sender == owner(), "E26");
+
+        bool canProcess = false;
+
+        if (group.accountType == AccountType.Time) {
+            canProcess = block.timestamp >= group.unlockTime;
+        } else {
+            // AUDIT FIX H-2: Use TWAP-validated price instead of spot
+            uint256 pricePerToken = priceOracle.getValidatedOooweeePrice(group.targetCurrency);
+            uint256 currentValue = (group.totalBalance * pricePerToken) / 1e18;
+            if (group.accountType == AccountType.Balance) {
+                uint256 requiredFiat = group.targetFiat + (group.targetFiat / 100);
+                canProcess = currentValue >= requiredFiat;
+            } else {
+                canProcess = currentValue >= group.targetFiat;
+            }
+        }
+
+        require(canProcess, "E27");
+
+        uint256 bal = group.totalBalance;
+        uint256 fee = (bal * withdrawalFeeRate) / FEE_DIVISOR;
+        uint256 amountAfterFee = bal - fee;
+
+        group.totalBalance = 0;
+        group.isActive = false;
+        group.completedAt = uint32(block.timestamp);
+
+        totalValueLocked = totalValueLocked >= bal ? totalValueLocked - bal : 0;
+        totalActiveBalance = totalActiveBalance >= bal ? totalActiveBalance - bal : 0;
+        // AUDIT FIX H-3: Subtract from totalDepositedBalance with underflow protection
+        totalDepositedBalance = totalDepositedBalance >= bal ? totalDepositedBalance - bal : 0;
+        totalGoalsCompleted++;
+        totalFeesCollected += fee;
+
+        if (fee > 0) {
+            oooweeeToken.transfer(feeCollector, fee);
+        }
+
+        require(oooweeeToken.transfer(group.destinationWallet, amountAfterFee), "TF");
+
+        emit GroupCompleted(groupId, group.destinationWallet, amountAfterFee);
+    }
+
+    /**
+     * @notice AUDIT FIX M-3: Cancel a group account and return contributions proportionally
+     * @dev Creator can cancel immediately if sole member, or after timeout.
+     *      Owner (admin) can cancel anytime.
+     *      Timeout: 365 days past unlockTime for Time accounts, 730 days past createdAt for others.
+     */
+    function cancelGroupAccount(uint256 groupId) external nonReentrant {
+        GroupAccount storage group = groups[groupId];
+        require(group.isActive, "E21");
+
+        bool isAdmin = msg.sender == owner();
+        bool isCreator = msg.sender == group.creator;
+
+        require(isAdmin || isCreator, "E26");
+
+        if (isCreator && !isAdmin) {
+            if (group.members.length == 1) {
+                // Creator is sole member: can cancel immediately
+            } else {
+                // Creator must wait for timeout
+                if (group.accountType == AccountType.Time) {
+                    require(
+                        block.timestamp >= uint256(group.unlockTime) + 365 days,
+                        "E28"
+                    );
+                } else {
+                    require(
+                        block.timestamp >= uint256(group.createdAt) + 730 days,
+                        "E29"
+                    );
+                }
+            }
+        }
+        // Admin (owner) can cancel anytime — no additional checks needed
+
+        uint256 bal = group.totalBalance;
+        group.totalBalance = 0;
+        group.isActive = false;
+        group.completedAt = uint32(block.timestamp);
+
+        totalValueLocked = totalValueLocked >= bal ? totalValueLocked - bal : 0;
+        totalActiveBalance = totalActiveBalance >= bal ? totalActiveBalance - bal : 0;
+        totalDepositedBalance = totalDepositedBalance >= bal ? totalDepositedBalance - bal : 0;
+
+        // Return contributions proportionally to members
+        uint256 totalReturned = 0;
+        for (uint256 i = 0; i < group.members.length; i++) {
+            address member = group.members[i];
+            uint256 contribution = group.contributions[member];
+            if (contribution > 0 && bal > 0) {
+                // Proportional share: (contribution / original totalBalance) * remaining bal
+                // Since no fees were taken from bal during cancel, bal == sum of all contributions
+                uint256 share = contribution;
+                if (share > bal - totalReturned) {
+                    share = bal - totalReturned;
+                }
+                group.contributions[member] = 0;
+                if (share > 0) {
+                    totalReturned += share;
+                    oooweeeToken.transfer(member, share);
+                }
+            }
+        }
+
+        emit GroupCancelled(groupId, msg.sender, totalReturned);
+    }
+
     // ============ Internal Logic ============
 
-    function _updateAccountRewards(address owner, uint256 accountId) internal virtual {
+    /**
+     * @notice Update account rewards using the clean V3 system
+     * @dev Uses rewardPerToken, lastRewardUpdate mapping, accountEarnedRewards mapping.
+     *      Solvency check: earned rewards capped at (contract balance - totalDepositedBalance).
+     */
+    function _updateAccountRewards(address owner, uint256 accountId) internal {
         SavingsAccount storage account = userAccounts[owner][accountId];
         if (!account.isActive) return;
 
-        uint256 currentGlobalReward = globalRewardPerToken;
+        uint256 currentReward = rewardPerToken;
 
-        // Flush any pending rewards into the global accumulator
-        if (pendingRewards > 0 && totalActiveBalance > 0) {
-            currentGlobalReward += (pendingRewards * 1e18) / totalActiveBalance;
-            globalRewardPerToken = currentGlobalReward;
+        // Flush any pending rewards into the accumulator
+        if (pendingRewards > 0 && totalDepositedBalance > 0) {
+            currentReward += (pendingRewards * 1e18) / totalDepositedBalance;
+            rewardPerToken = currentReward;
             totalRewardsDistributed += pendingRewards;
             pendingRewards = 0;
         }
 
-        if (currentGlobalReward > account.lastRewardUpdate) {
-            uint256 earned = (account.balance * (currentGlobalReward - account.lastRewardUpdate)) / 1e18;
+        uint256 lu = lastRewardUpdate[owner][accountId];
+        if (currentReward > lu) {
+            uint256 earned = (account.balance * (currentReward - lu)) / 1e18;
+
+            // Solvency check: cap earned rewards at available contract balance minus deposits
+            uint256 contractBalance = oooweeeToken.balanceOf(address(this));
+            if (totalDepositedBalance + earned > contractBalance) {
+                earned = contractBalance > totalDepositedBalance ? contractBalance - totalDepositedBalance : 0;
+            }
+
             if (earned > 0) {
-                account.balance += earned;
-                totalValueLocked += earned;
-                totalActiveBalance += earned;
+                accountEarnedRewards[owner][accountId] += earned;
                 emit RewardsClaimed(owner, accountId, earned);
             }
-            account.lastRewardUpdate = uint64(currentGlobalReward);
+            lastRewardUpdate[owner][accountId] = currentReward;
         }
+    }
+
+    /**
+     * @notice Calculate pending rewards without state change (view)
+     */
+    function _calculatePendingRewards(address owner, uint256 accountId)
+        internal view returns (uint256)
+    {
+        SavingsAccount memory account = userAccounts[owner][accountId];
+        if (!account.isActive) return accountEarnedRewards[owner][accountId];
+
+        uint256 currentReward = rewardPerToken;
+        if (pendingRewards > 0 && totalDepositedBalance > 0) {
+            currentReward += (pendingRewards * 1e18) / totalDepositedBalance;
+        }
+
+        uint256 lu = lastRewardUpdate[owner][accountId];
+        uint256 pending = currentReward > lu ? (account.balance * (currentReward - lu)) / 1e18 : 0;
+        return accountEarnedRewards[owner][accountId] + pending;
+    }
+
+    /**
+     * @notice Full balance = deposits + earned rewards + pending calculated rewards
+     */
+    function _fullBalance(address owner, uint256 accountId) internal view returns (uint256) {
+        return userAccounts[owner][accountId].balance + _calculatePendingRewards(owner, accountId);
+    }
+
+    /**
+     * @notice Unified withdraw check for all account types
+     */
+    function _checkWithdraw(SavingsAccount memory account, uint256 bal) internal view returns (bool) {
+        if (account.accountType == AccountType.Time) {
+            return block.timestamp >= account.unlockTime;
+        }
+        if (account.accountType == AccountType.Growth) {
+            if (account.isFiatTarget) {
+                return getBalanceInFiatView(bal, account.targetCurrency) >= account.targetFiat;
+            }
+            return bal >= account.targetAmount;
+        }
+        if (account.accountType == AccountType.Balance) {
+            if (account.isFiatTarget) {
+                uint256 requiredFiat = account.targetFiat + (account.targetFiat / 100);
+                return getBalanceInFiatView(bal, account.targetCurrency) >= requiredFiat;
+            }
+            uint256 requiredBalance = account.targetAmount + (account.targetAmount / 100);
+            return bal >= requiredBalance;
+        }
+        return false;
     }
 
     /**
@@ -577,75 +1026,101 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
         uint256 targetFiat,
         SavingsPriceOracle.Currency currency
     ) internal returns (bool) {
-        // Use TWAP-validated price: returns min(spot, TWAP) or TWAP if >10% divergence
         uint256 pricePerToken = priceOracle.getValidatedOooweeePrice(currency);
         uint256 currentValue = (balance * pricePerToken) / 1e18;
         return currentValue >= targetFiat;
     }
 
     /**
-     * @notice Return OOOWEEE tokens to account owner (Time & Growth)
+     * @notice AUDIT FIX C-2: Clean tracker subtraction helper
+     * @param depositAmt The deposit-only amount (account.balance) to subtract from totalDepositedBalance
+     * @param totalAmt The total amount (deposits + rewards) to subtract from totalValueLocked
      */
-    function _executeReturn(address owner, uint256 accountId) internal virtual {
+    function _reduceTrackers(uint256 depositAmt, uint256 totalAmt) internal {
+        totalDepositedBalance = totalDepositedBalance >= depositAmt ? totalDepositedBalance - depositAmt : 0;
+        totalValueLocked = totalValueLocked >= totalAmt ? totalValueLocked - totalAmt : 0;
+        totalActiveBalance = totalActiveBalance >= depositAmt ? totalActiveBalance - depositAmt : 0;
+    }
+
+    /**
+     * @notice Return tokens to account owner (Time & Growth accounts)
+     * @dev AUDIT FIX C-2: totalBal = balance + earnedRewards. Subtract deposits from
+     *      totalDepositedBalance, totalBal from totalValueLocked. Zero out earnedRewards.
+     */
+    function _executeReturn(address owner, uint256 accountId) internal {
         SavingsAccount storage account = userAccounts[owner][accountId];
 
-        uint256 balance = account.balance;
-        if (balance == 0) return;
+        uint256 depositBal = account.balance;
+        uint256 earnedBal = accountEarnedRewards[owner][accountId];
+        uint256 totalBal = depositBal + earnedBal;
+        if (totalBal == 0) return;
 
-        uint256 fee = (balance * withdrawalFeeRate) / FEE_DIVISOR;
-        uint256 amountAfterFee = balance - fee;
+        uint256 fee = (totalBal * withdrawalFeeRate) / FEE_DIVISOR;
+        uint256 amountAfterFee = totalBal - fee;
+
+        // Solvency guard
+        uint256 contractBal = oooweeeToken.balanceOf(address(this));
+        if (amountAfterFee + fee > contractBal) {
+            amountAfterFee = contractBal > fee ? contractBal - fee : 0;
+        }
 
         account.balance = 0;
         account.isActive = false;
         account.completedAt = uint32(block.timestamp);
+        accountEarnedRewards[owner][accountId] = 0;
 
-        totalValueLocked -= balance;
-        totalActiveBalance -= balance;
+        // AUDIT FIX C-2: Clean subtraction
+        _reduceTrackers(depositBal, totalBal);
         totalGoalsCompleted++;
         totalFeesCollected += fee;
 
         if (fee > 0) {
             oooweeeToken.transfer(feeCollector, fee);
         }
-        require(oooweeeToken.transfer(owner, amountAfterFee), "Transfer failed");
+        require(oooweeeToken.transfer(owner, amountAfterFee), "TF");
 
         emit GoalCompleted(owner, accountId, account.goalName, amountAfterFee, fee);
     }
 
     /**
-     * @notice Transfer OOOWEEE to recipient (Balance accounts)
-     * @dev Fee is charged on the full balance for consistency with Time/Growth accounts.
-     *      After fee, the target amount goes to recipient and any remainder back to owner.
+     * @notice Transfer tokens to recipient (Balance accounts)
+     * @dev AUDIT FIX C-2: totalBal = balance + earnedRewards. Subtract deposits from
+     *      totalDepositedBalance, totalBal from totalValueLocked. Zero out earnedRewards.
      */
-    function _executeBalanceTransfer(address owner, uint256 accountId) internal virtual {
+    function _executeBalanceTransfer(address owner, uint256 accountId) internal {
         SavingsAccount storage account = userAccounts[owner][accountId];
 
-        // Cache full balance before any modifications
-        uint256 fullBalance = account.balance;
+        uint256 depositBal = account.balance;
+        uint256 earnedBal = accountEarnedRewards[owner][accountId];
+        uint256 totalBal = depositBal + earnedBal;
 
-        // Charge fee on full balance for consistency with Time/Growth accounts
-        uint256 fee = (fullBalance * withdrawalFeeRate) / FEE_DIVISOR;
-        uint256 balanceAfterFee = fullBalance - fee;
+        uint256 fee = (totalBal * withdrawalFeeRate) / FEE_DIVISOR;
+        uint256 balanceAfterFee = totalBal - fee;
 
         uint256 transferAmount = account.isFiatTarget
             ? getFiatToTokens(account.targetFiat, account.targetCurrency)
             : account.targetAmount;
 
-        // From the after-fee balance, send the target amount to recipient
         uint256 amountToRecipient = transferAmount;
         if (amountToRecipient > balanceAfterFee) {
             amountToRecipient = balanceAfterFee;
         }
         uint256 remainder = balanceAfterFee - amountToRecipient;
 
-        // Close account
+        // Solvency guard
+        uint256 contractBal = oooweeeToken.balanceOf(address(this));
+        if (fee + amountToRecipient + remainder > contractBal) {
+            if (amountToRecipient > contractBal) amountToRecipient = contractBal;
+            remainder = 0;
+        }
+
         account.balance = 0;
         account.isActive = false;
         account.completedAt = uint32(block.timestamp);
+        accountEarnedRewards[owner][accountId] = 0;
 
-        // Subtract the FULL original balance from trackers
-        totalValueLocked -= fullBalance;
-        totalActiveBalance -= fullBalance;
+        // AUDIT FIX C-2: Clean subtraction
+        _reduceTrackers(depositBal, totalBal);
         totalFeesCollected += fee;
         totalGoalsCompleted++;
 
@@ -653,15 +1128,84 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
             oooweeeToken.transfer(feeCollector, fee);
         }
 
-        // Send target to recipient
-        require(oooweeeToken.transfer(account.recipient, amountToRecipient), "Transfer to recipient failed");
+        require(oooweeeToken.transfer(account.recipient, amountToRecipient), "TF");
 
-        // Return remainder to owner
         if (remainder > 0) {
             oooweeeToken.transfer(owner, remainder);
         }
 
         emit BalanceTransferred(owner, account.recipient, amountToRecipient, account.goalName);
+    }
+
+    /**
+     * @notice Auto-process a matured account (called by automation or processMaturedAccounts)
+     * @dev AUDIT FIX C-2: No _merge. Uses totalBal for condition checks.
+     */
+    function _autoProcess(address owner, uint256 accountId) internal {
+        if (accountId >= userAccounts[owner].length) return;
+        SavingsAccount storage account = userAccounts[owner][accountId];
+        if (!account.isActive) return;
+
+        _updateAccountRewards(owner, accountId);
+
+        uint256 totalBal = account.balance + accountEarnedRewards[owner][accountId];
+
+        if (account.accountType == AccountType.Time) {
+            if (block.timestamp < account.unlockTime) return;
+            _executeReturn(owner, accountId);
+        } else if (account.accountType == AccountType.Growth) {
+            if (account.isFiatTarget) {
+                if (!_checkFiatTarget(totalBal, account.targetFiat, account.targetCurrency)) return;
+            } else {
+                if (totalBal < account.targetAmount) return;
+            }
+            _executeReturn(owner, accountId);
+        } else if (account.accountType == AccountType.Balance) {
+            if (account.isFiatTarget) {
+                uint256 requiredFiat = account.targetFiat + (account.targetFiat / 100);
+                if (!_checkFiatTarget(totalBal, requiredFiat, account.targetCurrency)) return;
+            } else {
+                uint256 requiredBalance = account.targetAmount + (account.targetAmount / 100);
+                if (totalBal < requiredBalance) return;
+            }
+            _executeBalanceTransfer(owner, accountId);
+        }
+
+        _removeActiveRef(owner, accountId);
+
+        emit AutoUnlockProcessed(owner, accountId, totalBal);
+    }
+
+    /**
+     * @notice Check if an account is matured using _fullBalance
+     */
+    function _isAccountMatured(address owner, uint256 accountId) internal view returns (bool) {
+        if (accountId >= userAccounts[owner].length) return false;
+        SavingsAccount memory account = userAccounts[owner][accountId];
+        if (!account.isActive) return false;
+        return _checkWithdraw(account, _fullBalance(owner, accountId));
+    }
+
+    // ============ Active Account Tracking ============
+
+    function _addActiveRef(address owner, uint256 accountId) internal {
+        if (activeAccountIndex[owner][accountId] != 0) return;
+        activeAccountRefs.push(ActiveAccountRef(owner, accountId));
+        activeAccountIndex[owner][accountId] = activeAccountRefs.length; // 1-indexed
+    }
+
+    function _removeActiveRef(address owner, uint256 accountId) internal {
+        uint256 idx = activeAccountIndex[owner][accountId];
+        if (idx == 0) return;
+
+        uint256 lastIdx = activeAccountRefs.length - 1;
+        if (idx - 1 != lastIdx) {
+            ActiveAccountRef memory last = activeAccountRefs[lastIdx];
+            activeAccountRefs[idx - 1] = last;
+            activeAccountIndex[last.owner][last.accountId] = idx;
+        }
+        activeAccountRefs.pop();
+        delete activeAccountIndex[owner][accountId];
     }
 
     // ============ View Functions ============
@@ -688,8 +1232,11 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
         }
     }
 
+    /**
+     * @notice Get account details with full balance (deposits + rewards)
+     */
     function getAccountDetails(address owner, uint256 accountId)
-        external virtual view returns (
+        external view returns (
             AccountType accountType,
             bool isActive,
             uint256 balance,
@@ -702,12 +1249,12 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
             uint256 createdAt
         )
     {
-        require(accountId < userAccounts[owner].length, "Invalid account");
+        require(accountId < userAccounts[owner].length, "E2");
         SavingsAccount memory account = userAccounts[owner][accountId];
         return (
             account.accountType,
             account.isActive,
-            account.balance + _calculatePendingRewards(owner, accountId),
+            _fullBalance(owner, accountId),
             account.targetAmount,
             account.targetFiat,
             account.targetCurrency,
@@ -718,20 +1265,23 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
         );
     }
 
+    /**
+     * @notice Get fiat progress for a fiat-target account
+     */
     function getAccountFiatProgressView(address owner, uint256 accountId)
-        external virtual view returns (
+        external view returns (
             uint256 currentValue,
             uint256 targetValue,
             uint256 percentComplete,
             bool withdrawable
         )
     {
-        require(accountId < userAccounts[owner].length, "Invalid account");
+        require(accountId < userAccounts[owner].length, "E2");
         SavingsAccount memory account = userAccounts[owner][accountId];
 
         if (!account.isFiatTarget) return (0, 0, 0, false);
 
-        uint256 totalBalance = account.balance + _calculatePendingRewards(owner, accountId);
+        uint256 totalBalance = _fullBalance(owner, accountId);
         currentValue = getBalanceInFiatView(totalBalance, account.targetCurrency);
         targetValue = account.targetFiat;
 
@@ -742,28 +1292,41 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
 
         withdrawable = false;
         if (account.accountType == AccountType.Growth) {
-            withdrawable = currentValue >= targetValue;
+            withdrawable = currentValue >= account.targetFiat;
         } else if (account.accountType == AccountType.Balance) {
-            uint256 requiredValue = targetValue + (targetValue / 100);
+            uint256 requiredValue = account.targetFiat + (account.targetFiat / 100);
             withdrawable = currentValue >= requiredValue;
         }
     }
 
-    function _calculatePendingRewards(address owner, uint256 accountId)
-        internal virtual view returns (uint256)
+    /**
+     * @notice Get detailed balance breakdown for an account
+     */
+    function getAccountBalanceBreakdown(address owner, uint256 accountId)
+        external view returns (
+            uint256 depositBalance,
+            uint256 earnedRewards,
+            uint256 pendingAmt,
+            uint256 totalBalance
+        )
     {
+        require(accountId < userAccounts[owner].length, "E2");
         SavingsAccount memory account = userAccounts[owner][accountId];
-        if (!account.isActive) return 0;
+        depositBalance = account.balance;
+        earnedRewards = accountEarnedRewards[owner][accountId];
 
-        uint256 currentGlobalReward = globalRewardPerToken;
-        if (pendingRewards > 0 && totalActiveBalance > 0) {
-            currentGlobalReward += (pendingRewards * 1e18) / totalActiveBalance;
+        if (account.isActive) {
+            uint256 currentReward = rewardPerToken;
+            if (pendingRewards > 0 && totalDepositedBalance > 0) {
+                currentReward += (pendingRewards * 1e18) / totalDepositedBalance;
+            }
+            uint256 lu = lastRewardUpdate[owner][accountId];
+            if (currentReward > lu) {
+                pendingAmt = (account.balance * (currentReward - lu)) / 1e18;
+            }
         }
 
-        if (currentGlobalReward > account.lastRewardUpdate) {
-            return (account.balance * (currentGlobalReward - account.lastRewardUpdate)) / 1e18;
-        }
-        return 0;
+        totalBalance = depositBalance + earnedRewards + pendingAmt;
     }
 
     function getStatsView() external view returns (
@@ -783,6 +1346,57 @@ contract OOOWEEESavings is Initializable, ReentrancyGuardUpgradeable, OwnableUpg
             totalFeesCollected
         );
     }
+
+    // ============ Group View Functions ============
+
+    function getGroupDetails(uint256 groupId) external view returns (
+        address creator,
+        address destinationWallet,
+        AccountType accountType,
+        bool isActive,
+        uint256 totalBalance,
+        uint256 targetFiat,
+        SavingsPriceOracle.Currency targetCurrency,
+        uint32 unlockTime,
+        string memory goalName,
+        uint256 memberCount
+    ) {
+        GroupAccount storage group = groups[groupId];
+        return (
+            group.creator,
+            group.destinationWallet,
+            group.accountType,
+            group.isActive,
+            group.totalBalance,
+            group.targetFiat,
+            group.targetCurrency,
+            group.unlockTime,
+            group.goalName,
+            group.members.length
+        );
+    }
+
+    function getGroupMembers(uint256 groupId) external view returns (address[] memory) {
+        return groups[groupId].members;
+    }
+
+    function getGroupContribution(uint256 groupId, address member) external view returns (uint256) {
+        return groups[groupId].contributions[member];
+    }
+
+    function isGroupMember(uint256 groupId, address member) external view returns (bool) {
+        return groups[groupId].isMember[member];
+    }
+
+    function isGroupInvited(uint256 groupId, address member) external view returns (bool) {
+        return groups[groupId].isInvited[member];
+    }
+
+    function getActiveAccountCount() external view returns (uint256) {
+        return activeAccountRefs.length;
+    }
+
+    // ============ UUPS Upgrade ============
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 }

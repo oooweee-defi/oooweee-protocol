@@ -717,25 +717,9 @@ export const OOOWEEETokenABI = [
 ];
 
 // ============================================
-// OOOWEEESavings ABI
+// OOOWEEESavings ABI (flattened — all audit fixes applied)
 // ============================================
 export const OOOWEEESavingsABI = [
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_tokenAddress",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "_priceOracle",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "nonpayable",
-    "type": "constructor"
-  },
   {
     "anonymous": false,
     "inputs": [
@@ -783,6 +767,63 @@ export const OOOWEEESavingsABI = [
     "anonymous": false,
     "inputs": [
       {
+        "indexed": false,
+        "internalType": "address",
+        "name": "previousAdmin",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "newAdmin",
+        "type": "address"
+      }
+    ],
+    "name": "AdminChanged",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "owner",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "accountId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "AutoUnlockProcessed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "registry",
+        "type": "address"
+      }
+    ],
+    "name": "AutomationRegistryUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
         "indexed": true,
         "internalType": "address",
         "name": "from",
@@ -808,6 +849,19 @@ export const OOOWEEESavingsABI = [
       }
     ],
     "name": "BalanceTransferred",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "beacon",
+        "type": "address"
+      }
+    ],
+    "name": "BeaconUpgraded",
     "type": "event"
   },
   {
@@ -952,6 +1006,157 @@ export const OOOWEEESavingsABI = [
     "inputs": [
       {
         "indexed": true,
+        "internalType": "uint256",
+        "name": "groupId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "cancelledBy",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "totalReturned",
+        "type": "uint256"
+      }
+    ],
+    "name": "GroupCancelled",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "groupId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "destination",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "GroupCompleted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "groupId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "creator",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "goalName",
+        "type": "string"
+      }
+    ],
+    "name": "GroupCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "groupId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "depositor",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "GroupDeposit",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "version",
+        "type": "uint8"
+      }
+    ],
+    "name": "Initialized",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "groupId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "member",
+        "type": "address"
+      }
+    ],
+    "name": "InvitationAccepted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "groupId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "member",
+        "type": "address"
+      }
+    ],
+    "name": "MemberInvited",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
         "internalType": "address",
         "name": "previousOwner",
         "type": "address"
@@ -1037,6 +1242,19 @@ export const OOOWEEESavingsABI = [
     "type": "event"
   },
   {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "implementation",
+        "type": "address"
+      }
+    ],
+    "name": "Upgraded",
+    "type": "event"
+  },
+  {
     "inputs": [],
     "name": "FEE_DIVISOR",
     "outputs": [
@@ -1057,6 +1275,104 @@ export const OOOWEEESavingsABI = [
         "internalType": "uint256",
         "name": "",
         "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "groupId",
+        "type": "uint256"
+      }
+    ],
+    "name": "acceptInvitation",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "accountEarnedRewards",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "activeAccountIndex",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "activeAccountRefs",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "owner",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "accountId",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "automationRegistry",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
       }
     ],
     "stateMutability": "view",
@@ -1090,20 +1406,37 @@ export const OOOWEEESavingsABI = [
     "inputs": [
       {
         "internalType": "uint256",
-        "name": "accountId",
+        "name": "groupId",
         "type": "uint256"
       }
     ],
-    "name": "manualWithdraw",
+    "name": "cancelGroupAccount",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "processMaturedAccounts",
-    "outputs": [],
-    "stateMutability": "nonpayable",
+    "inputs": [
+      {
+        "internalType": "bytes",
+        "name": "",
+        "type": "bytes"
+      }
+    ],
+    "name": "checkUpkeep",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "upkeepNeeded",
+        "type": "bool"
+      },
+      {
+        "internalType": "bytes",
+        "name": "performData",
+        "type": "bytes"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -1173,6 +1506,55 @@ export const OOOWEEESavingsABI = [
       }
     ],
     "name": "createBalanceAccount",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "enum OOOWEEESavings.AccountType",
+        "name": "_accountType",
+        "type": "uint8"
+      },
+      {
+        "internalType": "address",
+        "name": "_destinationWallet",
+        "type": "address"
+      },
+      {
+        "internalType": "string",
+        "name": "_goalName",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_targetFiat",
+        "type": "uint256"
+      },
+      {
+        "internalType": "enum SavingsPriceOracle.Currency",
+        "name": "_targetCurrency",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint32",
+        "name": "_unlockTime",
+        "type": "uint32"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_initialDeposit",
+        "type": "uint256"
+      }
+    ],
+    "name": "createGroupAccount",
     "outputs": [
       {
         "internalType": "uint256",
@@ -1283,6 +1665,24 @@ export const OOOWEEESavingsABI = [
     "type": "function"
   },
   {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "groupId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "depositToGroup",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [],
     "name": "feeCollector",
     "outputs": [
@@ -1290,6 +1690,45 @@ export const OOOWEEESavingsABI = [
         "internalType": "address",
         "name": "",
         "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "owner",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "accountId",
+        "type": "uint256"
+      }
+    ],
+    "name": "getAccountBalanceBreakdown",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "depositBalance",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "earnedRewards",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "pendingAmt",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "totalBalance",
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -1404,6 +1843,19 @@ export const OOOWEEESavingsABI = [
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "getActiveAccountCount",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "uint256",
@@ -1500,6 +1952,113 @@ export const OOOWEEESavingsABI = [
     "type": "function"
   },
   {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "groupId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "member",
+        "type": "address"
+      }
+    ],
+    "name": "getGroupContribution",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "groupId",
+        "type": "uint256"
+      }
+    ],
+    "name": "getGroupDetails",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "creator",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "destinationWallet",
+        "type": "address"
+      },
+      {
+        "internalType": "enum OOOWEEESavings.AccountType",
+        "name": "accountType",
+        "type": "uint8"
+      },
+      {
+        "internalType": "bool",
+        "name": "isActive",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "totalBalance",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "targetFiat",
+        "type": "uint256"
+      },
+      {
+        "internalType": "enum SavingsPriceOracle.Currency",
+        "name": "targetCurrency",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint32",
+        "name": "unlockTime",
+        "type": "uint32"
+      },
+      {
+        "internalType": "string",
+        "name": "goalName",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "memberCount",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "groupId",
+        "type": "uint256"
+      }
+    ],
+    "name": "getGroupMembers",
+    "outputs": [
+      {
+        "internalType": "address[]",
+        "name": "",
+        "type": "address[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [],
     "name": "getStatsView",
     "outputs": [
@@ -1561,78 +2120,137 @@ export const OOOWEEESavingsABI = [
     "stateMutability": "view",
     "type": "function"
   },
-  // ============================================
-  // V2 Group Savings Functions
-  // ============================================
-  // Events
   {
-    "anonymous": false,
     "inputs": [
-      { "indexed": true, "internalType": "uint256", "name": "groupId", "type": "uint256" },
-      { "indexed": true, "internalType": "address", "name": "creator", "type": "address" },
-      { "indexed": false, "internalType": "string", "name": "goalName", "type": "string" }
+      {
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      }
     ],
-    "name": "GroupCreated",
-    "type": "event"
+    "name": "getUserAccounts",
+    "outputs": [
+      {
+        "internalType": "uint256[]",
+        "name": "activeIds",
+        "type": "uint256[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "uint256", "name": "groupId", "type": "uint256" },
-      { "indexed": true, "internalType": "address", "name": "member", "type": "address" }
+    "inputs": [],
+    "name": "groupCount",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
     ],
-    "name": "MemberInvited",
-    "type": "event"
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    "anonymous": false,
     "inputs": [
-      { "indexed": true, "internalType": "uint256", "name": "groupId", "type": "uint256" },
-      { "indexed": true, "internalType": "address", "name": "member", "type": "address" }
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
     ],
-    "name": "InvitationAccepted",
-    "type": "event"
+    "name": "groups",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "creator",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "destinationWallet",
+        "type": "address"
+      },
+      {
+        "internalType": "enum OOOWEEESavings.AccountType",
+        "name": "accountType",
+        "type": "uint8"
+      },
+      {
+        "internalType": "enum SavingsPriceOracle.Currency",
+        "name": "targetCurrency",
+        "type": "uint8"
+      },
+      {
+        "internalType": "bool",
+        "name": "isActive",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint32",
+        "name": "createdAt",
+        "type": "uint32"
+      },
+      {
+        "internalType": "uint32",
+        "name": "completedAt",
+        "type": "uint32"
+      },
+      {
+        "internalType": "uint32",
+        "name": "unlockTime",
+        "type": "uint32"
+      },
+      {
+        "internalType": "uint256",
+        "name": "totalBalance",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "targetFiat",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "goalName",
+        "type": "string"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    "anonymous": false,
     "inputs": [
-      { "indexed": true, "internalType": "uint256", "name": "groupId", "type": "uint256" },
-      { "indexed": true, "internalType": "address", "name": "depositor", "type": "address" },
-      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }
+      {
+        "internalType": "address",
+        "name": "_tokenAddress",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_priceOracle",
+        "type": "address"
+      }
     ],
-    "name": "GroupDeposit",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "uint256", "name": "groupId", "type": "uint256" },
-      { "indexed": true, "internalType": "address", "name": "destination", "type": "address" },
-      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }
-    ],
-    "name": "GroupCompleted",
-    "type": "event"
-  },
-  // Mutating functions
-  {
-    "inputs": [
-      { "internalType": "uint8", "name": "_accountType", "type": "uint8" },
-      { "internalType": "address", "name": "_destinationWallet", "type": "address" },
-      { "internalType": "string", "name": "_goalName", "type": "string" },
-      { "internalType": "uint256", "name": "_targetFiat", "type": "uint256" },
-      { "internalType": "uint8", "name": "_targetCurrency", "type": "uint8" },
-      { "internalType": "uint32", "name": "_unlockTime", "type": "uint32" },
-      { "internalType": "uint256", "name": "_initialDeposit", "type": "uint256" }
-    ],
-    "name": "createGroupAccount",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "name": "initialize",
+    "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
     "inputs": [
-      { "internalType": "uint256", "name": "groupId", "type": "uint256" },
-      { "internalType": "address", "name": "member", "type": "address" }
+      {
+        "internalType": "uint256",
+        "name": "groupId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "member",
+        "type": "address"
+      }
     ],
     "name": "inviteMember",
     "outputs": [],
@@ -1641,96 +2259,571 @@ export const OOOWEEESavingsABI = [
   },
   {
     "inputs": [
-      { "internalType": "uint256", "name": "groupId", "type": "uint256" }
+      {
+        "internalType": "uint256",
+        "name": "groupId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "member",
+        "type": "address"
+      }
     ],
-    "name": "acceptInvitation",
+    "name": "isGroupInvited",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "groupId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "member",
+        "type": "address"
+      }
+    ],
+    "name": "isGroupMember",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "lastRewardDistribution",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "lastRewardUpdate",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "accountId",
+        "type": "uint256"
+      }
+    ],
+    "name": "manualWithdraw",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
-    "inputs": [
-      { "internalType": "uint256", "name": "groupId", "type": "uint256" },
-      { "internalType": "uint256", "name": "amount", "type": "uint256" }
+    "inputs": [],
+    "name": "maxAutoProcessBatch",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
     ],
-    "name": "depositToGroup",
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "oooweeeToken",
+    "outputs": [
+      {
+        "internalType": "contract IERC20",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "owner",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "pendingRewards",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes",
+        "name": "performData",
+        "type": "bytes"
+      }
+    ],
+    "name": "performUpkeep",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "priceOracle",
+    "outputs": [
+      {
+        "internalType": "contract SavingsPriceOracle",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
-      { "internalType": "uint256", "name": "groupId", "type": "uint256" }
+      {
+        "internalType": "uint256",
+        "name": "groupId",
+        "type": "uint256"
+      }
     ],
     "name": "processGroupAccount",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
-  // View functions
   {
     "inputs": [],
-    "name": "groupCount",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
+    "name": "processMaturedAccounts",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
-    "inputs": [
-      { "internalType": "uint256", "name": "groupId", "type": "uint256" }
-    ],
-    "name": "getGroupDetails",
+    "inputs": [],
+    "name": "proxiableUUID",
     "outputs": [
-      { "internalType": "address", "name": "creator", "type": "address" },
-      { "internalType": "address", "name": "destinationWallet", "type": "address" },
-      { "internalType": "uint8", "name": "accountType", "type": "uint8" },
-      { "internalType": "bool", "name": "isActive", "type": "bool" },
-      { "internalType": "uint256", "name": "totalBalance", "type": "uint256" },
-      { "internalType": "uint256", "name": "targetFiat", "type": "uint256" },
-      { "internalType": "uint8", "name": "targetCurrency", "type": "uint8" },
-      { "internalType": "uint32", "name": "unlockTime", "type": "uint32" },
-      { "internalType": "string", "name": "goalName", "type": "string" },
-      { "internalType": "uint256", "name": "memberCount", "type": "uint256" }
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
     ],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [
-      { "internalType": "uint256", "name": "groupId", "type": "uint256" }
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
     ],
-    "name": "getGroupMembers",
-    "outputs": [{ "internalType": "address[]", "name": "", "type": "address[]" }],
+    "name": "receiveRewards",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "renounceOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "rewardPerToken",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "rewardsDistributor",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [
-      { "internalType": "uint256", "name": "groupId", "type": "uint256" },
-      { "internalType": "address", "name": "member", "type": "address" }
+      {
+        "internalType": "address",
+        "name": "_registry",
+        "type": "address"
+      }
     ],
-    "name": "getGroupContribution",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "name": "setAutomationRegistry",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_feeCollector",
+        "type": "address"
+      }
+    ],
+    "name": "setFeeCollector",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_creationFeeRate",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_withdrawalFeeRate",
+        "type": "uint256"
+      }
+    ],
+    "name": "setFees",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_max",
+        "type": "uint256"
+      }
+    ],
+    "name": "setMaxAutoProcessBatch",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_priceOracle",
+        "type": "address"
+      }
+    ],
+    "name": "setPriceOracle",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_distributor",
+        "type": "address"
+      }
+    ],
+    "name": "setRewardsDistributor",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalAccountsCreated",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalActiveBalance",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalDepositedBalance",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalFeesCollected",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalGoalsCompleted",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalRewardsDistributed",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalValueLocked",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [
-      { "internalType": "uint256", "name": "groupId", "type": "uint256" },
-      { "internalType": "address", "name": "member", "type": "address" }
+      {
+        "internalType": "address",
+        "name": "newOwner",
+        "type": "address"
+      }
     ],
-    "name": "isGroupMember",
-    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
-    "stateMutability": "view",
+    "name": "transferOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
     "inputs": [
-      { "internalType": "uint256", "name": "groupId", "type": "uint256" },
-      { "internalType": "address", "name": "member", "type": "address" }
+      {
+        "internalType": "address",
+        "name": "newImplementation",
+        "type": "address"
+      }
     ],
-    "name": "isGroupInvited",
-    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "name": "upgradeTo",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "newImplementation",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes",
+        "name": "data",
+        "type": "bytes"
+      }
+    ],
+    "name": "upgradeToAndCall",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "userAccounts",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "owner",
+        "type": "address"
+      },
+      {
+        "internalType": "enum OOOWEEESavings.AccountType",
+        "name": "accountType",
+        "type": "uint8"
+      },
+      {
+        "internalType": "enum SavingsPriceOracle.Currency",
+        "name": "targetCurrency",
+        "type": "uint8"
+      },
+      {
+        "internalType": "bool",
+        "name": "isActive",
+        "type": "bool"
+      },
+      {
+        "internalType": "bool",
+        "name": "isFiatTarget",
+        "type": "bool"
+      },
+      {
+        "internalType": "uint32",
+        "name": "createdAt",
+        "type": "uint32"
+      },
+      {
+        "internalType": "uint32",
+        "name": "completedAt",
+        "type": "uint32"
+      },
+      {
+        "internalType": "address",
+        "name": "recipient",
+        "type": "address"
+      },
+      {
+        "internalType": "uint32",
+        "name": "unlockTime",
+        "type": "uint32"
+      },
+      {
+        "internalType": "uint256",
+        "name": "balance",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "targetAmount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "targetFiat",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "goalName",
+        "type": "string"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "withdrawalFeeRate",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
     "stateMutability": "view",
     "type": "function"
   }

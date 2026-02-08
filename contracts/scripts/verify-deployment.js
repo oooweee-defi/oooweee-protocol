@@ -47,7 +47,7 @@ async function main() {
   // Get contract instances
   const token = await ethers.getContractAt("OOOWEEEToken", c.OOOWEEEToken);
   const oracle = await ethers.getContractAt("SavingsPriceOracle", c.SavingsPriceOracle);
-  const savings = await ethers.getContractAt("OOOWEEESavingsV3", c.OOOWEEESavings);
+  const savings = await ethers.getContractAt("OOOWEEESavings", c.OOOWEEESavings);
   const validatorFund = await ethers.getContractAt("OOOWEEEValidatorFund", c.OOOWEEEValidatorFund);
   const stability = await ethers.getContractAt("OOOWEEEStability", c.OOOWEEEStability);
   const donorRegistry = await ethers.getContractAt("DonorRegistry", c.DonorRegistry);
@@ -117,7 +117,7 @@ async function main() {
   }
 
   // ============ STEP 4: SAVINGS CHECKS ============
-  console.log("\n--- Step 4: Savings (V3) ---");
+  console.log("\n--- Step 4: Savings ---");
 
   const savingsToken = await savings.oooweeeToken();
   check("Savings → token", savingsToken.toLowerCase() === c.OOOWEEEToken.toLowerCase());
@@ -127,9 +127,6 @@ async function main() {
 
   const rewardsDistributor = await savings.rewardsDistributor();
   check("Savings → rewardsDistributor", rewardsDistributor.toLowerCase() === c.OOOWEEEValidatorFund.toLowerCase());
-
-  const v3Init = await savings.v3Initialized();
-  check("V3 initialized", v3Init === true);
 
   const batch = await savings.maxAutoProcessBatch();
   check("maxAutoProcessBatch = 20", batch.toNumber() === 20);
@@ -152,8 +149,8 @@ async function main() {
   const stabToken = await stability.oooweeeToken();
   check("Stability → token", stabToken.toLowerCase() === c.OOOWEEEToken.toLowerCase());
 
-  const stabVF = await stability.validatorFund();
-  check("Stability → validatorFund", stabVF.toLowerCase() === c.OOOWEEEValidatorFund.toLowerCase());
+  const stabVF = await stability.validatorFundWallet();
+  check("Stability → validatorFundWallet", stabVF.toLowerCase() === c.OOOWEEEValidatorFund.toLowerCase());
 
   if (deployment.uniswapPair) {
     const stabPair = await stability.liquidityPair();

@@ -23,9 +23,12 @@ module.exports = {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 1
+        runs: 200
       },
-      viaIR: true
+      viaIR: true,
+      debug: {
+        revertStrings: "strip"
+      }
     }
   },
   networks: {

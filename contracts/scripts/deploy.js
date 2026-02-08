@@ -1,7 +1,7 @@
 /**
  * OOOWEEE Protocol — Mainnet Deployment
  *
- * Deploys all 6 contracts with V3 Savings (direct deploy, no upgrade dance).
+ * Deploys all 6 contracts as UUPS proxies with flattened Savings.
  * Reads wallet addresses from .env — nothing hardcoded.
  *
  * Usage: npx hardhat run scripts/deploy.js --network mainnet
@@ -54,53 +54,58 @@ async function main() {
   // ============ PHASE 1: DEPLOY CONTRACTS ============
   console.log("\n📦 Phase 1: Deploying contracts...\n");
 
-  // 1. OOOWEEEToken (non-upgradeable)
-  console.log("1/6 Deploying OOOWEEEToken...");
+  // 1. OOOWEEEToken (UUPS proxy)
+  console.log("1/6 Deploying OOOWEEEToken (UUPS proxy)...");
   const Token = await ethers.getContractFactory("OOOWEEEToken");
-  const token = await Token.deploy(FOUNDER_WALLET, OPERATIONS_WALLET);
+  const token = await upgrades.deployProxy(
+    Token,
+    [FOUNDER_WALLET, OPERATIONS_WALLET],
+    { kind: "uups" }
+  );
   await token.deployed();
   console.log("  ✓ OOOWEEEToken:", token.address);
 
-  // 2. SavingsPriceOracle (non-upgradeable)
-  console.log("2/6 Deploying SavingsPriceOracle...");
+  // 2. SavingsPriceOracle (UUPS proxy)
+  console.log("2/6 Deploying SavingsPriceOracle (UUPS proxy)...");
   const Oracle = await ethers.getContractFactory("SavingsPriceOracle");
-  const oracle = await Oracle.deploy(UNISWAP_ROUTER);
+  const oracle = await upgrades.deployProxy(
+    Oracle,
+    [UNISWAP_ROUTER],
+    { kind: "uups" }
+  );
   await oracle.deployed();
   console.log("  ✓ SavingsPriceOracle:", oracle.address);
 
-  // 3. OOOWEEESavingsV3 — deploy as UUPS proxy with V3 implementation directly
-  console.log("3/6 Deploying OOOWEEESavingsV3 (UUPS proxy)...");
-  const OOOWEEESavingsV3 = await ethers.getContractFactory("OOOWEEESavingsV3");
+  // 3. OOOWEEESavings (UUPS proxy — single flattened contract)
+  console.log("3/6 Deploying OOOWEEESavings (UUPS proxy)...");
+  const Savings = await ethers.getContractFactory("OOOWEEESavings");
   const savings = await upgrades.deployProxy(
-    OOOWEEESavingsV3,
-    [token.address, oracle.address],  // calls inherited initialize(token, oracle)
-    { kind: "uups", unsafeSkipStorageCheck: true }
+    Savings,
+    [token.address, oracle.address],
+    { kind: "uups" }
   );
   await savings.deployed();
-  console.log("  ✓ OOOWEEESavings proxy:", savings.address);
+  console.log("  ✓ OOOWEEESavings:", savings.address);
 
-  // Initialize V2 + V3 features
-  console.log("  → Initializing V2 (batch processing)...");
-  let tx = await savings.initializeV2(20);
-  await tx.wait();
-  console.log("  ✓ V2 initialized (maxAutoProcessBatch = 20)");
-
-  console.log("  → Initializing V3 (deposit tracking)...");
-  tx = await savings.initializeV3();
-  await tx.wait();
-  console.log("  ✓ V3 initialized");
-
-  // 4. OOOWEEEValidatorFund (non-upgradeable)
-  console.log("4/6 Deploying OOOWEEEValidatorFund...");
+  // 4. OOOWEEEValidatorFund (UUPS proxy)
+  console.log("4/6 Deploying OOOWEEEValidatorFund (UUPS proxy)...");
   const ValidatorFund = await ethers.getContractFactory("OOOWEEEValidatorFund");
-  const validatorFund = await ValidatorFund.deploy(UNISWAP_ROUTER, OPERATIONS_WALLET);
+  const validatorFund = await upgrades.deployProxy(
+    ValidatorFund,
+    [UNISWAP_ROUTER, OPERATIONS_WALLET],
+    { kind: "uups" }
+  );
   await validatorFund.deployed();
   console.log("  ✓ OOOWEEEValidatorFund:", validatorFund.address);
 
-  // 5. OOOWEEEStability (non-upgradeable)
-  console.log("5/6 Deploying OOOWEEEStability...");
+  // 5. OOOWEEEStability (UUPS proxy)
+  console.log("5/6 Deploying OOOWEEEStability (UUPS proxy)...");
   const Stability = await ethers.getContractFactory("OOOWEEEStability");
-  const stability = await Stability.deploy(token.address, UNISWAP_ROUTER, validatorFund.address);
+  const stability = await upgrades.deployProxy(
+    Stability,
+    [token.address, UNISWAP_ROUTER, validatorFund.address],
+    { kind: "uups" }
+  );
   await stability.deployed();
   console.log("  ✓ OOOWEEEStability:", stability.address);
 
@@ -157,7 +162,7 @@ async function main() {
 
   // Token: transfer 80M to stability
   console.log("Setting stability mechanism (transfers 80M)...");
-  tx = await token.setStabilityMechanism(stability.address);
+  let tx = await token.setStabilityMechanism(stability.address);
   await tx.wait();
   console.log("  ✓ 80M tokens transferred to Stability");
 
