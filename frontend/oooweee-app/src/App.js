@@ -19,9 +19,9 @@ const UNISWAP_ROUTER_ABI = [
   "function WETH() external pure returns (address)"
 ];
 
-// Contract addresses
-const UNISWAP_ROUTER = "0xeE567Fe1712Faf6149d80dA1E6934E354124CfE3";
-const WETH_ADDRESS = "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14";
+// Contract addresses — Ethereum Mainnet
+const UNISWAP_ROUTER = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D";
+const WETH_ADDRESS = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 
 // ADMIN WALLET - Update this to your operations wallet address
 const ADMIN_WALLET = "0xB05F42B174E5152d34431eE4504210932ddfE715";
@@ -31,16 +31,16 @@ const WEB3AUTH_CLIENT_ID = "BBELIcLUxA8LFzE-ux8CxUpyKoojLwasmixNSEtqLcPFv7KUnRWK
 
 // Transak fiat onramp configuration
 const TRANSAK_API_KEY = "5606035c-b59a-4c73-80f0-b9930cdfd9f9";
-const SEPOLIA_CHAIN_CONFIG = {
+const CHAIN_CONFIG = {
   chainNamespace: CHAIN_NAMESPACES.EIP155,
-  chainId: "0xaa36a7",
-  rpcTarget: "https://ethereum-sepolia-rpc.publicnode.com",
-  displayName: "Ethereum Sepolia",
-  blockExplorerUrl: "https://sepolia.etherscan.io",
+  chainId: "0x1",
+  rpcTarget: "https://eth.llamarpc.com",
+  displayName: "Ethereum Mainnet",
+  blockExplorerUrl: "https://etherscan.io",
   ticker: "ETH",
   tickerName: "Ethereum",
   decimals: 18,
-  isTestnet: true,
+  isTestnet: false,
 };
 
 // Currency configuration - USD/EUR/GBP only
@@ -57,9 +57,9 @@ const providerOptions = {
     options: {
       projectId: "084d65a488f56065ea7a901e023a8b3e",
       rpc: {
-        11155111: "https://ethereum-sepolia-rpc.publicnode.com"
+        1: "https://eth.llamarpc.com"
       },
-      chainId: 11155111,
+      chainId: 1,
       bridge: "https://bridge.walletconnect.org",
       qrcode: true,
       qrcodeModalOptions: {
@@ -390,7 +390,7 @@ function App() {
       // Initialize Web3Auth
       try {
         const privateKeyProvider = new EthereumPrivateKeyProvider({
-          config: { chainConfig: SEPOLIA_CHAIN_CONFIG },
+          config: { chainConfig: CHAIN_CONFIG },
         });
 
         const web3authInstance = new Web3Auth({
@@ -1065,8 +1065,8 @@ function App() {
       const address = await signer.getAddress();
 
       const network = await web3Provider.getNetwork();
-      if (network.chainId !== 11155111) {
-        toast.error('Please switch to Sepolia network');
+      if (network.chainId !== 1) {
+        toast.error('Please switch to Ethereum Mainnet');
         setLoading(false);
         setIsConnecting(false);
         return;

@@ -510,4 +510,10 @@ contract OOOWEEEValidatorFund is Initializable, OwnableUpgradeable, ReentrancyGu
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+
+    function renounceOwnership() public virtual override {
+        revert("Renounce disabled");
+    }
+
+    uint256[50] private __gap;
 }

@@ -75,4 +75,10 @@ contract DonorRegistry is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+
+    function renounceOwnership() public virtual override {
+        revert("Renounce disabled");
+    }
+
+    uint256[50] private __gap;
 }
