@@ -9,14 +9,12 @@ if (!process.env.PRIVATE_KEY) {
   console.warn("⚠️  No PRIVATE_KEY set - deployment will not work, but compilation is fine");
 }
 
-// Default to public RPC if not specified
+const MAINNET_RPC_URL = process.env.MAINNET_RPC_URL || "";
 const SEPOLIA_RPC_URL = process.env.SEPOLIA_RPC_URL || "https://rpc.sepolia.org";
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || "";
 
-// Show warning if no Etherscan key
 if (!ETHERSCAN_API_KEY) {
   console.warn("⚠️  No ETHERSCAN_API_KEY set - verification will not work");
-  console.warn("   Get a free key at https://etherscan.io/apis");
 }
 
 module.exports = {
@@ -31,6 +29,13 @@ module.exports = {
     }
   },
   networks: {
+    mainnet: {
+      url: MAINNET_RPC_URL,
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      chainId: 1,
+      gasPrice: "auto",
+      timeout: 120000
+    },
     sepolia: {
       url: SEPOLIA_RPC_URL,
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
@@ -44,19 +49,9 @@ module.exports = {
   },
   etherscan: {
     apiKey: {
+      mainnet: ETHERSCAN_API_KEY,
       sepolia: ETHERSCAN_API_KEY
-    },
-    customChains: [
-      {
-        network: "sepolia",
-        chainId: 11155111,
-        urls: {
-          apiURL: "https://api.etherscan.io/v2/api?chainid=11155111",
-          browserURL: "https://sepolia.etherscan.io"
-        }
-      }
-    ],
-    enabled: true
+    }
   },
   sourcify: {
     enabled: false
