@@ -4,6 +4,12 @@
  * Deploys all 6 contracts as UUPS proxies with flattened Savings.
  * Reads wallet addresses from .env — nothing hardcoded.
  *
+ * IMPORTANT (M-2 R2): Do NOT call ValidatorFund.distributeRewards() before at
+ * least one savings account exists. If rewards arrive when totalDepositedBalance == 0,
+ * they accumulate in pendingRewards and the first depositor captures 100%.
+ * Deployment order: deploy → setup-liquidity → verify → setup-chainlink → create
+ * at least one savings account → THEN start reward distribution.
+ *
  * Usage: npx hardhat run scripts/deploy.js --network mainnet
  */
 const { ethers, upgrades } = require("hardhat");

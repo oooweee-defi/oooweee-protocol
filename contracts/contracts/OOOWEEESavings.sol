@@ -142,6 +142,9 @@ contract OOOWEEESavings is
     uint256 public groupCount;
     mapping(uint256 => GroupAccount) public groups;
 
+    // AUDIT FIX M-3 R2: Track group deposits separately for solvency calculation
+    uint256 public totalGroupBalance;
+
     // ============ Storage Gap ============
 
     uint256[50] private __gap;
@@ -671,7 +674,7 @@ contract OOOWEEESavings is
     /**
      * @notice Chainlink Automation: process matured accounts
      */
-    function performUpkeep(bytes calldata performData) external override {
+    function performUpkeep(bytes calldata performData) external override nonReentrant {
         require(automationRegistry != address(0), "E17");
         require(msg.sender == automationRegistry, "E18");
 
@@ -756,6 +759,8 @@ contract OOOWEEESavings is
         totalActiveBalance += depositAfterFee;
         // AUDIT FIX M-2 NEW: Group deposits excluded from totalDepositedBalance
         // to avoid diluting individual account rewards. Groups don't earn rewards.
+        // AUDIT FIX M-3 R2: Track group balance for solvency calculation
+        totalGroupBalance += depositAfterFee;
 
         emit GroupCreated(groupId, msg.sender, _goalName);
         return groupId;
@@ -812,6 +817,7 @@ contract OOOWEEESavings is
         group.contributions[msg.sender] += depositAfterFee;
         totalValueLocked += depositAfterFee;
         totalActiveBalance += depositAfterFee;
+        totalGroupBalance += depositAfterFee;
 
         emit GroupDeposit(groupId, msg.sender, depositAfterFee);
     }
@@ -856,7 +862,8 @@ contract OOOWEEESavings is
 
         totalValueLocked = totalValueLocked >= bal ? totalValueLocked - bal : 0;
         totalActiveBalance = totalActiveBalance >= bal ? totalActiveBalance - bal : 0;
-        // AUDIT FIX M-2 NEW: Groups excluded from totalDepositedBalance — no subtraction needed
+        // AUDIT FIX M-3 R2: Subtract from totalGroupBalance
+        totalGroupBalance = totalGroupBalance >= bal ? totalGroupBalance - bal : 0;
         totalGoalsCompleted++;
         totalFeesCollected += fee;
 
@@ -911,7 +918,8 @@ contract OOOWEEESavings is
 
         totalValueLocked = totalValueLocked >= bal ? totalValueLocked - bal : 0;
         totalActiveBalance = totalActiveBalance >= bal ? totalActiveBalance - bal : 0;
-        // AUDIT FIX M-2 NEW: Groups excluded from totalDepositedBalance — no subtraction needed
+        // AUDIT FIX M-3 R2: Subtract from totalGroupBalance
+        totalGroupBalance = totalGroupBalance >= bal ? totalGroupBalance - bal : 0;
 
         // Return contributions proportionally to members
         uint256 totalReturned = 0;
@@ -941,7 +949,8 @@ contract OOOWEEESavings is
     /**
      * @notice Update account rewards using the clean V3 system
      * @dev Uses rewardPerToken, lastRewardUpdate mapping, accountEarnedRewards mapping.
-     *      Solvency check: earned rewards capped at (contract balance - totalDepositedBalance).
+     *      AUDIT FIX M-3 R2: Solvency check accounts for both individual deposits AND group deposits.
+     *      Available rewards = contractBalance - totalDepositedBalance - totalGroupBalance.
      */
     function _updateAccountRewards(address owner, uint256 accountId) internal {
         SavingsAccount storage account = userAccounts[owner][accountId];
@@ -961,10 +970,12 @@ contract OOOWEEESavings is
         if (currentReward > lu) {
             uint256 earned = (account.balance * (currentReward - lu)) / 1e18;
 
-            // Solvency check: cap earned rewards at available contract balance minus deposits
+            // AUDIT FIX M-3 R2: Solvency check must reserve tokens for both
+            // individual deposits and group deposits
             uint256 contractBalance = oooweeeToken.balanceOf(address(this));
-            if (totalDepositedBalance + earned > contractBalance) {
-                earned = contractBalance > totalDepositedBalance ? contractBalance - totalDepositedBalance : 0;
+            uint256 reserved = totalDepositedBalance + totalGroupBalance;
+            if (reserved + earned > contractBalance) {
+                earned = contractBalance > reserved ? contractBalance - reserved : 0;
             }
 
             if (earned > 0) {
@@ -1115,11 +1126,12 @@ contract OOOWEEESavings is
         }
         uint256 remainder = balanceAfterFee - amountToRecipient;
 
-        // Solvency guard
+        // AUDIT FIX M-1 R2: Solvency guard — prioritize fee, then recipient, then remainder
         uint256 contractBal = oooweeeToken.balanceOf(address(this));
         if (fee + amountToRecipient + remainder > contractBal) {
-            if (amountToRecipient > contractBal) amountToRecipient = contractBal;
-            remainder = 0;
+            uint256 available = contractBal > fee ? contractBal - fee : 0;
+            if (amountToRecipient > available) amountToRecipient = available;
+            remainder = available > amountToRecipient ? available - amountToRecipient : 0;
         }
 
         account.balance = 0;
