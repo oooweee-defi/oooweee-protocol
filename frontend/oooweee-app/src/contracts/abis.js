@@ -721,6 +721,11 @@ export const OOOWEEETokenABI = [
 // ============================================
 export const OOOWEEESavingsABI = [
   {
+    "inputs": [],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
     "anonymous": false,
     "inputs": [
       {
@@ -1917,6 +1922,30 @@ export const OOOWEEESavingsABI = [
       }
     ],
     "name": "getFiatToTokens",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "fiatAmount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "enum SavingsPriceOracle.Currency",
+        "name": "currency",
+        "type": "uint8"
+      }
+    ],
+    "name": "getFiatToTokensValidated",
     "outputs": [
       {
         "internalType": "uint256",
@@ -5019,15 +5048,41 @@ export const OOOWEEEValidatorFundABI = [
 // ============================================
 export const SavingsPriceOracleABI = [
   {
+    "inputs": [],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "anonymous": false,
     "inputs": [
       {
+        "indexed": false,
         "internalType": "address",
-        "name": "_uniswapRouter",
+        "name": "previousAdmin",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "newAdmin",
         "type": "address"
       }
     ],
-    "stateMutability": "nonpayable",
-    "type": "constructor"
+    "name": "AdminChanged",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "beacon",
+        "type": "address"
+      }
+    ],
+    "name": "BeaconUpgraded",
+    "type": "event"
   },
   {
     "anonymous": false,
@@ -5040,6 +5095,19 @@ export const SavingsPriceOracleABI = [
       }
     ],
     "name": "EmergencyPriceModeActivated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "version",
+        "type": "uint8"
+      }
+    ],
+    "name": "Initialized",
     "type": "event"
   },
   {
@@ -5151,6 +5219,19 @@ export const SavingsPriceOracleABI = [
     "type": "event"
   },
   {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "implementation",
+        "type": "address"
+      }
+    ],
+    "name": "Upgraded",
+    "type": "event"
+  },
+  {
     "inputs": [],
     "name": "CHAINLINK_DECIMALS",
     "outputs": [
@@ -5165,7 +5246,20 @@ export const SavingsPriceOracleABI = [
   },
   {
     "inputs": [],
-    "name": "PRICE_STALENESS_THRESHOLD",
+    "name": "STALENESS_CROSS_RATE",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "STALENESS_ETH_USD",
     "outputs": [
       {
         "internalType": "uint256",
@@ -5387,7 +5481,26 @@ export const SavingsPriceOracleABI = [
     "type": "function"
   },
   {
-    "inputs": [],
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_uniswapRouter",
+        "type": "address"
+      }
+    ],
+    "name": "initialize",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "enum SavingsPriceOracle.Currency",
+        "name": "",
+        "type": "uint8"
+      }
+    ],
     "name": "lastValidPrice",
     "outputs": [
       {
@@ -5400,7 +5513,13 @@ export const SavingsPriceOracleABI = [
     "type": "function"
   },
   {
-    "inputs": [],
+    "inputs": [
+      {
+        "internalType": "enum SavingsPriceOracle.Currency",
+        "name": "",
+        "type": "uint8"
+      }
+    ],
     "name": "lastValidPriceTimestamp",
     "outputs": [
       {
@@ -5452,6 +5571,19 @@ export const SavingsPriceOracleABI = [
         "internalType": "address",
         "name": "",
         "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "proxiableUUID",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
       }
     ],
     "stateMutability": "view",
@@ -5663,6 +5795,37 @@ export const SavingsPriceOracleABI = [
     "name": "updateTWAP",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "newImplementation",
+        "type": "address"
+      }
+    ],
+    "name": "upgradeTo",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "newImplementation",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes",
+        "name": "data",
+        "type": "bytes"
+      }
+    ],
+    "name": "upgradeToAndCall",
+    "outputs": [],
+    "stateMutability": "payable",
     "type": "function"
   }
 ];

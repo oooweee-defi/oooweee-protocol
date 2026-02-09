@@ -40,7 +40,10 @@ contract SavingsPriceOracle is Initializable, OwnableUpgradeable, ReentrancyGuar
         FIXED_RATE
     }
 
-    uint256 public constant PRICE_STALENESS_THRESHOLD = 1 hours;
+    // AUDIT FIX M-1 R3: Per-currency staleness thresholds.
+    // ETH/USD has 1h heartbeat; EUR/USD and GBP/USD have 24h heartbeats.
+    uint256 public constant STALENESS_ETH_USD = 1 hours;
+    uint256 public constant STALENESS_CROSS_RATE = 26 hours; // 24h heartbeat + 2h buffer
     uint256 public constant CHAINLINK_DECIMALS = 8;
 
     IUniswapV2Router02 public uniswapRouter;
@@ -117,7 +120,9 @@ contract SavingsPriceOracle is Initializable, OwnableUpgradeable, ReentrancyGuar
         try priceFeed.latestRoundData() returns (
             uint80, int256 price, uint256, uint256 updatedAt, uint80
         ) {
-            if (updatedAt <= block.timestamp - PRICE_STALENESS_THRESHOLD) {
+            // AUDIT FIX M-1 R3: Use per-currency staleness threshold
+            uint256 staleness = currency == Currency.USD ? STALENESS_ETH_USD : STALENESS_CROSS_RATE;
+            if (updatedAt <= block.timestamp - staleness) {
                 return defaultPrices[currency];
             }
             if (price <= 0) {
@@ -356,7 +361,7 @@ contract SavingsPriceOracle is Initializable, OwnableUpgradeable, ReentrancyGuar
         // Check TWAP freshness
         uint32 currentTimestamp = uint32(block.timestamp % 2**32);
         uint32 twapAge = currentTimestamp - twapTimestampLast;
-        if (twapAge > uint32(PRICE_STALENESS_THRESHOLD)) {
+        if (twapAge > uint32(STALENESS_ETH_USD)) {
             return (false, 0);
         }
 

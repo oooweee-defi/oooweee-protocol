@@ -312,6 +312,19 @@ contract OOOWEEESavings is
         return (fiatAmount * 1e18) / pricePerToken;
     }
 
+    /**
+     * @notice Convert fiat amount to tokens using TWAP-validated price
+     * @dev AUDIT FIX M-2 R3: Uses same price source as withdrawal gate check
+     */
+    function getFiatToTokensValidated(
+        uint256 fiatAmount,
+        SavingsPriceOracle.Currency currency
+    ) public returns (uint256) {
+        uint256 pricePerToken = priceOracle.getValidatedOooweeePrice(currency);
+        if (pricePerToken == 0) return 0;
+        return (fiatAmount * 1e18) / pricePerToken;
+    }
+
     // ============ Account Creation ============
 
     /**
@@ -561,6 +574,10 @@ contract OOOWEEESavings is
             }
             _executeBalanceTransfer(msg.sender, accountId);
         }
+
+        // AUDIT FIX M-3 R3: Remove from active refs on manual withdraw
+        // (previously only _autoProcess removed refs, causing array bloat)
+        _removeActiveRef(msg.sender, accountId);
     }
 
     /**
@@ -1115,9 +1132,9 @@ contract OOOWEEESavings is
         uint256 fee = (totalBal * withdrawalFeeRate) / FEE_DIVISOR;
         uint256 balanceAfterFee = totalBal - fee;
 
-        // AUDIT FIX M-3 NEW: Use view price (Chainlink-only, not spot-manipulable)
+        // AUDIT FIX M-2 R3: Use TWAP-validated price (same source as withdrawal gate)
         uint256 transferAmount = account.isFiatTarget
-            ? getFiatToTokensView(account.targetFiat, account.targetCurrency)
+            ? getFiatToTokensValidated(account.targetFiat, account.targetCurrency)
             : account.targetAmount;
 
         uint256 amountToRecipient = transferAmount;
