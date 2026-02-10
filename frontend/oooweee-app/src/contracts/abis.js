@@ -4059,18 +4059,7 @@ export const OOOWEEEStabilityABI = [
 // ============================================
 export const OOOWEEEValidatorFundABI = [
   {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_uniswapRouter",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "_operationsWallet",
-        "type": "address"
-      }
-    ],
+    "inputs": [],
     "stateMutability": "nonpayable",
     "type": "constructor"
   },
@@ -4098,6 +4087,38 @@ export const OOOWEEEValidatorFundABI = [
     "inputs": [],
     "name": "TransferFailed",
     "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "previousAdmin",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "newAdmin",
+        "type": "address"
+      }
+    ],
+    "name": "AdminChanged",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "beacon",
+        "type": "address"
+      }
+    ],
+    "name": "BeaconUpgraded",
+    "type": "event"
   },
   {
     "anonymous": false,
@@ -4161,6 +4182,19 @@ export const OOOWEEEValidatorFundABI = [
       }
     ],
     "name": "EmergencyWithdrawal",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "version",
+        "type": "uint8"
+      }
+    ],
+    "name": "Initialized",
     "type": "event"
   },
   {
@@ -4319,6 +4353,19 @@ export const OOOWEEEValidatorFundABI = [
     "inputs": [
       {
         "indexed": true,
+        "internalType": "address",
+        "name": "implementation",
+        "type": "address"
+      }
+    ],
+    "name": "Upgraded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
         "internalType": "uint256",
         "name": "validatorId",
         "type": "uint256"
@@ -4438,7 +4485,13 @@ export const OOOWEEEValidatorFundABI = [
     "type": "function"
   },
   {
-    "inputs": [],
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "stakeAmount",
+        "type": "uint256"
+      }
+    ],
     "name": "confirmValidatorActive",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -4569,19 +4622,6 @@ export const OOOWEEEValidatorFundABI = [
   },
   {
     "inputs": [],
-    "name": "getFailedSwapAmount",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
     "name": "getStats",
     "outputs": [
       {
@@ -4633,9 +4673,32 @@ export const OOOWEEEValidatorFundABI = [
         "internalType": "uint256",
         "name": "_donorCount",
         "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_totalETHStaked",
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_uniswapRouter",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "_operationsWallet",
+        "type": "address"
+      }
+    ],
+    "name": "initialize",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -4731,6 +4794,19 @@ export const OOOWEEEValidatorFundABI = [
     "name": "provisionValidator",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "proxiableUUID",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -4935,6 +5011,19 @@ export const OOOWEEEValidatorFundABI = [
   },
   {
     "inputs": [],
+    "name": "totalETHStaked",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "totalETHToOperations",
     "outputs": [
       {
@@ -5009,6 +5098,37 @@ export const OOOWEEEValidatorFundABI = [
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "newImplementation",
+        "type": "address"
+      }
+    ],
+    "name": "upgradeTo",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "newImplementation",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes",
+        "name": "data",
+        "type": "bytes"
+      }
+    ],
+    "name": "upgradeToAndCall",
+    "outputs": [],
+    "stateMutability": "payable",
     "type": "function"
   },
   {
