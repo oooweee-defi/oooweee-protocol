@@ -17,7 +17,7 @@ OOOWEEEToken
        OOOWEEEValidatorFund
        │
        │  Accumulates ETH from stability + donations
-       │  At 32 ETH → owner provisions validator
+       │  At 4 ETH → owner provisions Rocketpool megapool validator
        │  Validator withdrawal address = this contract
        │
        │  When validator rewards arrive:
@@ -151,10 +151,15 @@ OOOWEEEToken.enableTrading()            // Opens public trading
 - Call ValidatorFund.distributeRewards() to split accumulated validator rewards
 - Check Chainlink Automation LINK balance, top up if needed
 
-### At 32 ETH Threshold
-- Call ValidatorFund.provisionValidator() to release 32 ETH
-- Set up validator node with withdrawal address = ValidatorFund contract
-- Call ValidatorFund.confirmValidatorActive() once beacon chain confirms
+### At 4 ETH Threshold (Rocketpool Megapool)
+- Call ValidatorFund.provisionValidator() to release 4 ETH to operations wallet
+- Deposit 4 ETH into a Rocketpool megapool validator
+- Set the validator withdrawal address to the ValidatorFund contract
+- Once the megapool validator is active on the beacon chain:
+  Call ValidatorFund.confirmValidatorActive(4 ether) — the stakeAmount parameter
+  tells the contract how much ETH backs this validator (4 for megapool, 32 for solo)
+- Periodically claim Rocketpool rewards and forward ETH to ValidatorFund
+  (either via plain ETH transfer or receiveValidatorRewards())
 
 ### Monitoring
 - Watch Etherscan for StabilityIntervention events

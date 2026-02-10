@@ -21,9 +21,9 @@ interface IOOOWEEESavings {
  * 1. Stability mechanism captures ETH from price spikes → sent here
  * 2. Donations from anyone → donate()
  *
- * When 32 ETH accumulates:
- * - Owner calls provisionValidator() to release 32 ETH to operations wallet
- * - Operations wallet manually sets up the validator node
+ * When 4 ETH accumulates:
+ * - Owner calls provisionValidator() to release 4 ETH to operations wallet
+ * - Operations wallet deposits into a Rocketpool megapool validator
  * - Validator withdrawal address is set to THIS contract
  *
  * When validator rewards arrive (ETH sent to this contract from consensus layer):
@@ -58,10 +58,11 @@ contract OOOWEEEValidatorFund is Initializable, OwnableUpgradeable, ReentrancyGu
 
     // ============ Validator Tracking ============
 
-    uint256 public constant VALIDATOR_STAKE = 32 ether;
+    uint256 public constant VALIDATOR_STAKE = 4 ether;
 
     uint256 public validatorsProvisioned;
     uint256 public validatorsActive;
+    uint256 public totalETHStaked;           // Total ETH across all active validators
 
     // ============ Fund Tracking ============
 
@@ -203,12 +204,12 @@ contract OOOWEEEValidatorFund is Initializable, OwnableUpgradeable, ReentrancyGu
     // ============ Validator Provisioning ============
 
     /**
-     * @notice Release 32 ETH to operations wallet for validator setup
-     * @dev Operations wallet uses this ETH to provision a new Ethereum validator.
+     * @notice Release 4 ETH to operations wallet for Rocketpool megapool validator
+     * @dev Operations wallet deposits ETH into a Rocketpool megapool.
      *      The validator's withdrawal address MUST be set to this contract
      *      so rewards flow back here for distribution.
      *
-     *      Only callable when the fund has 32+ ETH available (excluding pendingRewards
+     *      Only callable when the fund has 4+ ETH available (excluding pendingRewards
      *      and failedSwapETH).
      */
     function provisionValidator() external onlyOwner nonReentrant {
@@ -227,10 +228,13 @@ contract OOOWEEEValidatorFund is Initializable, OwnableUpgradeable, ReentrancyGu
 
     /**
      * @notice Confirm a validator is now active on the beacon chain
+     * @param stakeAmount The ETH staked for this validator (e.g. 4 ETH megapool, 32 ETH solo)
      */
-    function confirmValidatorActive() external onlyOwner {
+    function confirmValidatorActive(uint256 stakeAmount) external onlyOwner {
         require(validatorsProvisioned > validatorsActive, "No pending validators");
+        require(stakeAmount > 0, "Stake must be > 0");
         validatorsActive++;
+        totalETHStaked += stakeAmount;
         emit ValidatorConfirmed(validatorsActive);
     }
 
@@ -472,7 +476,8 @@ contract OOOWEEEValidatorFund is Initializable, OwnableUpgradeable, ReentrancyGu
         uint256 _validatorsProvisioned,
         uint256 _validatorsActive,
         uint256 _totalDistributions,
-        uint256 _donorCount
+        uint256 _donorCount,
+        uint256 _totalETHStaked
     ) {
         return (
             totalETHReceived,
@@ -484,7 +489,8 @@ contract OOOWEEEValidatorFund is Initializable, OwnableUpgradeable, ReentrancyGu
             validatorsProvisioned,
             validatorsActive,
             totalDistributions,
-            donors.length
+            donors.length,
+            totalETHStaked
         );
     }
 

@@ -586,11 +586,11 @@ function App() {
         validatorFundContract.progressToNextValidator()
       ]);
 
-      // getStats() returns 10 values:
+      // getStats() returns 11 values:
       // [0] totalETHReceived, [1] fromStability, [2] fromDonations,
       // [3] fromRewards, [4] pendingRewards, [5] availableForValidators,
       // [6] validatorsProvisioned, [7] validatorsActive,
-      // [8] totalDistributions, [9] donorCount
+      // [8] totalDistributions, [9] donorCount, [10] totalETHStaked
 
       // Build on-chain leaderboard — batch donor lookups via Promise.all
       const donorCount = stats[9].toNumber();
@@ -657,17 +657,31 @@ function App() {
       const topDonor = sortedDonors.length > 0 ? sortedDonors[0].address : null;
       const topDonorAmount = sortedDonors.length > 0 ? sortedDonors[0].amount : ethers.BigNumber.from(0);
 
+      // Dynamic progress: use required from contract (progressData[1]) instead of hardcoded 32
+      const currentETH = parseFloat(ethers.utils.formatEther(progressData[0]));
+      const requiredETH = parseFloat(ethers.utils.formatEther(progressData[1]));
+      const progressPercent = requiredETH > 0 ? (currentETH / requiredETH) * 100 : 0;
+
+      // totalETHStaked for new metrics
+      const totalStaked = parseFloat(ethers.utils.formatEther(stats[10]));
+      const ASSUMED_APR = 0.04; // 4% — update quarterly based on actual validator returns
+      const saversShareOfAPR = totalStaked * ASSUMED_APR * 0.34; // 34% goes to savers
+
       setValidatorStats({
         validators: stats[7].toString(),
         nextValidatorIn: ethers.utils.formatEther(ethNeeded),
-        progress: (parseFloat(ethers.utils.formatEther(progressData[0])) / 32) * 100,
+        progress: progressPercent,
         pendingETH: ethers.utils.formatEther(progressData[0]),
+        requiredETH: requiredETH,
         totalDonations: ethers.utils.formatEther(stats[2]),
         donors: stats[9].toString(),
         fromStability: ethers.utils.formatEther(stats[1]),
         fromRewards: ethers.utils.formatEther(stats[3]),
         topDonor: topDonor,
-        topDonorAmount: ethers.utils.formatEther(topDonorAmount)
+        topDonorAmount: ethers.utils.formatEther(topDonorAmount),
+        totalETHStaked: totalStaked,
+        equivalentSoloValidators: (totalStaked / 32).toFixed(2),
+        projectedAPRPool: saversShareOfAPR.toFixed(4)
       });
     } catch (error) {
       console.error('Error loading validator stats:', error);
@@ -2228,6 +2242,27 @@ function App() {
               <p className="metric-value">{parseFloat(validatorStats.fromRewards).toFixed(4)} ETH</p>
             </div>
           </div>
+          <div className="metric-item">
+            <span className="metric-icon">💎</span>
+            <div className="metric-content">
+              <h4>Total ETH Staked</h4>
+              <p className="metric-value">{validatorStats.totalETHStaked?.toFixed(4) || '0'} ETH</p>
+            </div>
+          </div>
+          <div className="metric-item">
+            <span className="metric-icon">🔗</span>
+            <div className="metric-content">
+              <h4>Equivalent Solo Validators</h4>
+              <p className="metric-value">{validatorStats.equivalentSoloValidators || '0'}</p>
+            </div>
+          </div>
+          <div className="metric-item">
+            <span className="metric-icon">📈</span>
+            <div className="metric-content">
+              <h4>Projected APR Pool</h4>
+              <p className="metric-value">{validatorStats.projectedAPRPool || '0'} ETH/yr</p>
+            </div>
+          </div>
         </div>
 
         <div className="validator-progress-section">
@@ -2238,7 +2273,7 @@ function App() {
               style={{ width: `${validatorStats.progress}%` }}
             />
           </div>
-          <p className="progress-text">{parseFloat(validatorStats.pendingETH).toFixed(4)} / 32 ETH ({validatorStats.progress.toFixed(1)}%)</p>
+          <p className="progress-text">{parseFloat(validatorStats.pendingETH).toFixed(4)} / {validatorStats.requiredETH || 4} ETH ({validatorStats.progress.toFixed(1)}%)</p>
         </div>
       </div>
 
@@ -2543,6 +2578,11 @@ function App() {
             <p className="metric-value">{validatorStats.validators}</p>
           </div>
           <div className="admin-card">
+            <h4>Total ETH Staked</h4>
+            <p className="metric-value">{validatorStats.totalETHStaked?.toFixed(4) || '0'}</p>
+            <span className="metric-label">ETH ({validatorStats.equivalentSoloValidators || '0'} solo equiv.)</span>
+          </div>
+          <div className="admin-card">
             <h4>From Stability</h4>
             <p className="metric-value">{parseFloat(validatorStats.fromStability).toFixed(4)}</p>
             <span className="metric-label">ETH</span>
@@ -2557,14 +2597,19 @@ function App() {
             <p className="metric-value">{parseFloat(validatorStats.totalDonations).toFixed(4)}</p>
             <span className="metric-label">ETH ({validatorStats.donors} donors)</span>
           </div>
+          <div className="admin-card">
+            <h4>Projected APR Pool</h4>
+            <p className="metric-value">{validatorStats.projectedAPRPool || '0'}</p>
+            <span className="metric-label">ETH/yr to savers</span>
+          </div>
         </div>
-        
+
         <div className="validator-progress-section">
           <h4>Progress to Next Validator</h4>
           <div className="validator-progress-bar">
             <div className="progress-fill" style={{ width: `${validatorStats.progress}%` }}></div>
           </div>
-          <p className="progress-text">{parseFloat(validatorStats.pendingETH).toFixed(4)} / 32 ETH ({validatorStats.progress.toFixed(1)}%)</p>
+          <p className="progress-text">{parseFloat(validatorStats.pendingETH).toFixed(4)} / {validatorStats.requiredETH || 4} ETH ({validatorStats.progress.toFixed(1)}%)</p>
         </div>
       </div>
       
