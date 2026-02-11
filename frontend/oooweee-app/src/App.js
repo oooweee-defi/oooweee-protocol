@@ -43,6 +43,10 @@ const CHAIN_CONFIG = {
   isTestnet: false,
 };
 
+// Read-only provider for price fetching (no login required)
+const READ_ONLY_PROVIDER = new ethers.providers.JsonRpcProvider("https://eth.llamarpc.com");
+const READ_ONLY_ROUTER = new ethers.Contract(UNISWAP_ROUTER, UNISWAP_ROUTER_ABI, READ_ONLY_PROVIDER);
+
 // Currency configuration - USD/EUR/GBP only
 const CURRENCIES = {
   USD: { code: 0, symbol: '$', name: 'US Dollar', decimals: 8, locale: 'en-US' },
@@ -145,6 +149,10 @@ function App() {
     return saved ? JSON.parse(saved) : [];
   });
   
+  // Intro sequence state
+  const [showIntro, setShowIntro] = useState(false);
+  const [introStep, setIntroStep] = useState(0);
+
   // Validator stats
   const [validatorStats, setValidatorStats] = useState({
     validators: 0,
@@ -519,14 +527,14 @@ function App() {
     }).format(amount);
   };
 
-  // Update OOOWEEE price
+  // Update OOOWEEE price (uses logged-in router or read-only fallback)
   const updateOooweeePrice = useCallback(async () => {
-    if (!routerContract) return;
-    
+    const router = routerContract || READ_ONLY_ROUTER;
+
     try {
       const ethAmount = ethers.utils.parseEther("1");
       const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.OOOWEEEToken];
-      const amounts = await routerContract.getAmountsOut(ethAmount, path);
+      const amounts = await router.getAmountsOut(ethAmount, path);
       const oooweeePerEth = parseFloat(ethers.utils.formatUnits(amounts[1], 18));
       setOooweeePrice(1 / oooweeePerEth);
     } catch (error) {
@@ -534,33 +542,34 @@ function App() {
     }
   }, [routerContract]);
 
-  // Update price periodically
+  // Update price periodically — starts immediately (no login needed)
   useEffect(() => {
-    if (routerContract) {
-      updateOooweeePrice();
-      const interval = setInterval(updateOooweeePrice, 30000);
-      return () => clearInterval(interval);
-    }
-  }, [routerContract, updateOooweeePrice]);
+    updateOooweeePrice();
+    const interval = setInterval(updateOooweeePrice, 30000);
+    return () => clearInterval(interval);
+  }, [updateOooweeePrice]);
 
   // Estimate OOOWEEE output (debounced)
+  // Estimate OOOWEEE output (debounced, uses read-only fallback)
   useEffect(() => {
     const estimateOooweee = async () => {
-      if (!routerContract || !ethToBuy || parseFloat(ethToBuy) <= 0) {
+      const router = routerContract || READ_ONLY_ROUTER;
+      const amount = parseFloat(ethToBuy);
+      if (!ethToBuy || isNaN(amount) || amount <= 0) {
         setEstimatedOooweee('0');
         return;
       }
-      
+
       try {
         const ethAmount = ethers.utils.parseEther(ethToBuy);
         const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.OOOWEEEToken];
-        const amounts = await routerContract.getAmountsOut(ethAmount, path);
+        const amounts = await router.getAmountsOut(ethAmount, path);
         setEstimatedOooweee(ethers.utils.formatUnits(amounts[1], 18));
       } catch (error) {
         setEstimatedOooweee('0');
       }
     };
-    
+
     // Debounce: wait 500ms after user stops typing
     const timeoutId = setTimeout(estimateOooweee, 500);
     return () => clearTimeout(timeoutId);
@@ -1109,6 +1118,12 @@ function App() {
 
       setLoginMethod('wallet');
       toast.success('Wallet connected!');
+
+      // Show intro for first-time users
+      if (!localStorage.getItem('oooweee_intro_seen')) {
+        setIntroStep(0);
+        setShowIntro(true);
+      }
     } catch (error) {
       console.error(error);
       if (error.message !== 'User closed modal') {
@@ -1160,6 +1175,12 @@ function App() {
       await loadSavingsAccounts(address, savings, web3Provider, router, ethPrice);
 
       toast.success('Signed in successfully!');
+
+      // Show intro for first-time users
+      if (!localStorage.getItem('oooweee_intro_seen')) {
+        setIntroStep(0);
+        setShowIntro(true);
+      }
     } catch (error) {
       console.error('Social login error:', error);
       if (error.message !== 'User closed popup' && error.message !== 'user closed popup') {
@@ -2643,7 +2664,69 @@ function App() {
   return (
     <div className="App">
       <Toaster position="top-right" />
-      
+
+      {/* Intro Sequence Modal */}
+      {showIntro && (
+        <div className="modal-overlay" onClick={() => {}}>
+          <div className="modal-content intro-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="close-modal" onClick={() => { setShowIntro(false); localStorage.setItem('oooweee_intro_seen', 'true'); }}>✕</button>
+
+            {introStep === 0 && (
+              <div className="intro-step">
+                <div className="intro-icon">🎉</div>
+                <h2>Welcome to OOOWEEE!</h2>
+                <p>Your wallet address is:</p>
+                <p className="intro-address">{account?.slice(0, 8)}...{account?.slice(-6)}</p>
+                <p>This is where your $OOOWEEE tokens live. Everything is secured by Ethereum smart contracts — no one else can touch your savings.</p>
+              </div>
+            )}
+
+            {introStep === 1 && (
+              <div className="intro-step">
+                <div className="intro-icon">💰</div>
+                <h2>Fund Your Wallet</h2>
+                <p>You'll need $OOOWEEE tokens to create savings accounts.</p>
+                <p>Tap <strong>"Buy $OOOWEEE"</strong> to swap some ETH for tokens. You can buy with as little as 0.001 ETH.</p>
+                <p>Prices are shown in EUR, USD, or GBP — pick your currency from the dashboard.</p>
+              </div>
+            )}
+
+            {introStep === 2 && (
+              <div className="intro-step">
+                <div className="intro-icon">🏦</div>
+                <h2>Start Saving!</h2>
+                <p>Create savings accounts with real goals:</p>
+                <ul className="intro-list">
+                  <li><strong>Time Lock</strong> — Lock until a date you choose</li>
+                  <li><strong>Growth Goal</strong> — Grow to a target amount</li>
+                  <li><strong>Balance Transfer</strong> — Auto-send when target is reached</li>
+                </ul>
+                <p>Set targets in EUR, USD, or GBP. Your savings are protected by smart contracts and can't be withdrawn early.</p>
+              </div>
+            )}
+
+            <div className="intro-nav">
+              {introStep > 0 && (
+                <button className="intro-back-btn" onClick={() => setIntroStep(s => s - 1)}>Back</button>
+              )}
+              {introStep < 2 ? (
+                <button className="intro-next-btn" onClick={() => setIntroStep(s => s + 1)}>Next</button>
+              ) : (
+                <button className="intro-next-btn intro-start-btn" onClick={() => { setShowIntro(false); localStorage.setItem('oooweee_intro_seen', 'true'); }}>
+                  Get Started!
+                </button>
+              )}
+            </div>
+
+            <div className="intro-dots">
+              {[0, 1, 2].map(i => (
+                <span key={i} className={`intro-dot ${introStep === i ? 'active' : ''}`} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Send Modal */}
       {showSendModal && (
         <div className="modal-overlay" onClick={() => setShowSendModal(false)}>
@@ -2877,9 +2960,19 @@ function App() {
             
             <div className="buy-form">
               <div className="form-group">
+                <label>Account Name:</label>
+                <input
+                  type="text"
+                  placeholder="e.g., Epic Vacation"
+                  id="goalName"
+                  className="text-input"
+                />
+              </div>
+
+              <div className="form-group">
                 <label>Account Type:</label>
-                <select 
-                  id="accountType" 
+                <select
+                  id="accountType"
                   value={accountType}
                   onChange={(e) => setAccountType(e.target.value)}
                   className="select-input"
@@ -2890,10 +2983,10 @@ function App() {
                   <option value="group">👥 Group Savings - Save together</option>
                 </select>
               </div>
-              
+
               <div className="form-group">
                 <label>Display Currency:</label>
-                <select 
+                <select
                   value={accountCurrency}
                   onChange={(e) => setAccountCurrency(e.target.value)}
                   className="select-input"
@@ -2902,16 +2995,6 @@ function App() {
                     <option key={code} value={code}>{info.symbol} {info.name}</option>
                   ))}
                 </select>
-              </div>
-              
-              <div className="form-group">
-                <label>Account Name:</label>
-                <input 
-                  type="text" 
-                  placeholder="e.g., Epic Vacation" 
-                  id="goalName"
-                  className="text-input"
-                />
               </div>
               
               <div className="form-group">
@@ -3063,13 +3146,30 @@ function App() {
             About
           </button>
           {account?.toLowerCase() === ADMIN_WALLET.toLowerCase() && (
-            <button 
+            <button
               className={`tab-btn admin-tab ${activeTab === 'admin' ? 'active' : ''}`}
               onClick={() => setActiveTab('admin')}
             >
               Admin
             </button>
           )}
+
+          <div className="header-auth">
+            {!account ? (
+              <button className="tab-btn login-btn" onClick={connectSocialLogin} disabled={isConnecting || !web3auth}>
+                {isConnecting ? 'Signing in...' : 'Sign In'}
+              </button>
+            ) : (
+              <div className="header-wallet-info">
+                <span className="header-address" onClick={() => { navigator.clipboard.writeText(account); toast.success('Copied!'); }}>
+                  {account.slice(0, 6)}...{account.slice(-4)}
+                </span>
+                <button className="tab-btn disconnect-header-btn" onClick={disconnectWallet}>
+                  Disconnect
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {activeTab === 'about' ? (
@@ -3143,9 +3243,8 @@ function App() {
                   </div>
 
                   <button onClick={connectWallet} className="connect-btn wallet-btn" disabled={isConnecting}>
-                    {isConnecting ? 'Connecting...' : 'Connect Wallet'}
+                    {isConnecting ? 'Connecting...' : 'Connect Wallet (MetaMask etc.)'}
                   </button>
-                  <p className="info-text">Works with MetaMask, Trust Wallet, and more!</p>
                 </div>
                 <p className="disclaimer">Values shown in your selected currency are estimates based on current market rates</p>
               </div>
@@ -3263,18 +3362,48 @@ function App() {
                               </div>
                               
                               <div className="account-details">
+                                {/* Target amount at top for Growth/Balance accounts */}
+                                {acc.isFiatTarget && (acc.type === 'Growth' || acc.type === 'Balance') && (
+                                  <div className="detail-row target-highlight">
+                                    <span>Target:</span>
+                                    <span className="primary-amount">
+                                      {currencyInfo.symbol}
+                                      {(acc.targetFiat / Math.pow(10, currencyInfo.decimals)).toFixed(2)}
+                                    </span>
+                                  </div>
+                                )}
+                                {!acc.isFiatTarget && acc.type === 'Growth' && (
+                                  <div className="detail-row target-highlight">
+                                    <span>Target:</span>
+                                    <span className="primary-amount">
+                                      {!showFiat
+                                        ? `${parseFloat(acc.target).toLocaleString()} $OOOWEEE`
+                                        : getOooweeeInFiat(acc.target, selectedCurrency.toLowerCase())
+                                      }
+                                    </span>
+                                  </div>
+                                )}
+                                {!acc.isFiatTarget && acc.type === 'Balance' && (
+                                  <div className="detail-row target-highlight">
+                                    <span>Target:</span>
+                                    <span className="primary-amount">
+                                      {!showFiat
+                                        ? `${parseFloat(acc.target).toLocaleString()} $OOOWEEE`
+                                        : getOooweeeInFiat(acc.target, selectedCurrency.toLowerCase())
+                                      }
+                                    </span>
+                                  </div>
+                                )}
+                                {acc.type === 'Time' && (
+                                  <div className="detail-row target-highlight">
+                                    <span>Unlocks in:</span>
+                                    <span className="primary-amount">{getDaysRemaining(acc.unlockTime)} days</span>
+                                  </div>
+                                )}
+
+                                {/* Current value / balance */}
                                 {acc.isFiatTarget ? (
                                   <div className="fiat-target-display">
-                                    {(acc.type === 'Growth' || acc.type === 'Balance') && (
-                                      <div className="detail-row">
-                                        <span>Target:</span>
-                                        <span className="primary-amount">
-                                          {currencyInfo.symbol}
-                                          {(acc.targetFiat / Math.pow(10, currencyInfo.decimals)).toFixed(2)}
-                                        </span>
-                                      </div>
-                                    )}
-                                    
                                     <div className="detail-row">
                                       <span>Current Value:</span>
                                       <span className="primary-amount">
@@ -3282,7 +3411,6 @@ function App() {
                                         {(acc.currentFiatValue / Math.pow(10, currencyInfo.decimals)).toFixed(2)}
                                       </span>
                                     </div>
-                                    
                                     <div className="balance-in-tokens">
                                       <span className="secondary-amount">
                                         {parseFloat(acc.balance).toLocaleString()} $OOOWEEE
@@ -3308,38 +3436,8 @@ function App() {
                                   </div>
                                 )}
 
-                                {acc.type === 'Time' && (
-                                  <div className="detail-row">
-                                    <span>Days Remaining:</span>
-                                    <span className="value">{getDaysRemaining(acc.unlockTime)}</span>
-                                  </div>
-                                )}
-                                
-                                {acc.type === 'Growth' && !acc.isFiatTarget && (
-                                  <div className="detail-row">
-                                    <span>Target:</span>
-                                    <span className="value">
-                                      {!showFiat
-                                        ? `${parseFloat(acc.target).toLocaleString()} $OOOWEEE`
-                                        : getOooweeeInFiat(acc.target, selectedCurrency.toLowerCase())
-                                      }
-                                    </span>
-                                  </div>
-                                )}
-                                
                                 {acc.type === 'Balance' && (
                                   <>
-                                    {!acc.isFiatTarget && (
-                                      <div className="detail-row">
-                                        <span>Target:</span>
-                                        <span className="value">
-                                          {!showFiat
-                                            ? `${parseFloat(acc.target).toLocaleString()} $OOOWEEE`
-                                            : getOooweeeInFiat(acc.target, selectedCurrency.toLowerCase())
-                                          }
-                                        </span>
-                                      </div>
-                                    )}
                                     <div className="detail-row">
                                       <span>To:</span>
                                       <span className="value address">{acc.recipient.slice(0, 6)}...{acc.recipient.slice(-4)}</span>
