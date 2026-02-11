@@ -34,7 +34,7 @@ const TRANSAK_API_KEY = "5606035c-b59a-4c73-80f0-b9930cdfd9f9";
 const CHAIN_CONFIG = {
   chainNamespace: CHAIN_NAMESPACES.EIP155,
   chainId: "0x1",
-  rpcTarget: "https://cloudflare-eth.com",
+  rpcTarget: "https://eth.llamarpc.com",
   displayName: "Ethereum Mainnet",
   blockExplorerUrl: "https://etherscan.io",
   ticker: "ETH",
@@ -43,9 +43,6 @@ const CHAIN_CONFIG = {
   isTestnet: false,
 };
 
-// Read-only provider for price fetching (no login required)
-const READ_ONLY_PROVIDER = new ethers.providers.JsonRpcProvider("https://cloudflare-eth.com");
-const READ_ONLY_ROUTER = new ethers.Contract(UNISWAP_ROUTER, UNISWAP_ROUTER_ABI, READ_ONLY_PROVIDER);
 
 // Currency configuration - USD/EUR/GBP only
 const CURRENCIES = {
@@ -61,7 +58,7 @@ const providerOptions = {
     options: {
       projectId: "084d65a488f56065ea7a901e023a8b3e",
       rpc: {
-        1: "https://cloudflare-eth.com"
+        1: "https://eth.llamarpc.com"
       },
       chainId: 1,
       bridge: "https://bridge.walletconnect.org",
@@ -527,14 +524,14 @@ function App() {
     }).format(amount);
   };
 
-  // Update OOOWEEE price (uses logged-in router or read-only fallback)
+  // Update OOOWEEE price (requires login)
   const updateOooweeePrice = useCallback(async () => {
-    const router = routerContract || READ_ONLY_ROUTER;
+    if (!routerContract) return;
 
     try {
       const ethAmount = ethers.utils.parseEther("1");
       const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.OOOWEEEToken];
-      const amounts = await router.getAmountsOut(ethAmount, path);
+      const amounts = await routerContract.getAmountsOut(ethAmount, path);
       const oooweeePerEth = parseFloat(ethers.utils.formatUnits(amounts[1], 18));
       setOooweeePrice(1 / oooweeePerEth);
     } catch (error) {
@@ -542,18 +539,18 @@ function App() {
     }
   }, [routerContract]);
 
-  // Update price periodically — starts immediately (no login needed)
+  // Update price periodically after login
   useEffect(() => {
+    if (!routerContract) return;
     updateOooweeePrice();
     const interval = setInterval(updateOooweeePrice, 30000);
     return () => clearInterval(interval);
-  }, [updateOooweeePrice]);
+  }, [routerContract, updateOooweeePrice]);
 
   // Estimate OOOWEEE output (debounced)
-  // Estimate OOOWEEE output (debounced, uses read-only fallback)
   useEffect(() => {
     const estimateOooweee = async () => {
-      const router = routerContract || READ_ONLY_ROUTER;
+      if (!routerContract) return;
       const amount = parseFloat(ethToBuy);
       if (!ethToBuy || isNaN(amount) || amount <= 0) {
         setEstimatedOooweee('0');
@@ -563,7 +560,7 @@ function App() {
       try {
         const ethAmount = ethers.utils.parseEther(ethToBuy);
         const path = [WETH_ADDRESS, CONTRACT_ADDRESSES.OOOWEEEToken];
-        const amounts = await router.getAmountsOut(ethAmount, path);
+        const amounts = await routerContract.getAmountsOut(ethAmount, path);
         setEstimatedOooweee(ethers.utils.formatUnits(amounts[1], 18));
       } catch (error) {
         setEstimatedOooweee('0');
