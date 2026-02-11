@@ -1,7 +1,7 @@
 /**
  * OOOWEEE Protocol — Mainnet Liquidity Setup
  *
- * Adds 2,000,000 OOOWEEE + 2 ETH to Uniswap V2.
+ * Adds 1,000,000 OOOWEEE + 1 ETH to Uniswap V2.
  * Configures oracle pool, stability pair, token LP pair, and baseline.
  *
  * Reads contract addresses from deployment.json (created by deploy.js).
@@ -13,8 +13,8 @@ const fs = require("fs");
 const path = require("path");
 
 // ============ LIQUIDITY PARAMETERS ============
-const TOKEN_AMOUNT = "2000000";  // 2M OOOWEEE
-const ETH_AMOUNT = "2";          // 2 ETH
+const TOKEN_AMOUNT = "1000000";  // 1M OOOWEEE
+const ETH_AMOUNT = "1";          // 1 ETH
 
 async function main() {
   const [deployer] = await ethers.getSigners();
