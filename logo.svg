@@ -1,0 +1,23 @@
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="oooweeeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ffd400"/>
+      <stop offset="25%" stop-color="#7ed957"/>
+      <stop offset="50%" stop-color="#00c9a7"/>
+      <stop offset="75%" stop-color="#2b7bff"/>
+      <stop offset="100%" stop-color="#5a3dff"/>
+    </linearGradient>
+  </defs>
+
+  <text
+    x="16"
+    y="17"
+    text-anchor="middle"
+    dominant-baseline="middle"
+    font-family="Arial Black, Arial, Helvetica, sans-serif"
+    font-size="26"
+    font-weight="900"
+    fill="url(#oooweeeGradient)">
+    O
+  </text>
+</svg>
