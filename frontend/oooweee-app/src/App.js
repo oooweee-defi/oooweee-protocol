@@ -397,13 +397,6 @@ function App() {
           clientId: WEB3AUTH_CLIENT_ID,
           web3AuthNetwork: WEB3AUTH_NETWORK.SAPPHIRE_MAINNET,
           privateKeyProvider,
-          uiConfig: {
-            appName: "OOOWEEE Protocol",
-            mode: "dark",
-            loginMethodsOrder: ["google", "email_passwordless"],
-            defaultLanguage: "en",
-            theme: { primary: "#7B68EE" },
-          },
         });
 
         await web3authInstance.initModal();
