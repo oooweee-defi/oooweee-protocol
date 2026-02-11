@@ -1,0 +1,31 @@
+{
+  "network": "mainnet",
+  "chainId": 1,
+  "deployer": "0x438a0db92Ad7A94Da455110096d02D8eF7cd6A34",
+  "timestamp": "2026-02-11T19:18:04.647Z",
+  "contracts": {
+    "OOOWEEEToken": "0xFb46B3eED3590eE5049bCbDA084D5582f2c14D35",
+    "SavingsPriceOracle": "0x0C7b62E985D3Fb2c930a545C32D23d3920961354",
+    "OOOWEEESavings": "0x6D95790b279045FeAC6DEde30600B7E3890d2018",
+    "OOOWEEEValidatorFund": "0xFC67Cb8e45408690029fEd391BD23861C46C92F2",
+    "OOOWEEEStability": "0x3797B40625db2eE5dB78E6C7757D701d28865890",
+    "DonorRegistry": "0xF726DA5DE29469DC73a1d75ebc8BAd0d3C92AAB2"
+  },
+  "wallets": {
+    "founder": "0x54bE1767CEe10356F46Ed4E125900Bd393BE9D5A",
+    "operations": "0x438a0db92Ad7A94Da455110096d02D8eF7cd6A34"
+  },
+  "config": {
+    "uniswapRouter": "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D",
+    "chainlinkEthUsd": "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
+    "chainlinkEurUsd": "0xb49f677943BC038e9857d61E7d053CaA2C1734C1",
+    "chainlinkGbpUsd": "0x5c0Ab2d9b5a7ed9f470386e82BB36A3613cDd4b5"
+  },
+  "uniswapPair": "0x5Ad308657372C25Ae5C4F75140b3811F3314b8a4",
+  "liquiditySetup": {
+    "timestamp": "2026-02-11T19:24:41.131Z",
+    "tokenAmount": "1000000",
+    "ethAmount": "1",
+    "pair": "0x5Ad308657372C25Ae5C4F75140b3811F3314b8a4"
+  }
+}
