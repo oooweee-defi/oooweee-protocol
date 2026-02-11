@@ -47,8 +47,8 @@ async function main() {
     console.error("   Add: OPERATIONS_WALLET=0x...");
     process.exit(1);
   }
-  if (balance.lt(ethers.utils.parseEther("1.5"))) {
-    console.error("\n❌ Insufficient balance. Need at least 1.5 ETH (1 ETH LP + ~0.5 gas)");
+  if (balance.lt(ethers.utils.parseEther("1.1"))) {
+    console.error("\n❌ Insufficient balance. Need at least 1.1 ETH (1 ETH LP + ~0.1 gas)");
     console.error("   Current:", ethers.utils.formatEther(balance), "ETH");
     process.exit(1);
   }
