@@ -34,7 +34,7 @@ const TRANSAK_API_KEY = "5606035c-b59a-4c73-80f0-b9930cdfd9f9";
 const CHAIN_CONFIG = {
   chainNamespace: CHAIN_NAMESPACES.EIP155,
   chainId: "0x1",
-  rpcTarget: "https://eth.llamarpc.com",
+  rpcTarget: "https://rpc.ankr.com/eth",
   displayName: "Ethereum Mainnet",
   blockExplorerUrl: "https://etherscan.io",
   ticker: "ETH",
@@ -44,7 +44,7 @@ const CHAIN_CONFIG = {
 };
 
 // Read-only provider for price fetching (no login required)
-const READ_ONLY_PROVIDER = new ethers.providers.JsonRpcProvider("https://eth.llamarpc.com");
+const READ_ONLY_PROVIDER = new ethers.providers.JsonRpcProvider("https://rpc.ankr.com/eth");
 const READ_ONLY_ROUTER = new ethers.Contract(UNISWAP_ROUTER, UNISWAP_ROUTER_ABI, READ_ONLY_PROVIDER);
 
 // Currency configuration - USD/EUR/GBP only
@@ -61,7 +61,7 @@ const providerOptions = {
     options: {
       projectId: "084d65a488f56065ea7a901e023a8b3e",
       rpc: {
-        1: "https://eth.llamarpc.com"
+        1: "https://rpc.ankr.com/eth"
       },
       chainId: 1,
       bridge: "https://bridge.walletconnect.org",
