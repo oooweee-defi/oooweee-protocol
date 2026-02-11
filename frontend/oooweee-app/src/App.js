@@ -27,7 +27,7 @@ const WETH_ADDRESS = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 const ADMIN_WALLET = "0xB05F42B174E5152d34431eE4504210932ddfE715";
 
 // Web3Auth configuration
-const WEB3AUTH_CLIENT_ID = "BBELIcLUxA8LFzE-ux8CxUpyKoojLwasmixNSEtqLcPFv7KUnRWKmM-C0PQFtWXy-cv8iHxDebZ4uiJkHEnBLSs";
+const WEB3AUTH_CLIENT_ID = "BJI5vavWlrqWJoj29XO3KwH6u7rTHAB1hBwvlpKlUA1Oeoo7mNwGE3MmmKFV0KweFBPl_GrgNsaq9U73MH95Fo8";
 
 // Transak fiat onramp configuration
 const TRANSAK_API_KEY = "5606035c-b59a-4c73-80f0-b9930cdfd9f9";
@@ -395,7 +395,7 @@ function App() {
 
         const web3authInstance = new Web3Auth({
           clientId: WEB3AUTH_CLIENT_ID,
-          web3AuthNetwork: WEB3AUTH_NETWORK.SAPPHIRE_DEVNET,
+          web3AuthNetwork: WEB3AUTH_NETWORK.SAPPHIRE_MAINNET,
           privateKeyProvider,
           uiConfig: {
             appName: "OOOWEEE Protocol",
