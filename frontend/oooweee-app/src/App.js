@@ -429,6 +429,11 @@ function App() {
           setStabilityContract(stability);
           setRouterContract(router);
           setLoginMethod('social');
+
+          // Load balances and accounts on auto-reconnect
+          await loadBalances(address, web3Provider, token);
+          await loadSavingsAccounts(address, savings, web3Provider, router, ethPrice);
+          await loadGroupAccounts(address, savings);
         }
       } catch (error) {
         console.error('Web3Auth init error:', error);
