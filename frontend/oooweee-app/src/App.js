@@ -172,6 +172,8 @@ function App() {
   const [priceFeedStatus, setPriceFeedStatus] = useState({ source: 'live', cachedAt: null, error: null });
 
   // Admin Dashboard State
+  const [userMetrics, setUserMetrics] = useState({ uniqueSavers: 0, tokenHolders: 0, loaded: false });
+  const userMetricsLoadedRef = useRef(false);
   const [adminStats, setAdminStats] = useState({
     totalValueLocked: '0',
     totalAccountsCreated: 0,
@@ -247,14 +249,51 @@ function App() {
     }
   }, [stabilityContract, savingsContract, provider]);
 
+  // Load user metrics from on-chain events (once per session, cached)
+  const loadUserMetrics = useCallback(async () => {
+    if (!savingsContract || !tokenContract || !provider || userMetricsLoadedRef.current) return;
+    userMetricsLoadedRef.current = true;
+
+    try {
+      // Query AccountCreated events to count unique savers
+      const DEPLOY_BLOCK = 24430000; // Approximate deployment block (Feb 11, 2026)
+      const accountCreatedFilter = savingsContract.filters.AccountCreated();
+      const events = await savingsContract.queryFilter(accountCreatedFilter, DEPLOY_BLOCK, 'latest');
+      const uniqueAddresses = new Set(events.map(e => e.args.owner.toLowerCase()));
+
+      // Count token holders via Transfer events
+      const transferFilter = tokenContract.filters.Transfer();
+      const transfers = await tokenContract.queryFilter(transferFilter, DEPLOY_BLOCK, 'latest');
+      const holderBalances = {};
+      for (const t of transfers) {
+        const from = t.args.from.toLowerCase();
+        const to = t.args.to.toLowerCase();
+        holderBalances[to] = (holderBalances[to] || 0) + 1;
+        if (from !== '0x0000000000000000000000000000000000000000') {
+          holderBalances[from] = (holderBalances[from] || 0); // track that they had tokens
+        }
+      }
+      // Exclude zero address and count addresses that received tokens
+      delete holderBalances['0x0000000000000000000000000000000000000000'];
+      const tokenHolderCount = Object.keys(holderBalances).length;
+
+      setUserMetrics({ uniqueSavers: uniqueAddresses.size, tokenHolders: tokenHolderCount, loaded: true });
+    } catch (error) {
+      console.error('Error loading user metrics:', error);
+      // Don't block the dashboard — just show 0s
+      setUserMetrics(prev => ({ ...prev, loaded: true }));
+    }
+  }, [savingsContract, tokenContract, provider]);
+
   // Admin refresh interval
   useEffect(() => {
     if (account?.toLowerCase() === ADMIN_WALLET.toLowerCase() && activeTab === 'admin') {
       loadAdminStats();
+      loadUserMetrics();
       const interval = setInterval(loadAdminStats, 5000);
       return () => clearInterval(interval);
     }
-  }, [account, activeTab, stabilityContract, savingsContract, provider, loadAdminStats]);
+  }, [account, activeTab, stabilityContract, savingsContract, provider, loadAdminStats, loadUserMetrics]);
 
   // Stability event alerting — listen for circuit breaker and interventions
   useEffect(() => {
@@ -2455,6 +2494,32 @@ function App() {
         </div>
       </div>
       
+      {/* User Metrics */}
+      <div className="admin-section">
+        <h2>User Metrics</h2>
+        <div className="admin-grid-3">
+          <div className="admin-card metric">
+            <h4>Unique Savers</h4>
+            <p className="metric-value">{userMetrics.loaded ? userMetrics.uniqueSavers : '...'}</p>
+            <span className="metric-label">wallets with savings accounts</span>
+          </div>
+          <div className="admin-card metric">
+            <h4>Token Holders</h4>
+            <p className="metric-value">{userMetrics.loaded ? userMetrics.tokenHolders : '...'}</p>
+            <span className="metric-label">wallets that received $OOOWEEE</span>
+          </div>
+          <div className="admin-card metric">
+            <h4>Accounts per User</h4>
+            <p className="metric-value">
+              {userMetrics.loaded && userMetrics.uniqueSavers > 0
+                ? (adminStats.totalAccountsCreated / userMetrics.uniqueSavers).toFixed(1)
+                : '—'}
+            </p>
+            <span className="metric-label">avg savings accounts</span>
+          </div>
+        </div>
+      </div>
+
       {/* Stability Mechanism */}
       <div className="admin-section">
         <h2>Stability Mechanism (SSA)</h2>
