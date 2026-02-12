@@ -30,7 +30,7 @@ const ADMIN_WALLET = "0x438a0db92Ad7A94Da455110096d02D8eF7cd6A34";
 const WEB3AUTH_CLIENT_ID = "BJI5vavWlrqWJoj29XO3KwH6u7rTHAB1hBwvlpKlUA1Oeoo7mNwGE3MmmKFV0KweFBPl_GrgNsaq9U73MH95Fo8";
 
 // Transak fiat onramp configuration
-const TRANSAK_API_KEY = "5606035c-b59a-4c73-80f0-b9930cdfd9f9";
+const TRANSAK_API_KEY = "5cb34a9b-f4da-43e8-8f4b-8e573b79ab22";
 const CHAIN_CONFIG = {
   chainNamespace: CHAIN_NAMESPACES.EIP155,
   chainId: "0x1",
@@ -1214,9 +1214,9 @@ function App() {
       return;
     }
 
-    const transakUrl = new URL('https://global-stg.transak.com');
+    const transakUrl = new URL('https://global.transak.com');
     transakUrl.searchParams.set('apiKey', TRANSAK_API_KEY);
-    transakUrl.searchParams.set('environment', 'STAGING');
+    transakUrl.searchParams.set('environment', 'PRODUCTION');
     transakUrl.searchParams.set('cryptoCurrencyCode', 'ETH');
     transakUrl.searchParams.set('network', 'ethereum');
     transakUrl.searchParams.set('defaultCryptoCurrency', 'ETH');
