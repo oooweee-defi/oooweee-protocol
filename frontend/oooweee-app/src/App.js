@@ -1532,24 +1532,52 @@ function App() {
     }
   };
 
+  // Helper: approve tokens and wait for state propagation before next contract call
+  // Fixes race condition where gas estimation fails because node hasn't indexed approval yet
+  const approveAndWait = async (spender, amount) => {
+    const approveTx = await tokenContract.approve(spender, amount);
+    await toast.promise(approveTx.wait(), {
+      loading: '🔓 Approving tokens...',
+      success: '✅ Tokens approved!',
+      error: '❌ Failed to approve'
+    });
+    // Wait for node state propagation to prevent gas estimation failures
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  };
+
+  // Helper: execute a contract call with retry on gas estimation failure
+  const executeWithRetry = async (contractCall, toastMessages, retries = 2) => {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const tx = await contractCall();
+        await toast.promise(tx.wait(), toastMessages);
+        return;
+      } catch (error) {
+        const isGasError = error.code === 'UNPREDICTABLE_GAS_LIMIT' ||
+                           error.message?.includes('cannot estimate gas') ||
+                           error.message?.includes('gas required exceeds') ||
+                           error.code === -32603;
+        if (isGasError && attempt < retries) {
+          toast('Retrying transaction...', { icon: '🔄' });
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          continue;
+        }
+        throw error;
+      }
+    }
+  };
+
   const depositToGroupAccount = async (groupId, oooweeeAmount) => {
     try {
       setLoading(true);
       const depositAmount = ethers.utils.parseUnits(Math.floor(parseFloat(oooweeeAmount)).toString(), 18);
 
-      const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
-      await toast.promise(approveTx.wait(), {
-        loading: '🔓 Approving tokens...',
-        success: '✅ Tokens approved!',
-        error: '❌ Failed to approve'
-      });
+      await approveAndWait(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
 
-      const tx = await savingsContract.depositToGroup(groupId, depositAmount);
-      await toast.promise(tx.wait(), {
-        loading: '💰 Depositing to group...',
-        success: '✅ Deposit successful!',
-        error: '❌ Failed to deposit'
-      });
+      await executeWithRetry(
+        () => savingsContract.depositToGroup(groupId, depositAmount),
+        { loading: '💰 Depositing to group...', success: '✅ Deposit successful!', error: '❌ Failed to deposit' }
+      );
 
       setGroupDepositAmount('');
       await loadGroupAccounts(account, savingsContract);
@@ -1602,26 +1630,12 @@ function App() {
       const unlockTime = Math.floor(new Date(unlockDate).getTime() / 1000);
       const depositAmount = ethers.utils.parseUnits(Math.ceil(parseFloat(initialDeposit)).toString(), 18);
       
-      const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
-      
-      await toast.promise(approveTx.wait(), {
-        loading: '🔓 Approving tokens...',
-        success: '✅ Tokens approved!',
-        error: '❌ Failed to approve'
-      });
-      
-      const createTx = await savingsContract.createTimeAccount(
-        unlockTime,
-        goalName,
-        depositAmount,
-        CURRENCIES[currency].code
+      await approveAndWait(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
+
+      await executeWithRetry(
+        () => savingsContract.createTimeAccount(unlockTime, goalName, depositAmount, CURRENCIES[currency].code),
+        { loading: '🐷 Creating piggy bank...', success: `🎉 Time account created with ${Math.ceil(parseFloat(initialDeposit)).toLocaleString()} $OOOWEEE!`, error: '❌ Failed to create account' }
       );
-      
-      await toast.promise(createTx.wait(), {
-        loading: '🐷 Creating piggy bank...',
-        success: `🎉 Time account created with ${Math.ceil(parseFloat(initialDeposit)).toLocaleString()} $OOOWEEE!`,
-        error: '❌ Failed to create account'
-      });
       
       await loadSavingsAccounts(account, savingsContract, provider, routerContract, ethPrice);
       await loadBalances(account, provider, tokenContract);
@@ -1658,26 +1672,12 @@ function App() {
       const targetInSmallestUnit = Math.round(targetAmount * Math.pow(10, CURRENCIES[currency].decimals));
       const depositAmount = ethers.utils.parseUnits(Math.ceil(parseFloat(initialDeposit)).toString(), 18);
       
-      const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
-      
-      await toast.promise(approveTx.wait(), {
-        loading: '🔓 Approving tokens...',
-        success: '✅ Tokens approved!',
-        error: '❌ Failed to approve'
-      });
-      
-      const createTx = await savingsContract.createGrowthAccount(
-        targetInSmallestUnit,
-        CURRENCIES[currency].code,
-        goalName,
-        depositAmount
+      await approveAndWait(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
+
+      await executeWithRetry(
+        () => savingsContract.createGrowthAccount(targetInSmallestUnit, CURRENCIES[currency].code, goalName, depositAmount),
+        { loading: '🌱 Planting money tree...', success: `🎉 Growth account created! Target: ${CURRENCIES[currency].symbol}${targetAmount}`, error: '❌ Failed to create account' }
       );
-      
-      await toast.promise(createTx.wait(), {
-        loading: '🌱 Planting money tree...',
-        success: `🎉 Growth account created! Target: ${CURRENCIES[currency].symbol}${targetAmount}`,
-        error: '❌ Failed to create account'
-      });
       
       await loadSavingsAccounts(account, savingsContract, provider, routerContract, ethPrice);
       await loadBalances(account, provider, tokenContract);
@@ -1713,27 +1713,12 @@ function App() {
       const targetInSmallestUnit = Math.round(targetAmount * Math.pow(10, CURRENCIES[currency].decimals));
       const depositAmount = ethers.utils.parseUnits(Math.ceil(parseFloat(initialDeposit)).toString(), 18);
       
-      const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
-      
-      await toast.promise(approveTx.wait(), {
-        loading: '🔓 Approving tokens...',
-        success: '✅ Tokens approved!',
-        error: '❌ Failed to approve'
-      });
-      
-      const createTx = await savingsContract.createBalanceAccount(
-        targetInSmallestUnit,
-        CURRENCIES[currency].code,
-        recipientAddress,
-        goalName,
-        depositAmount
+      await approveAndWait(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
+
+      await executeWithRetry(
+        () => savingsContract.createBalanceAccount(targetInSmallestUnit, CURRENCIES[currency].code, recipientAddress, goalName, depositAmount),
+        { loading: '⚖️ Setting up balance account...', success: `🎉 Balance account created! Will send to ${recipientAddress.slice(0,6)}...`, error: '❌ Failed to create account' }
       );
-      
-      await toast.promise(createTx.wait(), {
-        loading: '⚖️ Setting up balance account...',
-        success: `🎉 Balance account created! Will send to ${recipientAddress.slice(0,6)}...`,
-        error: '❌ Failed to create account'
-      });
       
       await loadSavingsAccounts(account, savingsContract, provider, routerContract, ethPrice);
       await loadBalances(account, provider, tokenContract);
@@ -1859,28 +1844,12 @@ function App() {
 
       const depositAmount = ethers.utils.parseUnits(Math.floor(initialDeposit).toString(), 18);
 
-      const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
-      await toast.promise(approveTx.wait(), {
-        loading: '🔓 Approving tokens...',
-        success: '✅ Tokens approved!',
-        error: '❌ Failed to approve'
-      });
+      await approveAndWait(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
 
-      const createTx = await savingsContract.createGroupAccount(
-        typeEnum,
-        destination,
-        goalName,
-        targetFiat,
-        currencyEnum,
-        unlockTime,
-        depositAmount
+      await executeWithRetry(
+        () => savingsContract.createGroupAccount(typeEnum, destination, goalName, targetFiat, currencyEnum, unlockTime, depositAmount),
+        { loading: '👥 Creating group account...', success: '🎉 Group account created!', error: '❌ Failed to create group account' }
       );
-
-      await toast.promise(createTx.wait(), {
-        loading: '👥 Creating group account...',
-        success: '🎉 Group account created!',
-        error: '❌ Failed to create group account'
-      });
 
       await loadGroupAccounts(account, savingsContract);
       await loadBalances(account, provider, tokenContract);
@@ -1916,21 +1885,12 @@ function App() {
       const depositAmount = ethers.utils.parseUnits(depositAmountNumber.toString(), 18);
       const formattedTokens = Number(depositAmountNumber).toLocaleString(undefined, { maximumFractionDigits: 0 });
 
-      const approveTx = await tokenContract.approve(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
+      await approveAndWait(CONTRACT_ADDRESSES.OOOWEEESavings, depositAmount);
 
-      await toast.promise(approveTx.wait(), {
-        loading: '🔓 Approving tokens...',
-        success: '✅ Tokens approved!',
-        error: '❌ Failed to approve'
-      });
-
-      const depositTx = await savingsContract.deposit(accountId, depositAmount);
-
-      await toast.promise(depositTx.wait(), {
-        loading: `💰 Depositing ${formattedTokens} $OOOWEEE...`,
-        success: `🎉 Deposited ${formattedTokens} $OOOWEEE!`,
-        error: '❌ Failed to deposit'
-      });
+      await executeWithRetry(
+        () => savingsContract.deposit(accountId, depositAmount),
+        { loading: `💰 Depositing ${formattedTokens} $OOOWEEE...`, success: `🎉 Deposited ${formattedTokens} $OOOWEEE!`, error: '❌ Failed to deposit' }
+      );
       
       // CRITICAL: Pass all required params including routerContract for fresh price fetch
       await loadSavingsAccounts(account, savingsContract, provider, routerContract, ethPrice);
