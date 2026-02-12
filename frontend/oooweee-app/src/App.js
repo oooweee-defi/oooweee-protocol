@@ -2801,16 +2801,17 @@ function App() {
                     {loading ? '⏳ Processing...' : '🚀 Swap for OOOWEEE'}
                   </button>
 
+                  {/* Fiat onramp — disabled until provider account is set up
                   <div className="onramp-divider">
                     <span>or buy ETH directly with</span>
                   </div>
-
                   <button
                     className="fiat-onramp-btn"
                     onClick={() => { setShowBuyModal(false); openFiatOnramp(); }}
                   >
                     💳 Card / Google Pay / Apple Pay
                   </button>
+                  */}
                 </>
               )}
             </div>
