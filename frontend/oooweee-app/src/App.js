@@ -87,6 +87,7 @@ function App() {
   const [stabilityContract, setStabilityContract] = useState(null);
   const [routerContract, setRouterContract] = useState(null);
   const [balance, setBalance] = useState('0');
+  const [balanceFiat, setBalanceFiat] = useState({}); // { usd: cents, eur: cents, gbp: pence } from oracle
   const [ethBalance, setEthBalance] = useState('0');
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -1038,6 +1039,24 @@ function App() {
       }
 
       setAccounts(accountDetails);
+
+      // Compute wallet balance fiat values using oracle (same source as account cards)
+      try {
+        const tokenContractForBalance = new ethers.Contract(CONTRACT_ADDRESSES.OOOWEEEToken, OOOWEEETokenABI, providerInstance);
+        const walletTokenBal = await tokenContractForBalance.balanceOf(userAccount);
+        if (walletTokenBal.gt(0)) {
+          const [usdVal, eurVal, gbpVal] = await Promise.all([
+            savingsContractInstance.getBalanceInFiatView(walletTokenBal, 0), // USD
+            savingsContractInstance.getBalanceInFiatView(walletTokenBal, 1), // EUR
+            savingsContractInstance.getBalanceInFiatView(walletTokenBal, 2), // GBP
+          ]);
+          setBalanceFiat({ usd: usdVal.toNumber(), eur: eurVal.toNumber(), gbp: gbpVal.toNumber() });
+        } else {
+          setBalanceFiat({ usd: 0, eur: 0, gbp: 0 });
+        }
+      } catch (e) {
+        console.error('Error computing wallet fiat balance:', e);
+      }
     } catch (error) {
       console.error('Error loading accounts:', error);
     }
@@ -3324,7 +3343,13 @@ function App() {
                       <span>
                         {!showFiat
                           ? `${parseFloat(balance).toLocaleString()} $OOOWEEE`
-                          : getOooweeeInFiat(balance, selectedCurrency.toLowerCase())
+                          : (() => {
+                              const currInfo = CURRENCIES[selectedCurrency] || CURRENCIES.EUR;
+                              const fiatVal = balanceFiat[selectedCurrency.toLowerCase()];
+                              return fiatVal !== undefined
+                                ? `${currInfo.symbol}${(fiatVal / Math.pow(10, currInfo.decimals)).toFixed(2)}`
+                                : getOooweeeInFiat(balance, selectedCurrency.toLowerCase());
+                            })()
                         }
                       </span>
                     </div>
