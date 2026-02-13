@@ -1016,21 +1016,18 @@ function App() {
             isFiatTarget: info[4].gt(0)
           };
 
-          if (accData.isFiatTarget) {
-            try {
-              const balanceWei = ethers.utils.parseUnits(accData.balance, 18);
-              const contractFiatValue = await savingsContractInstance.getBalanceInFiatView(balanceWei, accData.targetCurrency);
-              accData.currentFiatValue = contractFiatValue.toNumber();
-            } catch (e) {
-              console.error('Error getting contract fiat value:', e);
-              const currencyCode = CURRENCY_CODES_LOCAL[accData.targetCurrency] || 'EUR';
-              const ethPriceForCurrency = freshEthPrice?.[currencyCode.toLowerCase()] || freshEthPrice?.eur || 1850;
-              const tokenValueInEth = parseFloat(accData.balance) * freshOooweeePrice;
-              const decimals = CURRENCIES[currencyCode.toUpperCase()]?.decimals || 8;
-              accData.currentFiatValue = Math.floor(tokenValueInEth * ethPriceForCurrency * Math.pow(10, decimals));
-            }
-          } else {
-            accData.currentFiatValue = 0;
+          // Always compute fiat value via contract oracle for consistent pricing
+          try {
+            const balanceWei = ethers.utils.parseUnits(accData.balance, 18);
+            const contractFiatValue = await savingsContractInstance.getBalanceInFiatView(balanceWei, accData.targetCurrency);
+            accData.currentFiatValue = contractFiatValue.toNumber();
+          } catch (e) {
+            console.error('Error getting contract fiat value:', e);
+            const currencyCode = CURRENCY_CODES_LOCAL[accData.targetCurrency] || 'EUR';
+            const ethPriceForCurrency = freshEthPrice?.[currencyCode.toLowerCase()] || freshEthPrice?.eur || 1850;
+            const tokenValueInEth = parseFloat(accData.balance) * freshOooweeePrice;
+            const decimals = CURRENCIES[currencyCode.toUpperCase()]?.decimals || 8;
+            accData.currentFiatValue = Math.floor(tokenValueInEth * ethPriceForCurrency * Math.pow(10, decimals));
           }
 
           accData.progress = calculateProgress(accData, freshOooweeePrice, freshEthPrice);
@@ -3430,39 +3427,25 @@ function App() {
                                 )}
 
                                 {/* Current value / balance */}
-                                {acc.isFiatTarget ? (
-                                  <div className="fiat-target-display">
-                                    <div className="detail-row">
-                                      <span>Current Value:</span>
-                                      <span className="primary-amount">
-                                        {currencyInfo.symbol}
-                                        {(acc.currentFiatValue / Math.pow(10, currencyInfo.decimals)).toFixed(2)}
-                                      </span>
-                                    </div>
-                                    <div className="balance-in-tokens">
-                                      <span className="secondary-amount">
-                                        {parseFloat(acc.balance).toLocaleString()} $OOOWEEE
-                                      </span>
-                                    </div>
+                                <div className="fiat-target-display">
+                                  <div className="detail-row">
+                                    <span>{acc.isFiatTarget ? 'Current Value:' : 'Balance:'}</span>
+                                    <span className="primary-amount">
+                                      {!showFiat
+                                        ? `${parseFloat(acc.balance).toLocaleString()} $OOOWEEE`
+                                        : `${currencyInfo.symbol}${(acc.currentFiatValue / Math.pow(10, currencyInfo.decimals)).toFixed(2)}`
+                                      }
+                                    </span>
                                   </div>
-                                ) : (
-                                  <div className="balance-display">
-                                    <div className="detail-row">
-                                      <span>Balance:</span>
-                                      <span className="primary-amount">
-                                        {!showFiat
-                                          ? `${parseFloat(acc.balance).toLocaleString()} $OOOWEEE`
-                                          : getOooweeeInFiat(acc.balance, selectedCurrency.toLowerCase())
-                                        }
-                                      </span>
-                                    </div>
-                                    {showFiat && (
-                                      <span className="secondary-amount">
-                                        ≈ {parseFloat(acc.balance).toLocaleString()} $OOOWEEE
-                                      </span>
-                                    )}
+                                  <div className="balance-in-tokens">
+                                    <span className="secondary-amount">
+                                      {showFiat
+                                        ? `${parseFloat(acc.balance).toLocaleString()} $OOOWEEE`
+                                        : `≈ ${currencyInfo.symbol}${(acc.currentFiatValue / Math.pow(10, currencyInfo.decimals)).toFixed(2)}`
+                                      }
+                                    </span>
                                   </div>
-                                )}
+                                </div>
 
                                 {acc.type === 'Balance' && (
                                   <>
@@ -3831,36 +3814,24 @@ function App() {
                                 <div className="account-details">
                                   <p className="completed-text">🏆 Goal Complete!</p>
                                   
-                                  {acc.isFiatTarget ? (
-                                    <>
-                                      {(acc.type === 'Growth' || acc.type === 'Balance') && (
-                                        <div className="detail-row">
-                                          <span>Target Reached:</span>
-                                          <span className="value">
-                                            {currencyInfo.symbol}
-                                            {(acc.targetFiat / Math.pow(10, currencyInfo.decimals)).toFixed(2)}
-                                          </span>
-                                        </div>
-                                      )}
-                                      <div className="detail-row">
-                                        <span>Final Value:</span>
-                                        <span className="value">
-                                          {currencyInfo.symbol}
-                                          {(acc.currentFiatValue / Math.pow(10, currencyInfo.decimals)).toFixed(2)}
-                                        </span>
-                                      </div>
-                                    </>
-                                  ) : (
+                                  {(acc.type === 'Growth' || acc.type === 'Balance') && acc.targetFiat > 0 && (
                                     <div className="detail-row">
-                                      <span>Final Balance:</span>
+                                      <span>Target Reached:</span>
                                       <span className="value">
-                                        {!showFiat
-                                          ? `${parseFloat(acc.balance).toLocaleString()} $OOOWEEE`
-                                          : getOooweeeInFiat(acc.balance, selectedCurrency.toLowerCase())
-                                        }
+                                        {currencyInfo.symbol}
+                                        {(acc.targetFiat / Math.pow(10, currencyInfo.decimals)).toFixed(2)}
                                       </span>
                                     </div>
                                   )}
+                                  <div className="detail-row">
+                                    <span>Final Balance:</span>
+                                    <span className="value">
+                                      {!showFiat
+                                        ? `${parseFloat(acc.balance).toLocaleString()} $OOOWEEE`
+                                        : `${currencyInfo.symbol}${(acc.currentFiatValue / Math.pow(10, currencyInfo.decimals)).toFixed(2)}`
+                                      }
+                                    </span>
+                                  </div>
                                   
                                   {acc.type === 'Time' && acc.unlockTime > 0 && (
                                     <div className="detail-row secondary">
