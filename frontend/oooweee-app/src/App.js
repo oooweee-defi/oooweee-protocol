@@ -997,6 +997,32 @@ function App() {
       const ACCOUNT_TYPES = ['Time', 'Balance', 'Growth'];
       const CURRENCY_CODES_LOCAL = ['USD', 'EUR', 'GBP'];
 
+      // Pre-fetch closing balances from events for completed accounts
+      let closingBalances = {};
+      try {
+        const deployBlock = 21430000; // Contract deploy block (approx)
+        const goalFilter = savingsContractInstance.filters.GoalCompleted(userAccount, null);
+        const autoFilter = savingsContractInstance.filters.AutoUnlockProcessed(userAccount, null);
+        const [goalEvents, autoEvents] = await Promise.all([
+          savingsContractInstance.queryFilter(goalFilter, deployBlock),
+          savingsContractInstance.queryFilter(autoFilter, deployBlock)
+        ]);
+        // GoalCompleted: tokensReturned + feeCollected = total closing balance
+        for (const evt of goalEvents) {
+          const accId = evt.args.accountId.toString();
+          const tokensReturned = evt.args.tokensReturned;
+          const feeCollected = evt.args.feeCollected;
+          closingBalances[accId] = tokensReturned.add(feeCollected);
+        }
+        // AutoUnlockProcessed: amount is total balance before fee
+        for (const evt of autoEvents) {
+          const accId = evt.args.accountId.toString();
+          closingBalances[accId] = evt.args.amount;
+        }
+      } catch (evtErr) {
+        console.error('Error fetching closing balance events:', evtErr);
+      }
+
       for (let id = 0; id < totalCount.toNumber(); id++) {
         try {
           const info = await savingsContractInstance.getAccountDetails(userAccount, id);
@@ -1016,6 +1042,13 @@ function App() {
             pendingRewards: '0',
             isFiatTarget: info[4].gt(0)
           };
+
+          // For completed accounts, use closing balance from events
+          const closingBal = closingBalances[accData.id];
+          if (!accData.isActive && closingBal && closingBal.gt(0)) {
+            accData.balance = ethers.utils.formatUnits(closingBal, 18);
+            accData.closingBalance = true;
+          }
 
           // Always compute fiat value via contract oracle for consistent pricing
           try {
@@ -3848,16 +3881,18 @@ function App() {
                                       </span>
                                     </div>
                                   )}
-                                  <div className="detail-row">
-                                    <span>Final Balance:</span>
-                                    <span className="value">
-                                      {!showFiat
-                                        ? `${parseFloat(acc.balance).toLocaleString()} $OOOWEEE`
-                                        : `${currencyInfo.symbol}${(acc.currentFiatValue / Math.pow(10, currencyInfo.decimals)).toFixed(2)}`
-                                      }
-                                    </span>
-                                  </div>
-                                  
+                                  {acc.closingBalance && (
+                                    <div className="detail-row">
+                                      <span>Closing Balance:</span>
+                                      <span className="value">
+                                        {!showFiat
+                                          ? `${parseFloat(acc.balance).toLocaleString()} $OOOWEEE`
+                                          : `${currencyInfo.symbol}${(acc.currentFiatValue / Math.pow(10, currencyInfo.decimals)).toFixed(2)}`
+                                        }
+                                      </span>
+                                    </div>
+                                  )}
+
                                   {acc.type === 'Time' && acc.unlockTime > 0 && (
                                     <div className="detail-row secondary">
                                       <span>Unlocked:</span>
