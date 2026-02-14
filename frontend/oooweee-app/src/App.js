@@ -1000,24 +1000,31 @@ function App() {
       // Pre-fetch closing balances from events for completed accounts
       let closingBalances = {};
       try {
-        const deployBlock = 21430000; // Contract deploy block (approx)
+        const currentBlock = await providerInstance.getBlockNumber();
+        // Search from deploy block, but chunk to avoid RPC range limits (50k blocks)
+        const startBlock = 24430000;
+        const chunkSize = 49000;
         const goalFilter = savingsContractInstance.filters.GoalCompleted(userAccount, null);
         const autoFilter = savingsContractInstance.filters.AutoUnlockProcessed(userAccount, null);
-        const [goalEvents, autoEvents] = await Promise.all([
-          savingsContractInstance.queryFilter(goalFilter, deployBlock),
-          savingsContractInstance.queryFilter(autoFilter, deployBlock)
-        ]);
-        // GoalCompleted: tokensReturned + feeCollected = total closing balance
-        for (const evt of goalEvents) {
-          const accId = evt.args.accountId.toString();
-          const tokensReturned = evt.args.tokensReturned;
-          const feeCollected = evt.args.feeCollected;
-          closingBalances[accId] = tokensReturned.add(feeCollected);
-        }
-        // AutoUnlockProcessed: amount is total balance before fee
-        for (const evt of autoEvents) {
-          const accId = evt.args.accountId.toString();
-          closingBalances[accId] = evt.args.amount;
+
+        for (let from = startBlock; from <= currentBlock; from += chunkSize) {
+          const to = Math.min(from + chunkSize - 1, currentBlock);
+          const [goalEvents, autoEvents] = await Promise.all([
+            savingsContractInstance.queryFilter(goalFilter, from, to),
+            savingsContractInstance.queryFilter(autoFilter, from, to)
+          ]);
+          // GoalCompleted: tokensReturned + feeCollected = total closing balance
+          for (const evt of goalEvents) {
+            const accId = evt.args.accountId.toString();
+            const tokensReturned = evt.args.tokensReturned;
+            const feeCollected = evt.args.feeCollected;
+            closingBalances[accId] = tokensReturned.add(feeCollected);
+          }
+          // AutoUnlockProcessed: amount is total balance before fee
+          for (const evt of autoEvents) {
+            const accId = evt.args.accountId.toString();
+            closingBalances[accId] = evt.args.amount;
+          }
         }
       } catch (evtErr) {
         console.error('Error fetching closing balance events:', evtErr);
