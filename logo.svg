@@ -8,16 +8,19 @@
       <stop offset="100%" stop-color="#5a3dff"/>
     </linearGradient>
   </defs>
-
   <text
     x="16"
     y="17"
     text-anchor="middle"
     dominant-baseline="middle"
     font-family="Arial Black, Arial, Helvetica, sans-serif"
-    font-size="26"
+    font-size="14"
     font-weight="900"
-    fill="url(#oooweeeGradient)">
-    O
+    letter-spacing="-1"
+    fill="url(#oooweeeGradient)"
+    stroke="#1b1445"
+    stroke-width="1.8"
+    paint-order="stroke fill">
+    OOO
   </text>
 </svg>
