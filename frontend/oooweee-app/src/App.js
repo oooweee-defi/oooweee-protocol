@@ -2185,12 +2185,16 @@ function App() {
             <p>80,000,000 (80%)</p>
           </div>
           <div className="token-stat">
-            <h4>Founder Allocation</h4>
+            <h4>Founder</h4>
             <p>10,000,000 (10%)</p>
           </div>
           <div className="token-stat">
+            <h4>Operations</h4>
+            <p>9,000,000 (9%)</p>
+          </div>
+          <div className="token-stat">
             <h4>Initial Liquidity</h4>
-            <p>10,000,000 (10%)</p>
+            <p>1,000,000 (1%)</p>
           </div>
         </div>
         <div className="tokenomics-details">
@@ -2246,6 +2250,553 @@ function App() {
         <button onClick={() => setActiveTab('dashboard')} className="cta-button rainbow-btn">
           Start Saving Now
         </button>
+      </div>
+
+      {/* Whitepaper — Terminal-style renderer */}
+      <div className="whitepaper-section" id="whitepaper">
+        <h2>Whitepaper</h2>
+        <p className="whitepaper-intro">Full technical documentation of the OOOWEEE Protocol.</p>
+        <div className="terminal-window">
+          <div className="terminal-header">
+            <div className="terminal-dots">
+              <span className="dot red"></span>
+              <span className="dot yellow"></span>
+              <span className="dot green"></span>
+            </div>
+            <span className="terminal-title">WHITEPAPER.md</span>
+            <a
+              href="https://github.com/oooweee-defi/oooweee-protocol/blob/main/WHITEPAPER.md"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="terminal-github-link"
+            >
+              View on GitHub &rarr;
+            </a>
+          </div>
+          <div className="terminal-body">
+            <pre className="terminal-content">{`# OOOWEEE Protocol Whitepaper
+
+**A DeFi Savings Protocol with Built-In Price Stability**
+
+Version 1.0 — February 2026
+
+Website: https://oooweee.io
+GitHub: https://github.com/oooweee-defi/oooweee-protocol
+Contact: support@oooweee.io
+
+---
+
+## Table of Contents
+
+1. Abstract
+2. Problem Statement
+3. Protocol Overview
+4. The OOOWEEE Token
+5. Goal-Based Savings Accounts
+6. Group Savings
+7. Price Stability Mechanism
+8. Validator Fund & Staking Yield
+9. Price Oracle System
+10. Fee Structure
+11. Rewards Distribution
+12. Automation & Auto-Unlock
+13. Security & Auditing
+14. Smart Contract Architecture
+15. Deployed Contracts
+16. Roadmap
+17. Team
+
+---
+
+## 1. Abstract
+
+OOOWEEE is a decentralised savings protocol deployed on Ethereum
+that enables users to create goal-based savings accounts denominated
+in fiat currencies (USD, EUR, GBP). The protocol introduces a novel
+price stability mechanism that suppresses speculative price spikes,
+redirecting captured value into Ethereum validator staking. Staking
+rewards are then distributed back to savers, creating a sustainable
+yield loop that does not rely on inflation or unsustainable emissions.
+
+The protocol is designed around a simple premise: cryptocurrency
+savings should behave more like traditional savings accounts — with
+predictable value growth, clear goals, and protection from volatility
+— while retaining the transparency, self-custody, and permissionless
+access of DeFi.
+
+---
+
+## 2. Problem Statement
+
+Existing DeFi savings and yield protocols face several challenges
+that limit mainstream adoption:
+
+**Price Volatility**: Most DeFi tokens are subject to speculative
+pumps and dumps. Users who deposit tokens into savings are exposed
+to sudden price swings that can wipe out months of progress toward
+a savings goal.
+
+**Unsustainable Yield**: Many yield protocols rely on token emissions
+(inflation) or complex leverage strategies that are unsustainable
+long-term. When the emissions end or strategies unwind, yields
+collapse.
+
+**Fiat Disconnect**: Users think in fiat currencies — dollars, euros,
+pounds. Most DeFi protocols operate entirely in token-denominated
+terms, making it difficult for everyday users to set and track
+real-world savings goals.
+
+**Complexity**: DeFi savings products typically require users to
+understand liquidity pools, impermanent loss, farming strategies,
+and complex tokenomics. This creates a barrier to entry for
+non-technical users.
+
+OOOWEEE addresses these problems through an integrated protocol that
+combines goal-based savings, automated price stability, fiat-
+denominated tracking via Chainlink oracles, and real yield from
+Ethereum validator staking.
+
+---
+
+## 3. Protocol Overview
+
+The OOOWEEE Protocol consists of six interconnected smart contracts
+deployed on Ethereum mainnet:
+
+  Contract              | Purpose
+  ----------------------|------------------------------------------
+  OOOWEEEToken          | ERC-20 token with fixed 100M supply
+  OOOWEEESavings        | Goal-based savings accounts (individual
+                        | and group)
+  OOOWEEEStability      | Automated price spike suppression
+  OOOWEEEValidatorFund  | ETH accumulation & validator staking
+  SavingsPriceOracle    | Chainlink + Uniswap price feeds for
+                        | fiat conversion
+  DonorRegistry         | Tracks community donations
+
+These contracts form a closed-loop economic system:
+
+  1. Users deposit OOOWEEE tokens into savings accounts
+  2. Stability mechanism suppresses price spikes, capturing ETH
+  3. Captured ETH flows to the Validator Fund
+  4. Validator staking rewards split: ops / validators / savers
+  5. Saver rewards swapped to OOOWEEE, distributed proportionally
+
+---
+
+## 4. The OOOWEEE Token
+
+  Contract:     OOOWEEEToken.sol
+  Standard:     ERC-20 (OpenZeppelin, UUPS Upgradeable)
+  Name:         OOOWEEE
+  Symbol:       OOOWEEE
+  Total Supply: 100,000,000 (fixed, no minting capability)
+  Decimals:     18
+
+### 4.1 Token Distribution
+
+  Allocation         | Amount      | %   | Purpose
+  -------------------|-------------|-----|---------------------------
+  Stability Reserve  | 80,000,000  | 80% | Price interventions
+  Founder            | 10,000,000  | 10% | Lockup + tranche sales
+  Operations         |  9,000,000  |  9% | Bootstrap validators
+  Initial Liquidity  |  1,000,000  |  1% | Uniswap V2 trading pair
+
+### 4.2 Design Principles
+
+  - Fixed Supply: No minting function. 100M cap is immutable.
+  - Zero Transfer Tax: No buy/sell taxes. Fees at savings level only.
+  - Trading Controls: One-time enable, irreversible.
+  - Ownership Safeguard: renounceOwnership() disabled.
+
+### 4.3 Stability Reserve
+
+80% of the total supply is transferred to the OOOWEEEStability
+contract at deployment. This reserve is not circulating supply —
+tokens only enter circulation when the stability mechanism sells
+them to suppress price spikes, and the ETH captured from those
+sales funds Ethereum validators.
+
+### 4.4 Operations Allocation
+
+9% of the supply is allocated to the operations wallet to cover
+protocol running costs and to be sold privately to bootstrap the
+first Ethereum validators.
+
+### 4.5 Initial Liquidity
+
+1% of the supply (1,000,000 tokens) was paired with ETH on
+Uniswap V2 to establish the initial trading pair and provide
+market liquidity at launch.
+
+---
+
+## 5. Goal-Based Savings Accounts
+
+  Contract: OOOWEEESavings.sol
+
+### 5.1 Account Types
+
+  Time Account:
+    - Tokens locked until a specified future date
+    - User sets unlock timestamp at creation
+    - Auto-unlocked by Chainlink Automation
+    - Maximum lock: 100 years
+
+  Growth Account:
+    - Tokens locked until they reach a target fiat value
+    - User sets target in USD, EUR, or GBP
+    - Unlocks when oracle-reported value meets target
+
+  Balance Account:
+    - Like Growth, but with a designated recipient
+    - Target amount transferred to recipient on completion
+    - Remainder returned to account owner
+    - Useful for gifting, bills, directed savings
+
+### 5.2 Fiat-Denominated Goals
+
+All account types display values in USD, EUR, or GBP. Growth and
+Balance accounts use fiat-denominated targets — the unlock condition
+is based on real-world value, not token quantity. Powered by the
+SavingsPriceOracle combining Chainlink feeds with Uniswap V2 data.
+
+### 5.3 Deposits
+
+Users can deposit into active accounts at any time. Each deposit
+incurs a 1% fee. Deposits tracked separately from rewards.
+
+---
+
+## 6. Group Savings
+
+### 6.1 How Group Savings Work
+
+  1. Creator opens group account with goal type, target, and
+     destination wallet
+  2. Creator invites members by wallet address
+  3. Invited members accept and can deposit tokens
+  4. Each member's contributions tracked individually
+  5. On goal completion, funds sent to destination wallet
+
+### 6.2 Group Cancellation
+
+  - Sole creator: Can cancel immediately
+  - Multi-member (Time): Creator cancels 1 year past unlock
+  - Multi-member (Growth/Balance): Creator cancels 2 years
+    past creation
+  - Admin: Protocol owner can cancel any group at any time
+
+  On cancellation, contributions returned proportionally.
+
+### 6.3 Reward Isolation
+
+Group deposits excluded from individual reward pool to prevent
+dilution. Group accounts do not earn staking rewards.
+
+---
+
+## 7. Price Stability Mechanism
+
+  Contract: OOOWEEEStability.sol
+
+### 7.1 How It Works
+
+  1. System monitors OOOWEEE/ETH price on Uniswap V2
+  2. Time-weighted baseline tracks organic market value
+  3. Price exceeds baseline by >10% → system intervenes
+  4. Sells tokens from 80M stability reserve into pool
+  5. Pushes price back toward baseline
+  6. Captured ETH sent to Validator Fund
+
+### 7.2 Deterministic Capture Rates
+
+  Spike Severity         | Capture Rate
+  -----------------------|-------------
+  10-19% above baseline  |    60%
+  20-29% above baseline  |    70%
+  30-49% above baseline  |    75%
+  50%+   above baseline  |    85%
+
+These rates are deterministic and publicly visible in the smart
+contract. There is no randomness.
+
+### 7.3 Time-Weighted Baseline
+
+  - Post-intervention: 80% old baseline + 20% new price
+  - No intervention for 48h: baseline decays to market price
+  - Max drift rate: 5% per hour (prevents slow-pump attacks)
+  - Gradual price increases permitted; spikes captured
+
+### 7.4 Circuit Breakers
+
+  - Max 10 interventions per 24-hour period
+  - Max 5,000,000 tokens sold per 24-hour period
+  - Max 5% of reserves per single intervention
+  - Auto-reset every 24 hours
+
+### 7.5 Triggering
+
+  1. Chainlink Automation: off-chain check every block (zero
+     gas cost), triggers on-chain only when needed
+  2. Manual check: anyone can trigger by sending 0.01 ETH
+
+### 7.6 Token Swap Mechanics
+
+Uses Uniswap V2 constant product formula to calculate exact tokens
+needed for target capture rate. Compensates for 0.3% swap fee.
+5% slippage tolerance.
+
+---
+
+## 8. Validator Fund & Staking Yield
+
+  Contract: OOOWEEEValidatorFund.sol
+
+### 8.1 ETH Sources
+
+  - Stability interventions: ETH from price spike captures
+  - Community donations: anyone can contribute via donate()
+
+### 8.2 Validator Provisioning
+
+  When fund accumulates 4 ETH (Rocketpool megapool minimum):
+  1. 4 ETH released to operations wallet
+  2. Operations deposits into Rocketpool megapool validator
+  3. Withdrawal address set to Validator Fund contract
+  4. Consensus-layer rewards flow back as ETH
+
+### 8.3 Reward Distribution (33/33/34 Split)
+
+  Share       | %   | Destination
+  ------------|-----|-----------------------------------
+  Operations  | 33% | ETH to operations wallet
+  Validators  | 33% | Stays in fund (compounds)
+  Savers      | 34% | Swapped to OOOWEEE, sent to
+              |     | Savings contract
+
+### 8.4 Compounding Effect
+
+The 33% validator share stays in the fund, compounding over time.
+More validators → more rewards → more validators. Expanding base
+of productive assets backing the protocol.
+
+---
+
+## 9. Price Oracle System
+
+  Contract: SavingsPriceOracle.sol
+
+### 9.1 Price Calculation
+
+  USD: OOOWEEE/ETH (Uniswap) × ETH/USD (Chainlink)
+  EUR: OOOWEEE/USD ÷ EUR/USD (Chainlink)
+  GBP: OOOWEEE/USD ÷ GBP/USD (Chainlink)
+
+### 9.2 Chainlink Feeds (Mainnet)
+
+  Feed    | Address                                    | Heartbeat
+  --------|--------------------------------------------|----------
+  ETH/USD | 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419 | 1 hour
+  EUR/USD | 0xb49f677943BC038e9857d61E7d053CaA2C1734C1 | 24 hours
+  GBP/USD | 0x5c0Ab2d9b5a7ed9f470386e82BB36A3613cDd4b5 | 24 hours
+
+### 9.3 TWAP Protection
+
+30-minute TWAP from Uniswap V2 cumulative price accumulators.
+When spot and TWAP diverge by >10%, TWAP is used instead.
+Prevents flash loan attacks on withdrawal conditions.
+
+### 9.4 Fallback Hierarchy
+
+  1. Primary:        Chainlink + Uniswap spot price
+  2. Fallback:       Emergency fixed rates (admin-set)
+  3. Emergency:      Last valid cached price (within 24h)
+  4. Final fallback: Hardcoded minimum value
+
+---
+
+## 10. Fee Structure
+
+  Fee Type             | Rate | Applied When
+  ---------------------|------|----------------------------
+  Creation/Deposit Fee | 1%   | Creating account or deposit
+  Withdrawal Fee       | 1%   | Withdrawing from completed
+
+  - No transfer taxes, no buy/sell taxes, no hidden fees
+  - Rates adjustable by owner, max 5% cap
+  - Fees collected in OOOWEEE tokens
+
+---
+
+## 11. Rewards Distribution
+
+### 11.1 Mechanism
+
+  - Global rewardPerToken accumulator tracks cumulative rewards
+  - On reward arrival: rewardPerToken += rewards / totalDeposited
+  - Per-account: balance × (currentRewardPerToken − checkpoint)
+  - Rewards tracked separately from deposits
+  - Solvency check: earned rewards ≤ available balance
+
+### 11.2 Claiming
+
+  - Single account claim
+  - Batch claim (up to 20 accounts per tx)
+  - Automatic claiming during withdrawals
+
+---
+
+## 12. Automation & Auto-Unlock
+
+### 12.1 How It Works
+
+  1. Chainlink calls checkUpkeep() off-chain every block
+  2. If accounts have met withdrawal conditions, returns list
+  3. performUpkeep() processes up to 20 matured accounts
+  4. Time accounts: auto-unlocked when timestamp passes
+  5. Growth/Balance: auto-processed when fiat targets met
+
+### 12.2 Public Processing
+
+Anyone can call processMaturedAccounts() to trigger auto-unlock
+without Chainlink. System works even if automation unavailable.
+
+---
+
+## 13. Security & Auditing
+
+### 13.1 Smart Contract Security
+
+  - UUPS Upgradeable Proxies (OpenZeppelin)
+  - ReentrancyGuard on all state-changing functions
+  - Ownership Controls (renounceOwnership disabled)
+  - 50-slot storage gaps for safe upgrades
+
+### 13.2 Audit Fixes Implemented
+
+  C-1: Reward checkpoint at account creation
+  C-2: Clean separation of deposits and rewards
+  H-1: View functions for creation checks
+  H-2: Group processing restricted + TWAP validated
+  M-1: Consistent fee application
+  M-2: Group deposits excluded from rewards
+  M-3: Group cancellation with proportional refunds
+  L-6: renounceOwnership() disabled
+
+### 13.3 TWAP Validation
+
+All withdrawal condition checks use TWAP-validated prices rather
+than spot prices, preventing flash loan manipulation.
+
+---
+
+## 14. Smart Contract Architecture
+
+All contracts deployed as UUPS upgradeable proxies (ERC-1967).
+
+  User
+   │
+   ├──► OOOWEEEToken (ERC-20)
+   │       └── 80M reserve ──► OOOWEEEStability
+   │                               │
+   │                               │ sells tokens on spikes
+   │                               │ sends captured ETH ▼
+   │                               │
+   ├──► OOOWEEESavings ◄────── OOOWEEEValidatorFund
+   │       │                       │
+   │       │ deposits/withdraws    │ provisions validators
+   │       │ earns rewards         │ distributes (33/33/34)
+   │       │                       │
+   │       └── SavingsPriceOracle  └── Rocketpool Validators
+   │               │
+   │               ├── Chainlink ETH/USD
+   │               ├── Chainlink EUR/USD
+   │               ├── Chainlink GBP/USD
+   │               └── Uniswap V2 OOOWEEE/ETH Pool
+   │
+   └──► DonorRegistry (community donations)
+
+---
+
+## 15. Deployed Contracts
+
+### Ethereum Mainnet (Chain ID: 1)
+
+  Contract             | Address
+  ---------------------|------------------------------------------
+  OOOWEEEToken         | 0xFb46B3eED3590eE5049bCbDA084D5582f2c14D35
+  SavingsPriceOracle   | 0x0C7b62E985D3Fb2c930a545C32D23d3920961354
+  OOOWEEESavings       | 0x6D95790b279045FeAC6DEde30600B7E3890d2018
+  OOOWEEEValidatorFund | 0xFC67Cb8e45408690029fEd391BD23861C46C92F2
+  OOOWEEEStability     | 0x3797B40625db2eE5dB78E6C7757D701d28865890
+  DonorRegistry        | 0xF726DA5DE29469DC73a1d75ebc8BAd0d3C92AAB2
+  Uniswap V2 Pair      | 0x5Ad308657372C25Ae5C4F75140b3811F3314b8a4
+
+### External Dependencies
+
+  Dependency       | Address
+  -----------------|------------------------------------------
+  Uniswap V2 Router| 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D
+  Chainlink ETH/USD| 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419
+  Chainlink EUR/USD| 0xb49f677943BC038e9857d61E7d053CaA2C1734C1
+  Chainlink GBP/USD| 0x5c0Ab2d9b5a7ed9f470386e82BB36A3613cDd4b5
+
+All contracts verified on Etherscan. Source code open source at
+https://github.com/oooweee-defi/oooweee-protocol
+
+Deployed: February 11, 2026
+
+---
+
+## 16. Roadmap
+
+### Phase 1 — Foundation (Complete)
+  - Smart contract development and testing (Sepolia)
+  - Security audit and remediation
+  - Mainnet deployment
+  - Web application launch at oooweee.io
+  - Uniswap V2 liquidity establishment
+
+### Phase 2 — Growth
+  - Chainlink Automation for savings auto-unlock
+  - First Ethereum validator via Rocketpool
+  - Community donation programme
+  - Etherscan token information and branding
+  - Fiat on/off ramp integration
+
+### Phase 3 — Expansion
+  - Additional fiat currency support
+  - Mobile-optimised experience
+  - Multi-validator staking infrastructure
+
+### Phase 4 — Maturity
+  - Cross-chain expansion
+  - Institutional savings products
+
+---
+
+## 17. Team
+
+Ryan Heapes — Founder & Developer
+
+---
+
+## Disclaimer
+
+This document is for informational purposes only and does not
+constitute financial advice. OOOWEEE is an experimental DeFi
+protocol. Users should conduct their own research and understand
+the risks before interacting with any smart contracts. The
+protocol's smart contracts are upgradeable, meaning the owner
+retains the ability to modify contract logic. All code is open
+source and verifiable on Etherscan.
+
+---
+
+OOOWEEE Protocol — Saving, Stabilised.`}</pre>
+          </div>
+        </div>
       </div>
     </div>
   );

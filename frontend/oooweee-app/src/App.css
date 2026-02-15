@@ -3785,3 +3785,146 @@ textarea:focus {
     text-align: center;
   }
 }
+
+/* ============================================
+   WHITEPAPER — Terminal-Style Renderer
+   ============================================ */
+
+.whitepaper-section {
+  margin-top: 3rem;
+  margin-bottom: 2rem;
+}
+
+.whitepaper-section > h2 {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 1.375rem;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.whitepaper-intro {
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin-bottom: 1.25rem;
+}
+
+.terminal-window {
+  background: #1e1e2e;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.terminal-header {
+  background: #181825;
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.terminal-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.terminal-dots .dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.terminal-dots .dot.red {
+  background: #f38ba8;
+}
+
+.terminal-dots .dot.yellow {
+  background: #f9e2af;
+}
+
+.terminal-dots .dot.green {
+  background: #a6e3a1;
+}
+
+.terminal-title {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', 'Consolas', monospace;
+  font-size: 0.8rem;
+  color: #a6adc8;
+  flex: 1;
+}
+
+.terminal-github-link {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', 'Consolas', monospace;
+  font-size: 0.75rem;
+  color: #89b4fa;
+  text-decoration: none;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.terminal-github-link:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.terminal-body {
+  padding: 1.5rem;
+  max-height: 70vh;
+  overflow-y: auto;
+  counter-reset: line;
+}
+
+/* Scrollbar styling */
+.terminal-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.terminal-body::-webkit-scrollbar-track {
+  background: #1e1e2e;
+}
+
+.terminal-body::-webkit-scrollbar-thumb {
+  background: #45475a;
+  border-radius: 4px;
+}
+
+.terminal-body::-webkit-scrollbar-thumb:hover {
+  background: #585b70;
+}
+
+.terminal-content {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', 'Consolas', monospace;
+  font-size: 0.8rem;
+  line-height: 1.7;
+  color: #cdd6f4;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin: 0;
+  tab-size: 2;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+  .terminal-body {
+    padding: 1rem;
+    max-height: 60vh;
+  }
+
+  .terminal-content {
+    font-size: 0.7rem;
+    line-height: 1.6;
+  }
+
+  .terminal-header {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .terminal-github-link {
+    display: none;
+  }
+}
