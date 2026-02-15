@@ -3928,3 +3928,496 @@ textarea:focus {
     display: none;
   }
 }
+
+/* ==========================================
+   SHOP PAGE
+   ========================================== */
+.shop-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.shop-logo {
+  width: 120px;
+  height: auto;
+  margin-bottom: 1rem;
+}
+
+.shop-header {
+  text-align: center;
+  margin-bottom: 2.5rem;
+  animation: slideDown 0.5s ease-out;
+}
+
+.shop-header h1 {
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-size: 2rem;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.shop-header p {
+  font-family: var(--font-sans);
+  font-size: 1.125rem;
+  color: var(--text-secondary);
+}
+
+/* Proceeds Banner */
+.shop-proceeds-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.08), rgba(123, 104, 238, 0.12));
+  border: 1px solid var(--oooweee-purple-mid, rgba(123, 104, 238, 0.3));
+  border-radius: var(--radius-md);
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 2rem;
+  animation: slideUp 0.5s ease-out;
+}
+
+.shop-proceeds-banner .proceeds-icon {
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+.shop-proceeds-banner strong {
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.shop-proceeds-banner p {
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* Category Filter */
+.shop-categories {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.shop-category-btn {
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border-default, #e5e7eb);
+  border-radius: 999px;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.shop-category-btn:hover {
+  border-color: var(--accent-primary, #7B68EE);
+  color: var(--accent-primary, #7B68EE);
+}
+
+.shop-category-btn.active {
+  background: var(--oooweee-purple-light, rgba(123, 104, 238, 0.1));
+  border-color: var(--accent-primary, #7B68EE);
+  color: var(--accent-primary, #7B68EE);
+  font-weight: 600;
+}
+
+/* Product Grid */
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2.5rem;
+}
+
+.shop-product-card {
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border-default, #e5e7eb);
+  border-radius: var(--radius-md, 12px);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.05));
+  transition: box-shadow 200ms ease, transform 200ms ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.shop-product-card:hover {
+  box-shadow: var(--shadow-md, 0 4px 6px rgba(0,0,0,0.07));
+  transform: translateY(-2px);
+}
+
+.shop-product-image {
+  height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shop-product-emoji {
+  font-size: 4rem;
+}
+
+.shop-product-info {
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.shop-product-info h3 {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.shop-product-info > p {
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+  flex: 1;
+}
+
+.shop-product-price {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.shop-product-price .eth-price {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 1.125rem;
+  color: var(--text-primary);
+}
+
+.shop-product-price .fiat-price {
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  color: var(--text-tertiary, #9ca3af);
+}
+
+.shop-buy-btn {
+  width: 100%;
+  margin-top: auto;
+}
+
+/* Shop Modal */
+.shop-modal {
+  max-width: 480px;
+}
+
+.shop-modal-product-preview {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.shop-modal-emoji {
+  font-size: 3rem;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.shop-modal-price {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: var(--text-primary);
+}
+
+.shop-modal-price .fiat-price {
+  font-size: 0.875rem;
+  color: var(--text-tertiary, #9ca3af);
+  font-weight: 400;
+}
+
+/* Size Selector */
+.shop-size-selector {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.shop-size-btn {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-default, #e5e7eb);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--bg-primary);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 150ms ease;
+  color: var(--text-primary);
+}
+
+.shop-size-btn:hover {
+  border-color: var(--accent-primary, #7B68EE);
+}
+
+.shop-size-btn.active {
+  background: var(--oooweee-purple-light, rgba(123, 104, 238, 0.1));
+  border-color: var(--accent-primary, #7B68EE);
+  color: var(--accent-primary, #7B68EE);
+  font-weight: 600;
+}
+
+/* Quantity Selector */
+.shop-quantity-selector {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.shop-quantity-selector button {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-default, #e5e7eb);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--bg-primary);
+  font-size: 1.125rem;
+  cursor: pointer;
+  transition: all 150ms ease;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
+.shop-quantity-selector button:hover {
+  border-color: var(--accent-primary, #7B68EE);
+  background: var(--oooweee-purple-light, rgba(123, 104, 238, 0.1));
+}
+
+.shop-quantity-selector span {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 1.125rem;
+  min-width: 2rem;
+  text-align: center;
+  color: var(--text-primary);
+}
+
+/* Shipping Form */
+.shop-address-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.shop-step-buttons {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.shop-step-buttons .buy-btn {
+  flex: 1;
+}
+
+.shop-back-btn {
+  background: transparent;
+  border: 1.5px solid var(--accent-primary, #7B68EE);
+  color: var(--accent-primary, #7B68EE);
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-sm, 8px);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.875rem;
+  transition: all 150ms ease;
+}
+
+.shop-back-btn:hover {
+  background: var(--oooweee-purple-light, rgba(123, 104, 238, 0.1));
+}
+
+/* Order Summary */
+.shop-order-summary {
+  background: var(--bg-secondary, #f7f8fa);
+  border-radius: var(--radius-sm, 8px);
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-light, #f0f0f0);
+}
+
+.summary-row:last-child {
+  border-bottom: none;
+}
+
+.summary-row.total {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 1rem;
+  padding-top: 0.75rem;
+  margin-top: 0.25rem;
+  border-top: 1px solid var(--border-default, #e5e7eb);
+  border-bottom: none;
+}
+
+.shop-privacy-notice {
+  background: var(--bg-secondary, #f7f8fa);
+  border-radius: var(--radius-sm, 8px);
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.shop-privacy-notice p {
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Order History */
+.shop-orders-section {
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border-default, #e5e7eb);
+  border-radius: var(--radius-md, 12px);
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.05));
+}
+
+.shop-orders-section h2 {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: var(--text-primary);
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-default, #e5e7eb);
+}
+
+.shop-order-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border-light, #f0f0f0);
+}
+
+.shop-order-item:last-child {
+  border-bottom: none;
+}
+
+.shop-order-product {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.order-size {
+  color: var(--text-tertiary, #9ca3af);
+  font-size: 0.8125rem;
+}
+
+.shop-order-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+}
+
+.order-date {
+  color: var(--text-tertiary, #9ca3af);
+}
+
+.order-tx-link {
+  color: var(--accent-primary, #7B68EE);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.order-tx-link:hover {
+  text-decoration: underline;
+}
+
+/* NFT Teaser */
+.shop-nft-teaser {
+  text-align: center;
+  padding: 2.5rem 2rem;
+  border: 2px dashed var(--border-default, #e5e7eb);
+  border-radius: var(--radius-md, 12px);
+  margin-bottom: 2rem;
+}
+
+.shop-nft-teaser h2 {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.shop-nft-teaser p {
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  color: var(--text-tertiary, #9ca3af);
+}
+
+/* Shop Mobile Responsive */
+@media (max-width: 768px) {
+  .shop-page {
+    padding: 1rem;
+  }
+
+  .shop-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .shop-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .shop-address-row {
+    grid-template-columns: 1fr;
+  }
+
+  .shop-order-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .shop-proceeds-banner {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .shop-logo {
+    width: 80px;
+  }
+}

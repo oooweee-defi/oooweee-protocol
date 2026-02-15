@@ -44,6 +44,55 @@ const CHAIN_CONFIG = {
 };
 
 
+// Shop configuration
+const SHOP_WALLET = ADMIN_WALLET;
+const SHOP_PRODUCTS = [
+  {
+    id: 'hoodie',
+    name: 'OOOWEEE Hoodie',
+    description: 'Premium heavyweight hoodie with embroidered OOOWEEE logo. 100% proceeds fund Ethereum validators.',
+    priceETH: 0.04,
+    category: 'apparel',
+    hasSizes: true,
+    sizes: ['S', 'M', 'L', 'XL', 'XXL'],
+    emoji: '🧥',
+    color: '#7B68EE'
+  },
+  {
+    id: 'tshirt',
+    name: 'OOOWEEE T-Shirt',
+    description: 'Soft cotton tee with OOOWEEE gradient print. Wear the protocol.',
+    priceETH: 0.02,
+    category: 'apparel',
+    hasSizes: true,
+    sizes: ['S', 'M', 'L', 'XL', 'XXL'],
+    emoji: '👕',
+    color: '#667eea'
+  },
+  {
+    id: 'cup',
+    name: 'OOOWEEE Mug',
+    description: 'Ceramic mug with OOOWEEE branding. Perfect for your morning coffee and DeFi.',
+    priceETH: 0.01,
+    category: 'accessories',
+    hasSizes: false,
+    sizes: [],
+    emoji: '☕',
+    color: '#FFD700'
+  },
+  {
+    id: 'hat',
+    name: 'OOOWEEE Cap',
+    description: 'Structured cap with embroidered OOOWEEE logo. One size fits most.',
+    priceETH: 0.015,
+    category: 'accessories',
+    hasSizes: false,
+    sizes: [],
+    emoji: '🧢',
+    color: '#764ba2'
+  }
+];
+
 // Currency configuration - USD/EUR/GBP only
 const CURRENCIES = {
   USD: { code: 0, symbol: '$', name: 'US Dollar', decimals: 8, locale: 'en-US' },
@@ -150,6 +199,19 @@ function App() {
   // Intro sequence state
   const [showIntro, setShowIntro] = useState(false);
   const [introStep, setIntroStep] = useState(0);
+
+  // Shop state
+  const [showShopModal, setShowShopModal] = useState(false);
+  const [shopSelectedProduct, setShopSelectedProduct] = useState(null);
+  const [shopStep, setShopStep] = useState(1);
+  const [shopSize, setShopSize] = useState('M');
+  const [shopQuantity, setShopQuantity] = useState(1);
+  const [shopShipping, setShopShipping] = useState({ name: '', email: '', address: '', city: '', country: '', zip: '' });
+  const [shopOrders, setShopOrders] = useState(() => {
+    const saved = localStorage.getItem('oooweee_shop_orders');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [shopCategory, setShopCategory] = useState('all');
 
   // Validator stats
   const [validatorStats, setValidatorStats] = useState({
@@ -1450,6 +1512,74 @@ function App() {
         toast.error('Transaction cancelled');
       } else {
         toast.error('Donation failed');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleShopPurchase = async () => {
+    if (!provider || !account) {
+      toast.error('Please connect your wallet first');
+      return;
+    }
+    if (!shopSelectedProduct) return;
+
+    const totalETH = shopSelectedProduct.priceETH * shopQuantity;
+
+    if (parseFloat(ethBalance) < totalETH) {
+      toast.error('Insufficient ETH balance');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const signer = provider.getSigner();
+      const tx = await signer.sendTransaction({
+        to: SHOP_WALLET,
+        value: ethers.utils.parseEther(totalETH.toFixed(18))
+      });
+
+      const receipt = await toast.promise(tx.wait(), {
+        loading: 'Processing payment...',
+        success: `Payment confirmed! ${totalETH.toFixed(4)} ETH sent.`,
+        error: 'Payment failed'
+      });
+
+      const order = {
+        id: `order_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        productId: shopSelectedProduct.id,
+        productName: shopSelectedProduct.name,
+        emoji: shopSelectedProduct.emoji,
+        size: shopSelectedProduct.hasSizes ? shopSize : null,
+        quantity: shopQuantity,
+        totalETH: totalETH.toFixed(4),
+        shipping: { ...shopShipping },
+        txHash: receipt.transactionHash,
+        buyer: account,
+        timestamp: Date.now(),
+        status: 'confirmed'
+      };
+
+      const updatedOrders = [...shopOrders, order];
+      setShopOrders(updatedOrders);
+      try {
+        localStorage.setItem('oooweee_shop_orders', JSON.stringify(updatedOrders));
+      } catch (e) {
+        console.warn('Could not save order to localStorage:', e);
+      }
+
+      if (account && provider && tokenContract) {
+        await loadBalances(account, provider, tokenContract);
+      }
+
+      setShopStep(4);
+    } catch (error) {
+      console.error('Shop purchase error:', error);
+      if (error.code === 'ACTION_REJECTED' || error.code === 4001) {
+        toast.error('Transaction cancelled');
+      } else {
+        toast.error('Purchase failed. Please try again.');
       }
     } finally {
       setLoading(false);
@@ -2923,6 +3053,100 @@ OOOWEEE Protocol — Saving, Stabilised.`}</pre>
     </div>
   );
   
+  // Shop Page
+  const renderShopPage = () => (
+    <div className="shop-page">
+      <div className="shop-header">
+        <img src={oooweeLogo} alt="OOOWEEE" className="shop-logo pixel-art" />
+        <h1>OOOWEEE Shop</h1>
+        <p>Merch that funds Ethereum validators</p>
+      </div>
+
+      <div className="shop-proceeds-banner">
+        <span className="proceeds-icon">🛡️</span>
+        <div>
+          <strong>100% of proceeds fund Ethereum validators</strong>
+          <p>Every purchase directly supports the OOOWEEE validator network, earning staking rewards for the community.</p>
+        </div>
+      </div>
+
+      <div className="shop-categories">
+        <button className={`shop-category-btn ${shopCategory === 'all' ? 'active' : ''}`} onClick={() => setShopCategory('all')}>All</button>
+        <button className={`shop-category-btn ${shopCategory === 'apparel' ? 'active' : ''}`} onClick={() => setShopCategory('apparel')}>Apparel</button>
+        <button className={`shop-category-btn ${shopCategory === 'accessories' ? 'active' : ''}`} onClick={() => setShopCategory('accessories')}>Accessories</button>
+      </div>
+
+      <div className="shop-grid">
+        {SHOP_PRODUCTS
+          .filter(p => shopCategory === 'all' || p.category === shopCategory)
+          .map(product => (
+            <div className="shop-product-card" key={product.id}>
+              <div className="shop-product-image" style={{ background: `linear-gradient(135deg, ${product.color}22, ${product.color}66)` }}>
+                <span className="shop-product-emoji">{product.emoji}</span>
+              </div>
+              <div className="shop-product-info">
+                <h3>{product.name}</h3>
+                <p>{product.description}</p>
+                <div className="shop-product-price">
+                  <span className="eth-price">{product.priceETH} ETH</span>
+                  {ethPrice && (
+                    <span className="fiat-price">
+                      (~{formatCurrency(product.priceETH * (ethPrice[selectedCurrency.toLowerCase()] || ethPrice.eur), selectedCurrency)})
+                    </span>
+                  )}
+                </div>
+                <button
+                  className="buy-btn shop-buy-btn"
+                  onClick={() => {
+                    setShopSelectedProduct(product);
+                    setShopStep(1);
+                    setShopSize(product.hasSizes ? 'M' : '');
+                    setShopQuantity(1);
+                    setShopShipping({ name: '', email: '', address: '', city: '', country: '', zip: '' });
+                    setShowShopModal(true);
+                  }}
+                >
+                  Buy with ETH
+                </button>
+              </div>
+            </div>
+          ))}
+      </div>
+
+      {shopOrders.length > 0 && (
+        <div className="shop-orders-section">
+          <h2>Your Orders</h2>
+          <div className="shop-orders-list">
+            {shopOrders.slice().reverse().map((order, i) => (
+              <div className="shop-order-item" key={order.id || i}>
+                <div className="shop-order-product">
+                  <span>{order.emoji}</span>
+                  <span>{order.productName}</span>
+                  {order.size && <span className="order-size">Size: {order.size}</span>}
+                  <span>x{order.quantity}</span>
+                </div>
+                <div className="shop-order-meta">
+                  <span>{order.totalETH} ETH</span>
+                  <span className="order-date">{new Date(order.timestamp).toLocaleDateString()}</span>
+                  {order.txHash && (
+                    <a href={`https://etherscan.io/tx/${order.txHash}`} target="_blank" rel="noopener noreferrer" className="order-tx-link">
+                      View TX
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="shop-nft-teaser">
+        <h2>NFTs Coming Soon</h2>
+        <p>Exclusive OOOWEEE NFTs with protocol utility. Stay tuned.</p>
+      </div>
+    </div>
+  );
+
   // Improved Admin Dashboard
   const renderAdminDashboard = () => (
     <div className="admin-dashboard">
@@ -3497,6 +3721,131 @@ OOOWEEE Protocol — Saving, Stabilised.`}</pre>
         </div>
       )}
       
+      {showShopModal && shopSelectedProduct && (
+        <div className="modal-overlay" onClick={() => { setShowShopModal(false); setShopStep(1); }}>
+          <div className="modal-content shop-modal" onClick={(e) => e.stopPropagation()}>
+            <h2>{shopStep === 4 ? 'Order Confirmed!' : shopSelectedProduct.name}</h2>
+            <button className="close-modal" onClick={() => { setShowShopModal(false); setShopStep(1); }}>✕</button>
+
+            {shopStep === 1 && (
+              <div className="buy-form">
+                <div className="shop-modal-product-preview">
+                  <span className="shop-modal-emoji">{shopSelectedProduct.emoji}</span>
+                  <div className="shop-modal-price">
+                    {shopSelectedProduct.priceETH} ETH
+                    {ethPrice && (
+                      <span className="fiat-price">
+                        {' '}(~{formatCurrency(shopSelectedProduct.priceETH * (ethPrice[selectedCurrency.toLowerCase()] || ethPrice.eur), selectedCurrency)})
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {shopSelectedProduct.hasSizes && (
+                  <div className="input-group">
+                    <label>Size</label>
+                    <div className="shop-size-selector">
+                      {shopSelectedProduct.sizes.map(s => (
+                        <button key={s} className={`shop-size-btn ${shopSize === s ? 'active' : ''}`} onClick={() => setShopSize(s)}>{s}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="input-group">
+                  <label>Quantity</label>
+                  <div className="shop-quantity-selector">
+                    <button onClick={() => setShopQuantity(Math.max(1, shopQuantity - 1))}>-</button>
+                    <span>{shopQuantity}</span>
+                    <button onClick={() => setShopQuantity(Math.min(10, shopQuantity + 1))}>+</button>
+                  </div>
+                </div>
+
+                <div className="output-estimate">
+                  <p>Total:</p>
+                  <h3>{(shopSelectedProduct.priceETH * shopQuantity).toFixed(4)} ETH</h3>
+                  {ethPrice && (
+                    <p className="fiat-value">
+                      ~{formatCurrency(shopSelectedProduct.priceETH * shopQuantity * (ethPrice[selectedCurrency.toLowerCase()] || ethPrice.eur), selectedCurrency)}
+                    </p>
+                  )}
+                </div>
+
+                <button className="buy-btn" onClick={() => setShopStep(2)}>Continue to Shipping</button>
+              </div>
+            )}
+
+            {shopStep === 2 && (
+              <div className="buy-form">
+                <div className="input-group">
+                  <label>Full Name</label>
+                  <input type="text" value={shopShipping.name} onChange={(e) => setShopShipping(prev => ({ ...prev, name: e.target.value }))} placeholder="John Doe" />
+                </div>
+                <div className="input-group">
+                  <label>Email</label>
+                  <input type="email" value={shopShipping.email} onChange={(e) => setShopShipping(prev => ({ ...prev, email: e.target.value }))} placeholder="you@example.com" />
+                </div>
+                <div className="input-group">
+                  <label>Street Address</label>
+                  <input type="text" value={shopShipping.address} onChange={(e) => setShopShipping(prev => ({ ...prev, address: e.target.value }))} placeholder="123 Main St" />
+                </div>
+                <div className="shop-address-row">
+                  <div className="input-group">
+                    <label>City</label>
+                    <input type="text" value={shopShipping.city} onChange={(e) => setShopShipping(prev => ({ ...prev, city: e.target.value }))} />
+                  </div>
+                  <div className="input-group">
+                    <label>Zip / Postal Code</label>
+                    <input type="text" value={shopShipping.zip} onChange={(e) => setShopShipping(prev => ({ ...prev, zip: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="input-group">
+                  <label>Country</label>
+                  <input type="text" value={shopShipping.country} onChange={(e) => setShopShipping(prev => ({ ...prev, country: e.target.value }))} placeholder="Ireland" />
+                </div>
+
+                <div className="shop-step-buttons">
+                  <button className="shop-back-btn" onClick={() => setShopStep(1)}>Back</button>
+                  <button className="buy-btn" disabled={!shopShipping.name || !shopShipping.email || !shopShipping.address || !shopShipping.city || !shopShipping.country} onClick={() => setShopStep(3)}>Review Order</button>
+                </div>
+              </div>
+            )}
+
+            {shopStep === 3 && (
+              <div className="buy-form">
+                <div className="shop-order-summary">
+                  <div className="summary-row"><span>Product</span><span>{shopSelectedProduct.name}{shopSelectedProduct.hasSizes ? ` (${shopSize})` : ''}</span></div>
+                  <div className="summary-row"><span>Quantity</span><span>{shopQuantity}</span></div>
+                  <div className="summary-row"><span>Ship to</span><span>{shopShipping.name}, {shopShipping.city}, {shopShipping.country}</span></div>
+                  <div className="summary-row total"><span>Total</span><span>{(shopSelectedProduct.priceETH * shopQuantity).toFixed(4)} ETH</span></div>
+                </div>
+
+                <div className="shop-privacy-notice">
+                  <p>🛡️ 100% of proceeds fund Ethereum validators. Shipping details are stored locally on your device only.</p>
+                </div>
+
+                <div className="shop-step-buttons">
+                  <button className="shop-back-btn" onClick={() => setShopStep(2)}>Back</button>
+                  <button className="buy-btn" onClick={handleShopPurchase} disabled={loading || !account}>
+                    {loading ? 'Processing...' : !account ? 'Connect Wallet First' : `Pay ${(shopSelectedProduct.priceETH * shopQuantity).toFixed(4)} ETH`}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {shopStep === 4 && (
+              <div className="buy-form" style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>✅</div>
+                <h3>Order Placed!</h3>
+                <p>Your {shopSelectedProduct.name} is on its way. We'll reach out via email to confirm shipping.</p>
+                <p style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)', marginTop: '0.5rem' }}>Order details saved to your browser. Check "Your Orders" on the Shop page.</p>
+                <button className="buy-btn" onClick={() => { setShowShopModal(false); setShopStep(1); }} style={{ marginTop: '1rem' }}>Done</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {showCreateModal && (
         <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
           <div className="modal-content create-modal" onClick={(e) => e.stopPropagation()}>
@@ -3690,6 +4039,12 @@ OOOWEEE Protocol — Saving, Stabilised.`}</pre>
           >
             Whitepaper
           </button>
+          <button
+            className={`tab-btn ${activeTab === 'shop' ? 'active' : ''}`}
+            onClick={() => setActiveTab('shop')}
+          >
+            Shop
+          </button>
           {account?.toLowerCase() === ADMIN_WALLET.toLowerCase() && (
             <button
               className={`tab-btn admin-tab ${activeTab === 'admin' ? 'active' : ''}`}
@@ -3721,6 +4076,8 @@ OOOWEEE Protocol — Saving, Stabilised.`}</pre>
           renderAboutPage()
         ) : activeTab === 'community' ? (
           renderCommunityPage()
+        ) : activeTab === 'shop' ? (
+          renderShopPage()
         ) : activeTab === 'admin' && account?.toLowerCase() === ADMIN_WALLET.toLowerCase() ? (
           renderAdminDashboard()
         ) : (
