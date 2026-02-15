@@ -3,9 +3,10 @@ import { ethers } from 'ethers';
 import toast, { Toaster } from 'react-hot-toast';
 import './App.css';
 import oooweeLogo from './assets/oooweee-logo.png';
-import hoodieAsh from './assets/shop/hoodie-ash.png';
-import hoodieGraphite from './assets/shop/hoodie-graphite.png';
-import hoodieNavy from './assets/shop/hoodie-navy.png';
+import hoodieBlack from './assets/shop/hoodie-black.png';
+import hoodieCarolinaBlue from './assets/shop/hoodie-carolina-blue.png';
+import hoodieForestGreen from './assets/shop/hoodie-forest-green.png';
+import hoodieLightPink from './assets/shop/hoodie-light-pink.png';
 import hoodieWhite from './assets/shop/hoodie-white.png';
 import tshirtAsh from './assets/shop/tshirt-ash.png';
 import tshirtGraphite from './assets/shop/tshirt-graphite.png';
@@ -65,16 +66,17 @@ const SHOP_PRODUCTS = [
     id: 'hoodie',
     name: 'OOOWEEE Hoodeee',
     description: 'Premium heavyweight hoodie with embroidered OOOWEEE logo. 100% proceeds fund Ethereum validators.',
-    priceETH: 0.04,
+    priceETH: 0.03,
     category: 'apparel',
     hasSizes: true,
     sizes: ['S', 'M', 'L', 'XL', 'XXL'],
     emoji: '🧥',
     color: '#7B68EE',
     colors: [
-      { name: 'Ash', hex: '#b5b5b5', image: hoodieAsh },
-      { name: 'Graphite', hex: '#5e5e5e', image: hoodieGraphite },
-      { name: 'Navy', hex: '#1b2a4a', image: hoodieNavy },
+      { name: 'Black', hex: '#1a1a1a', image: hoodieBlack },
+      { name: 'Carolina Blue', hex: '#5ba4d9', image: hoodieCarolinaBlue },
+      { name: 'Forest Green', hex: '#2d5a27', image: hoodieForestGreen },
+      { name: 'Light Pink', hex: '#f4c2c2', image: hoodieLightPink },
       { name: 'White', hex: '#ffffff', image: hoodieWhite },
     ]
   },
@@ -82,7 +84,7 @@ const SHOP_PRODUCTS = [
     id: 'tee',
     name: 'OOOWEEE Teee',
     description: 'Soft cotton tee with OOOWEEE gradient print. Wear the protocol.',
-    priceETH: 0.02,
+    priceETH: 0.03,
     category: 'apparel',
     hasSizes: true,
     sizes: ['S', 'M', 'L', 'XL', 'XXL'],
@@ -99,7 +101,7 @@ const SHOP_PRODUCTS = [
     id: 'cordeee',
     name: 'OOOWEEE Cordeee',
     description: 'Corduroy cap with embroidered OOOWEEE logo. One size fits most.',
-    priceETH: 0.015,
+    priceETH: 0.03,
     category: 'accessories',
     hasSizes: false,
     sizes: [],
@@ -116,7 +118,7 @@ const SHOP_PRODUCTS = [
     id: 'bageee',
     name: 'OOOWEEE Bageee',
     description: 'Large eco tote bag with OOOWEEE print. Carry your bags and your bags.',
-    priceETH: 0.01,
+    priceETH: 0.03,
     category: 'accessories',
     hasSizes: false,
     sizes: [],
