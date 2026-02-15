@@ -2100,8 +2100,6 @@ function App() {
 
       {/* Whitepaper — Terminal-style renderer */}
       <div className="whitepaper-section" id="whitepaper">
-        <h2>Whitepaper</h2>
-        <p className="whitepaper-intro">Full technical documentation of the OOOWEEE Protocol.</p>
         <div className="terminal-window">
           <div className="terminal-header">
             <div className="terminal-dots">
