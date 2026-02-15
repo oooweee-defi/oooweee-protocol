@@ -19,6 +19,8 @@ import cordeeeOlive from './assets/shop/cordeee-olive.png';
 import cordeeeNavy from './assets/shop/cordeee-navy.png';
 import bageeeBlack from './assets/shop/bageee-black.png';
 import bageeeOyster from './assets/shop/bageee-oyster.png';
+import slideeezImg from './assets/shop/slideeez.png';
+import fanneeeImg from './assets/shop/fanneee.png';
 import { OOOWEEETokenABI, OOOWEEESavingsABI, OOOWEEEValidatorFundABI, OOOWEEEStabilityABI, DonorRegistryABI, CONTRACT_ADDRESSES } from './contracts/abis';
 import Web3Modal from "web3modal";
 import WalletConnectProvider from "@walletconnect/web3-provider";
@@ -129,6 +131,34 @@ const SHOP_PRODUCTS = [
     colors: [
       { name: 'Black', hex: '#1a1a1a', image: bageeeBlack },
       { name: 'Oyster', hex: '#e8dcc8', image: bageeeOyster },
+    ]
+  },
+  {
+    id: 'slideeez',
+    name: 'OOOWEEE Slideeez',
+    description: 'Slides with OOOWEEE branding. Comfort meets protocol.',
+    priceETH: 0.275,
+    category: 'accessories',
+    hasSizes: true,
+    sizes: ['6', '7', '8', '9', '10', '11', '12', '13'],
+    emoji: '🩴',
+    color: '#667eea',
+    colors: [
+      { name: 'Default', hex: '#1a1a1a', image: slideeezImg },
+    ]
+  },
+  {
+    id: 'fanneee',
+    name: 'OOOWEEE Fanneee',
+    description: 'Fanny pack with OOOWEEE print. Keep your keys close.',
+    priceETH: 0.275,
+    category: 'accessories',
+    hasSizes: false,
+    sizes: [],
+    emoji: '👝',
+    color: '#764ba2',
+    colors: [
+      { name: 'Default', hex: '#1a1a1a', image: fanneeeImg },
     ]
   }
 ];
