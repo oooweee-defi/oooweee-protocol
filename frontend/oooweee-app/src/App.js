@@ -2094,162 +2094,8 @@ function App() {
     <div className="about-page">
       <div className="about-header">
         <img src={oooweeLogo} alt="OOOWEEE" className="about-logo pixel-art" />
-        <h1>The OOOWEEE Protocol</h1>
-        <p className="subtitle">Make your $aving goals non-negotiable</p>
-      </div>
-
-      <div className="about-section">
-        <h2>The Problem</h2>
-        <p>Saving money should be simple. But traditional banks make breaking your goals too easy &mdash; cooling-off periods you can override, penalty fees that barely sting, and no real accountability. 92% of people abandon their savings goals within 6 months.</p>
-      </div>
-
-      <div className="about-section">
-        <h2>The Solution</h2>
-        <p>OOOWEEE uses smart contracts to create savings accounts that <strong>cannot be broken early</strong>. No bank manager override. No "forgot password" backdoor. When you set a time lock, balance target, or growth goal &mdash; it's enforced by code, not willpower. Your future self will thank you.</p>
-      </div>
-
-      <div className="about-section features-section">
-        <h2>Key Features</h2>
-        <div className="features-grid">
-          <div className="feature-card">
-            <span className="feature-icon">🔒</span>
-            <h3>Three Lock Types</h3>
-            <p><strong>Time Lock</strong> &mdash; funds release after a set date. <strong>Balance Target</strong> &mdash; unlock when your savings hit a fiat value. <strong>Growth Goal</strong> &mdash; unlock when your tokens grow by a target percentage.</p>
-          </div>
-          <div className="feature-card">
-            <span className="feature-icon">👥</span>
-            <h3>Group Savings</h3>
-            <p>Save together with friends, family, or communities. Create a shared goal, invite members, and watch your collective savings grow. Perfect for holidays, emergency funds, or group investments.</p>
-          </div>
-          <div className="feature-card">
-            <span className="feature-icon">🎁</span>
-            <h3>Passive Rewards</h3>
-            <p>Active savers earn rewards from the protocol's validator staking income. The longer you save, the more you earn &mdash; all distributed automatically in $OOOWEEE.</p>
-          </div>
-          <div className="feature-card">
-            <span className="feature-icon">🛡️</span>
-            <h3>Price Stability</h3>
-            <p>An automated stability mechanism monitors the token price and intervenes during excessive pumps, capturing ETH value and protecting savers from volatile swings.</p>
-          </div>
-          <div className="feature-card">
-            <span className="feature-icon">💸</span>
-            <h3>Multi-Currency Targets</h3>
-            <p>Set your savings goals in USD, EUR, or GBP. Live Chainlink price feeds convert your $OOOWEEE balance to real-world values so you always know where you stand.</p>
-          </div>
-          <div className="feature-card">
-            <span className="feature-icon">⚡</span>
-            <h3>Auto-Unlock</h3>
-            <p>When your savings account matures, Chainlink Automation processes the unlock automatically. No manual claiming needed &mdash; funds return to your wallet on time, every time.</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="about-section">
-        <h2>How the Value Flows</h2>
-        <div className="flow-diagram">
-          <div className="flow-step">
-            <span className="step-icon">📈</span>
-            <h3>1. Market Activity</h3>
-            <p>Traders buy and sell $OOOWEEE on Uniswap, creating price movement</p>
-          </div>
-          <div className="flow-arrow">&#8594;</div>
-          <div className="flow-step">
-            <span className="step-icon">🛡️</span>
-            <h3>2. Stability</h3>
-            <p>Protocol detects price spikes above 10%, sells reserve tokens, captures ETH</p>
-          </div>
-          <div className="flow-arrow">&#8594;</div>
-          <div className="flow-step">
-            <span className="step-icon">🔐</span>
-            <h3>3. Validators</h3>
-            <p>Captured ETH funds Ethereum validators earning ~4% APY staking rewards</p>
-          </div>
-          <div className="flow-arrow">&#8594;</div>
-          <div className="flow-step">
-            <span className="step-icon">🎁</span>
-            <h3>4. Rewards</h3>
-            <p>Validator rewards are split: 34% converted to $OOOWEEE for savers</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="tokenomics-section">
-        <h2>Tokenomics</h2>
-        <div className="tokenomics-grid">
-          <div className="token-stat">
-            <h4>Total Supply</h4>
-            <p>100,000,000</p>
-          </div>
-          <div className="token-stat highlight">
-            <h4>Stability Reserve</h4>
-            <p>80,000,000 (80%)</p>
-          </div>
-          <div className="token-stat">
-            <h4>Founder</h4>
-            <p>10,000,000 (10%)</p>
-          </div>
-          <div className="token-stat">
-            <h4>Operations</h4>
-            <p>9,000,000 (9%)</p>
-          </div>
-          <div className="token-stat">
-            <h4>Initial Liquidity</h4>
-            <p>1,000,000 (1%)</p>
-          </div>
-        </div>
-        <div className="tokenomics-details">
-          <div className="tokenomics-detail-row">
-            <span>Buy / Sell Tax</span>
-            <span className="value">0%</span>
-          </div>
-          <div className="tokenomics-detail-row">
-            <span>Savings Creation Fee</span>
-            <span className="value">1%</span>
-          </div>
-          <div className="tokenomics-detail-row">
-            <span>Validator Reward Split</span>
-            <span className="value">33% Ops / 33% Validators / 34% Savers</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="about-section">
-        <h2>Smart Contracts</h2>
-        <p style={{ marginBottom: '1rem' }}>All contracts are upgradeable (UUPS proxy pattern), verified on Etherscan, and powered by Chainlink oracles and automation.</p>
-        <div className="contracts-list">
-          <div className="contract-item">
-            <span className="contract-name">$OOOWEEE Token</span>
-            <span className="contract-desc">ERC-20 with stability mechanism integration</span>
-          </div>
-          <div className="contract-item">
-            <span className="contract-name">Savings</span>
-            <span className="contract-desc">Individual &amp; group accounts with auto-unlock</span>
-          </div>
-          <div className="contract-item">
-            <span className="contract-name">Stability</span>
-            <span className="contract-desc">Automated price intervention &amp; ETH capture</span>
-          </div>
-          <div className="contract-item">
-            <span className="contract-name">Validator Fund</span>
-            <span className="contract-desc">ETH staking &amp; 33/33/34 reward distribution</span>
-          </div>
-          <div className="contract-item">
-            <span className="contract-name">Price Oracle</span>
-            <span className="contract-desc">Chainlink feeds for USD, EUR, GBP conversion</span>
-          </div>
-          <div className="contract-item">
-            <span className="contract-name">Donor Registry</span>
-            <span className="contract-desc">On-chain recognition for community contributors</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="cta-section">
-        <h2>Ready to start saving?</h2>
-        <p>Take control of your financial future. Create an account that holds you accountable.</p>
-        <button onClick={() => setActiveTab('dashboard')} className="cta-button rainbow-btn">
-          Start Saving Now
-        </button>
+        <h1>OOOWEEE Protocol</h1>
+        <p className="subtitle">Whitepaper</p>
       </div>
 
       {/* Whitepaper — Terminal-style renderer */}
@@ -2807,6 +2653,72 @@ OOOWEEE Protocol — Saving, Stabilised.`}</pre>
       <div className="community-header">
         <h1>OOOWEEE Community</h1>
         <p>Supporting the network, together!</p>
+      </div>
+
+      {/* Mission Statement */}
+      <div className="about-section" style={{ marginBottom: '2rem' }}>
+        <p style={{ fontSize: '1.125rem', lineHeight: '1.7', color: 'var(--text-secondary)' }}>
+          Saving money should be simple, but 92% of people abandon their savings goals within 6 months.
+          OOOWEEE uses smart contracts to create savings accounts that <strong>cannot be broken early</strong> &mdash;
+          enforced by code, not willpower. Set a time lock, balance target, or growth goal, and your funds stay put until you hit it.
+        </p>
+      </div>
+
+      <div className="about-section features-section" style={{ marginBottom: '2rem' }}>
+        <div className="features-grid">
+          <div className="feature-card">
+            <span className="feature-icon">🔒</span>
+            <h3>Three Lock Types</h3>
+            <p><strong>Time Lock</strong> &mdash; funds release after a set date. <strong>Balance Target</strong> &mdash; unlock when your savings hit a fiat value. <strong>Growth Goal</strong> &mdash; unlock when tokens grow to a target.</p>
+          </div>
+          <div className="feature-card">
+            <span className="feature-icon">🎁</span>
+            <h3>Passive Rewards</h3>
+            <p>Active savers earn rewards from the protocol's validator staking income. The longer you save, the more you earn &mdash; distributed automatically in $OOOWEEE.</p>
+          </div>
+          <div className="feature-card">
+            <span className="feature-icon">🛡️</span>
+            <h3>Price Stability</h3>
+            <p>An automated stability mechanism intervenes during excessive price pumps, capturing ETH value and protecting savers from volatile swings.</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="about-section" style={{ marginBottom: '2rem' }}>
+        <h2>How the Value Flows</h2>
+        <div className="flow-diagram">
+          <div className="flow-step">
+            <span className="step-icon">📈</span>
+            <h3>1. Market Activity</h3>
+            <p>Traders buy and sell $OOOWEEE on Uniswap, creating price movement</p>
+          </div>
+          <div className="flow-arrow">&#8594;</div>
+          <div className="flow-step">
+            <span className="step-icon">🛡️</span>
+            <h3>2. Stability</h3>
+            <p>Protocol detects price spikes above 10%, sells reserve tokens, captures ETH</p>
+          </div>
+          <div className="flow-arrow">&#8594;</div>
+          <div className="flow-step">
+            <span className="step-icon">🔐</span>
+            <h3>3. Validators</h3>
+            <p>Captured ETH funds Ethereum validators earning ~4% APY staking rewards</p>
+          </div>
+          <div className="flow-arrow">&#8594;</div>
+          <div className="flow-step">
+            <span className="step-icon">🎁</span>
+            <h3>4. Rewards</h3>
+            <p>Validator rewards are split: 34% converted to $OOOWEEE for savers</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="cta-section" style={{ marginBottom: '2rem' }}>
+        <h2>Ready to start saving?</h2>
+        <p>Take control of your financial future. Create an account that holds you accountable.</p>
+        <button onClick={() => setActiveTab('dashboard')} className="cta-button rainbow-btn">
+          Start Saving Now
+        </button>
       </div>
 
       {/* ATH Donor Banner */}
@@ -3774,11 +3686,11 @@ OOOWEEE Protocol — Saving, Stabilised.`}</pre>
           >
             Community
           </button>
-          <button 
+          <button
             className={`tab-btn ${activeTab === 'about' ? 'active' : ''}`}
             onClick={() => setActiveTab('about')}
           >
-            About
+            Whitepaper
           </button>
           {account?.toLowerCase() === ADMIN_WALLET.toLowerCase() && (
             <button
