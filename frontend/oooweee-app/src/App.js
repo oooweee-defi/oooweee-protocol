@@ -3,6 +3,10 @@ import { ethers } from 'ethers';
 import toast, { Toaster } from 'react-hot-toast';
 import './App.css';
 import oooweeLogo from './assets/oooweee-logo.png';
+import hoodieAsh from './assets/shop/hoodie-ash.png';
+import hoodieGraphite from './assets/shop/hoodie-graphite.png';
+import hoodieNavy from './assets/shop/hoodie-navy.png';
+import hoodieWhite from './assets/shop/hoodie-white.png';
 import { OOOWEEETokenABI, OOOWEEESavingsABI, OOOWEEEValidatorFundABI, OOOWEEEStabilityABI, DonorRegistryABI, CONTRACT_ADDRESSES } from './contracts/abis';
 import Web3Modal from "web3modal";
 import WalletConnectProvider from "@walletconnect/web3-provider";
@@ -56,7 +60,13 @@ const SHOP_PRODUCTS = [
     hasSizes: true,
     sizes: ['S', 'M', 'L', 'XL', 'XXL'],
     emoji: '🧥',
-    color: '#7B68EE'
+    color: '#7B68EE',
+    colors: [
+      { name: 'Ash', hex: '#b5b5b5', image: hoodieAsh },
+      { name: 'Graphite', hex: '#5e5e5e', image: hoodieGraphite },
+      { name: 'Navy', hex: '#1b2a4a', image: hoodieNavy },
+      { name: 'White', hex: '#ffffff', image: hoodieWhite },
+    ]
   },
   {
     id: 'tshirt',
@@ -212,6 +222,7 @@ function App() {
     return saved ? JSON.parse(saved) : [];
   });
   const [shopCategory, setShopCategory] = useState('all');
+  const [shopSelectedColors, setShopSelectedColors] = useState({});
 
   // Validator stats
   const [validatorStats, setValidatorStats] = useState({
@@ -1552,6 +1563,7 @@ function App() {
         productName: shopSelectedProduct.name,
         emoji: shopSelectedProduct.emoji,
         size: shopSelectedProduct.hasSizes ? shopSize : null,
+        color: shopSelectedProduct.colors ? shopSelectedProduct.colors[shopSelectedColors[shopSelectedProduct.id] || 0].name : null,
         quantity: shopQuantity,
         totalETH: totalETH.toFixed(4),
         shipping: { ...shopShipping },
@@ -3081,11 +3093,31 @@ OOOWEEE Protocol — Saving, Stabilised.`}</pre>
           .filter(p => shopCategory === 'all' || p.category === shopCategory)
           .map(product => (
             <div className="shop-product-card" key={product.id}>
-              <div className="shop-product-image" style={{ background: `linear-gradient(135deg, ${product.color}22, ${product.color}66)` }}>
-                <span className="shop-product-emoji">{product.emoji}</span>
-              </div>
+              {product.colors ? (
+                <div className="shop-product-image shop-product-image-photo">
+                  <img src={product.colors[shopSelectedColors[product.id] || 0].image} alt={`${product.name} - ${product.colors[shopSelectedColors[product.id] || 0].name}`} />
+                </div>
+              ) : (
+                <div className="shop-product-image" style={{ background: `linear-gradient(135deg, ${product.color}22, ${product.color}66)` }}>
+                  <span className="shop-product-emoji">{product.emoji}</span>
+                </div>
+              )}
               <div className="shop-product-info">
                 <h3>{product.name}</h3>
+                {product.colors && (
+                  <div className="shop-color-swatches">
+                    {product.colors.map((c, i) => (
+                      <button
+                        key={c.name}
+                        className={`shop-color-swatch ${(shopSelectedColors[product.id] || 0) === i ? 'active' : ''}`}
+                        style={{ background: c.hex }}
+                        onClick={() => setShopSelectedColors(prev => ({ ...prev, [product.id]: i }))}
+                        title={c.name}
+                      />
+                    ))}
+                    <span className="shop-color-name">{product.colors[shopSelectedColors[product.id] || 0].name}</span>
+                  </div>
+                )}
                 <p>{product.description}</p>
                 <div className="shop-product-price">
                   <span className="eth-price">{product.priceETH} ETH</span>
@@ -3730,7 +3762,11 @@ OOOWEEE Protocol — Saving, Stabilised.`}</pre>
             {shopStep === 1 && (
               <div className="buy-form">
                 <div className="shop-modal-product-preview">
-                  <span className="shop-modal-emoji">{shopSelectedProduct.emoji}</span>
+                  {shopSelectedProduct.colors ? (
+                    <img className="shop-modal-image" src={shopSelectedProduct.colors[shopSelectedColors[shopSelectedProduct.id] || 0].image} alt={shopSelectedProduct.name} />
+                  ) : (
+                    <span className="shop-modal-emoji">{shopSelectedProduct.emoji}</span>
+                  )}
                   <div className="shop-modal-price">
                     {shopSelectedProduct.priceETH} ETH
                     {ethPrice && (
@@ -3740,6 +3776,24 @@ OOOWEEE Protocol — Saving, Stabilised.`}</pre>
                     )}
                   </div>
                 </div>
+
+                {shopSelectedProduct.colors && (
+                  <div className="input-group">
+                    <label>Color</label>
+                    <div className="shop-color-swatches modal-swatches">
+                      {shopSelectedProduct.colors.map((c, i) => (
+                        <button
+                          key={c.name}
+                          className={`shop-color-swatch ${(shopSelectedColors[shopSelectedProduct.id] || 0) === i ? 'active' : ''}`}
+                          style={{ background: c.hex }}
+                          onClick={() => setShopSelectedColors(prev => ({ ...prev, [shopSelectedProduct.id]: i }))}
+                          title={c.name}
+                        />
+                      ))}
+                      <span className="shop-color-name">{shopSelectedProduct.colors[shopSelectedColors[shopSelectedProduct.id] || 0].name}</span>
+                    </div>
+                  </div>
+                )}
 
                 {shopSelectedProduct.hasSizes && (
                   <div className="input-group">
@@ -3814,7 +3868,7 @@ OOOWEEE Protocol — Saving, Stabilised.`}</pre>
             {shopStep === 3 && (
               <div className="buy-form">
                 <div className="shop-order-summary">
-                  <div className="summary-row"><span>Product</span><span>{shopSelectedProduct.name}{shopSelectedProduct.hasSizes ? ` (${shopSize})` : ''}</span></div>
+                  <div className="summary-row"><span>Product</span><span>{shopSelectedProduct.name}{shopSelectedProduct.hasSizes ? ` (${shopSize})` : ''}{shopSelectedProduct.colors ? ` — ${shopSelectedProduct.colors[shopSelectedColors[shopSelectedProduct.id] || 0].name}` : ''}</span></div>
                   <div className="summary-row"><span>Quantity</span><span>{shopQuantity}</span></div>
                   <div className="summary-row"><span>Ship to</span><span>{shopShipping.name}, {shopShipping.city}, {shopShipping.country}</span></div>
                   <div className="summary-row total"><span>Total</span><span>{(shopSelectedProduct.priceETH * shopQuantity).toFixed(4)} ETH</span></div>
