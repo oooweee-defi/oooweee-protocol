@@ -8,17 +8,14 @@
       <stop offset="100%" stop-color="#5a3dff"/>
     </linearGradient>
   </defs>
-  <text
-    x="16"
-    y="17"
-    text-anchor="middle"
-    dominant-baseline="middle"
-    font-family="Arial Black, Arial, Helvetica, sans-serif"
-    font-size="11"
-    font-weight="900"
-    letter-spacing="-0.5"
-    fill="url(#oooweeeGradient)"
-    stroke="#1b1445"
-    stroke-width="1.5"
-    paint-order="stroke fill">OOO</text>
+  <!-- Three O's as concentric circles — no font dependency -->
+  <!-- O1 (left) -->
+  <circle cx="8" cy="16" r="6.5" fill="url(#oooweeeGradient)" stroke="#1b1445" stroke-width="1.5"/>
+  <circle cx="8" cy="16" r="3" fill="#1b1445"/>
+  <!-- O2 (center) -->
+  <circle cx="16" cy="16" r="6.5" fill="url(#oooweeeGradient)" stroke="#1b1445" stroke-width="1.5"/>
+  <circle cx="16" cy="16" r="3" fill="#1b1445"/>
+  <!-- O3 (right) -->
+  <circle cx="24" cy="16" r="6.5" fill="url(#oooweeeGradient)" stroke="#1b1445" stroke-width="1.5"/>
+  <circle cx="24" cy="16" r="3" fill="#1b1445"/>
 </svg>
