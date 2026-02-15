@@ -8,9 +8,13 @@ import hoodieCarolinaBlue from './assets/shop/hoodie-carolina-blue.png';
 import hoodieForestGreen from './assets/shop/hoodie-forest-green.png';
 import hoodieLightPink from './assets/shop/hoodie-light-pink.png';
 import hoodieWhite from './assets/shop/hoodie-white.png';
-import tshirtAsh from './assets/shop/tshirt-ash.png';
-import tshirtGraphite from './assets/shop/tshirt-graphite.png';
-import tshirtNavy from './assets/shop/tshirt-navy.png';
+import tshirtBlack from './assets/shop/tshirt-black.png';
+import tshirtCarolinaBlue from './assets/shop/tshirt-carolina-blue.png';
+import tshirtCharcoal from './assets/shop/tshirt-charcoal.png';
+import tshirtDaisy from './assets/shop/tshirt-daisy.png';
+import tshirtLightPink from './assets/shop/tshirt-light-pink.png';
+import tshirtMilitaryGreen from './assets/shop/tshirt-military-green.png';
+import tshirtPurple from './assets/shop/tshirt-purple.png';
 import tshirtWhite from './assets/shop/tshirt-white.png';
 import cordeeeBlack from './assets/shop/cordeee-black.png';
 import cordeeeCamel from './assets/shop/cordeee-camel.png';
@@ -91,9 +95,13 @@ const SHOP_PRODUCTS = [
     emoji: '👕',
     color: '#667eea',
     colors: [
-      { name: 'Ash', hex: '#b5b5b5', image: tshirtAsh },
-      { name: 'Graphite', hex: '#5e5e5e', image: tshirtGraphite },
-      { name: 'Navy', hex: '#1b2a4a', image: tshirtNavy },
+      { name: 'Black', hex: '#1a1a1a', image: tshirtBlack },
+      { name: 'Carolina Blue', hex: '#5ba4d9', image: tshirtCarolinaBlue },
+      { name: 'Charcoal', hex: '#4a4a4a', image: tshirtCharcoal },
+      { name: 'Daisy', hex: '#f5d442', image: tshirtDaisy },
+      { name: 'Light Pink', hex: '#f4c2c2', image: tshirtLightPink },
+      { name: 'Military Green', hex: '#4b5320', image: tshirtMilitaryGreen },
+      { name: 'Purple', hex: '#6b3fa0', image: tshirtPurple },
       { name: 'White', hex: '#ffffff', image: tshirtWhite },
     ]
   },
