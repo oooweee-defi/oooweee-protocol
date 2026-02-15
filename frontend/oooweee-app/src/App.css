@@ -4067,7 +4067,7 @@ textarea:focus {
 
 /* Product card with real photo */
 .shop-product-image-photo {
-  background: #000 !important;
+  background: #fff !important;
   overflow: hidden;
 }
 
@@ -4130,7 +4130,7 @@ textarea:focus {
   height: 200px;
   object-fit: cover;
   border-radius: var(--radius-sm, 8px);
-  background: #000;
+  background: #fff;
   display: block;
   margin: 0 auto 0.5rem;
 }

@@ -7,6 +7,10 @@ import hoodieAsh from './assets/shop/hoodie-ash.png';
 import hoodieGraphite from './assets/shop/hoodie-graphite.png';
 import hoodieNavy from './assets/shop/hoodie-navy.png';
 import hoodieWhite from './assets/shop/hoodie-white.png';
+import tshirtAsh from './assets/shop/tshirt-ash.png';
+import tshirtGraphite from './assets/shop/tshirt-graphite.png';
+import tshirtNavy from './assets/shop/tshirt-navy.png';
+import tshirtWhite from './assets/shop/tshirt-white.png';
 import { OOOWEEETokenABI, OOOWEEESavingsABI, OOOWEEEValidatorFundABI, OOOWEEEStabilityABI, DonorRegistryABI, CONTRACT_ADDRESSES } from './contracts/abis';
 import Web3Modal from "web3modal";
 import WalletConnectProvider from "@walletconnect/web3-provider";
@@ -77,7 +81,13 @@ const SHOP_PRODUCTS = [
     hasSizes: true,
     sizes: ['S', 'M', 'L', 'XL', 'XXL'],
     emoji: '👕',
-    color: '#667eea'
+    color: '#667eea',
+    colors: [
+      { name: 'Ash', hex: '#b5b5b5', image: tshirtAsh },
+      { name: 'Graphite', hex: '#5e5e5e', image: tshirtGraphite },
+      { name: 'Navy', hex: '#1b2a4a', image: tshirtNavy },
+      { name: 'White', hex: '#ffffff', image: tshirtWhite },
+    ]
   },
   {
     id: 'cup',
