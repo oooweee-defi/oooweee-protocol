@@ -11,6 +11,12 @@ import tshirtAsh from './assets/shop/tshirt-ash.png';
 import tshirtGraphite from './assets/shop/tshirt-graphite.png';
 import tshirtNavy from './assets/shop/tshirt-navy.png';
 import tshirtWhite from './assets/shop/tshirt-white.png';
+import cordeeeBlack from './assets/shop/cordeee-black.png';
+import cordeeeCamel from './assets/shop/cordeee-camel.png';
+import cordeeeOlive from './assets/shop/cordeee-olive.png';
+import cordeeeNavy from './assets/shop/cordeee-navy.png';
+import bageeeBlack from './assets/shop/bageee-black.png';
+import bageeeOyster from './assets/shop/bageee-oyster.png';
 import { OOOWEEETokenABI, OOOWEEESavingsABI, OOOWEEEValidatorFundABI, OOOWEEEStabilityABI, DonorRegistryABI, CONTRACT_ADDRESSES } from './contracts/abis';
 import Web3Modal from "web3modal";
 import WalletConnectProvider from "@walletconnect/web3-provider";
@@ -57,7 +63,7 @@ const SHOP_WALLET = ADMIN_WALLET;
 const SHOP_PRODUCTS = [
   {
     id: 'hoodie',
-    name: 'OOOWEEE Hoodie',
+    name: 'OOOWEEE Hoodeee',
     description: 'Premium heavyweight hoodie with embroidered OOOWEEE logo. 100% proceeds fund Ethereum validators.',
     priceETH: 0.04,
     category: 'apparel',
@@ -73,8 +79,8 @@ const SHOP_PRODUCTS = [
     ]
   },
   {
-    id: 'tshirt',
-    name: 'OOOWEEE T-Shirt',
+    id: 'tee',
+    name: 'OOOWEEE Teee',
     description: 'Soft cotton tee with OOOWEEE gradient print. Wear the protocol.',
     priceETH: 0.02,
     category: 'apparel',
@@ -90,26 +96,36 @@ const SHOP_PRODUCTS = [
     ]
   },
   {
-    id: 'cup',
-    name: 'OOOWEEE Mug',
-    description: 'Ceramic mug with OOOWEEE branding. Perfect for your morning coffee and DeFi.',
-    priceETH: 0.01,
-    category: 'accessories',
-    hasSizes: false,
-    sizes: [],
-    emoji: '☕',
-    color: '#FFD700'
-  },
-  {
-    id: 'hat',
-    name: 'OOOWEEE Cap',
-    description: 'Structured cap with embroidered OOOWEEE logo. One size fits most.',
+    id: 'cordeee',
+    name: 'OOOWEEE Cordeee',
+    description: 'Corduroy cap with embroidered OOOWEEE logo. One size fits most.',
     priceETH: 0.015,
     category: 'accessories',
     hasSizes: false,
     sizes: [],
     emoji: '🧢',
-    color: '#764ba2'
+    color: '#764ba2',
+    colors: [
+      { name: 'Black', hex: '#1a1a1a', image: cordeeeBlack },
+      { name: 'Camel', hex: '#c19a6b', image: cordeeeCamel },
+      { name: 'Olive', hex: '#3c4a2b', image: cordeeeOlive },
+      { name: 'Navy', hex: '#1b2a4a', image: cordeeeNavy },
+    ]
+  },
+  {
+    id: 'bageee',
+    name: 'OOOWEEE Bageee',
+    description: 'Large eco tote bag with OOOWEEE print. Carry your bags and your bags.',
+    priceETH: 0.01,
+    category: 'accessories',
+    hasSizes: false,
+    sizes: [],
+    emoji: '👜',
+    color: '#667eea',
+    colors: [
+      { name: 'Black', hex: '#1a1a1a', image: bageeeBlack },
+      { name: 'Oyster', hex: '#e8dcc8', image: bageeeOyster },
+    ]
   }
 ];
 
