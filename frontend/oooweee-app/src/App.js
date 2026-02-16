@@ -4409,26 +4409,6 @@ OOOWEEE Protocol — Saving, Stabilised.`}</pre>
 
             {!account ? (
               <div className="connect-section">
-                <div className="welcome-card">
-                  <h3>Welcome to OOOWEEE</h3>
-                  <div className="feature-grid">
-                    <div className="feature">
-                      <span className="icon">🏦</span>
-                      <h4>Like a Bank Account</h4>
-                      <p>Save money for your goals</p>
-                    </div>
-                    <div className="feature">
-                      <span className="icon">🔒</span>
-                      <h4>But More Secure</h4>
-                      <p>Protected by blockchain</p>
-                    </div>
-                    <div className="feature">
-                      <span className="icon">🌍</span>
-                      <h4>Works Globally</h4>
-                      <p>Send anywhere instantly</p>
-                    </div>
-                  </div>
-                </div>
                 <div className="connect-options">
                   <button onClick={connectSocialLogin} className="connect-btn social-btn" disabled={isConnecting || !web3auth}>
                     {isConnecting ? 'Signing in...' : 'Sign in with Google / Email'}
