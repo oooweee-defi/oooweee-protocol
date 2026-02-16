@@ -37,9 +37,10 @@ async function getAccessToken() {
   }
 
   const data = await res.json();
-  const accessToken = data.data?.accessToken || data.accessToken;
+  console.log('Transak refresh-token response:', JSON.stringify(data));
+  const accessToken = data.data?.accessToken || data.data?.token || data.accessToken || data.token;
   if (!accessToken) {
-    throw new Error('No accessToken in Transak refresh-token response');
+    throw new Error(`No accessToken in Transak refresh-token response: ${JSON.stringify(data)}`);
   }
 
   cachedAccessToken = accessToken;
@@ -75,6 +76,7 @@ export default async function handler(req, res) {
   try {
     const accessToken = await getAccessToken();
 
+    console.log('Using access token (first 20 chars):', accessToken.substring(0, 20));
     const sessionRes = await fetch(CREATE_WIDGET_URL, {
       method: 'POST',
       headers: {
