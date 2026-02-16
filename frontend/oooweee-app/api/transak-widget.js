@@ -37,10 +37,9 @@ async function getAccessToken() {
   }
 
   const data = await res.json();
-  console.log('Transak refresh-token response:', JSON.stringify(data));
   const accessToken = data.data?.accessToken || data.data?.token || data.accessToken || data.token;
   if (!accessToken) {
-    throw new Error(`No accessToken in Transak refresh-token response: ${JSON.stringify(data)}`);
+    throw new Error('No accessToken in Transak refresh-token response');
   }
 
   cachedAccessToken = accessToken;
@@ -76,10 +75,6 @@ export default async function handler(req, res) {
   try {
     const accessToken = await getAccessToken();
 
-    // Debug: return the token type and first chars so we can diagnose 401s
-    const tokenPreview = `type=${typeof accessToken}, len=${accessToken.length}, start=${accessToken.substring(0, 30)}`;
-    console.log('Access token info:', tokenPreview);
-
     const sessionRes = await fetch(CREATE_WIDGET_URL, {
       method: 'POST',
       headers: {
@@ -110,7 +105,7 @@ export default async function handler(req, res) {
         cachedAccessToken = null;
         tokenExpiresAt = 0;
       }
-      throw new Error(`Transak create-widget-url failed (${sessionRes.status}): ${text} [token: ${tokenPreview}]`);
+      throw new Error(`Transak create-widget-url failed (${sessionRes.status}): ${text}`);
     }
 
     const sessionData = await sessionRes.json();

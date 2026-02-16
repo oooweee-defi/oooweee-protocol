@@ -47,7 +47,8 @@ const ADMIN_WALLET = "0x438a0db92Ad7A94Da455110096d02D8eF7cd6A34";
 // Web3Auth configuration
 const WEB3AUTH_CLIENT_ID = "BJI5vavWlrqWJoj29XO3KwH6u7rTHAB1hBwvlpKlUA1Oeoo7mNwGE3MmmKFV0KweFBPl_GrgNsaq9U73MH95Fo8";
 
-// Transak fiat onramp — API key now handled server-side (api/transak-widget.js)
+// Transak fiat onramp — server-side widget URL via api/transak-widget.js
+// Requires KYB approval on Transak partner dashboard before production use
 const CHAIN_CONFIG = {
   chainNamespace: CHAIN_NAMESPACES.EIP155,
   chainId: "0x1",
@@ -3883,6 +3884,7 @@ OOOWEEE Protocol — Saving, Stabilised.`}</pre>
                     {loading ? '⏳ Processing...' : '🚀 Swap for OOOWEEE'}
                   </button>
 
+                  {/* Fiat onramp — uncomment once Transak KYB approval is complete
                   <div className="onramp-divider">
                     <span>or buy ETH directly with</span>
                   </div>
@@ -3892,6 +3894,7 @@ OOOWEEE Protocol — Saving, Stabilised.`}</pre>
                   >
                     💳 Card / Google Pay / Apple Pay
                   </button>
+                  */}
                 </>
               )}
             </div>
