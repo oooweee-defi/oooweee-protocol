@@ -47,8 +47,7 @@ const ADMIN_WALLET = "0x438a0db92Ad7A94Da455110096d02D8eF7cd6A34";
 // Web3Auth configuration
 const WEB3AUTH_CLIENT_ID = "BJI5vavWlrqWJoj29XO3KwH6u7rTHAB1hBwvlpKlUA1Oeoo7mNwGE3MmmKFV0KweFBPl_GrgNsaq9U73MH95Fo8";
 
-// Transak fiat onramp configuration
-const TRANSAK_API_KEY = "5cb34a9b-f4da-43e8-8f4b-8e573b79ab22";
+// Transak fiat onramp — API key now handled server-side (api/transak-widget.js)
 const CHAIN_CONFIG = {
   chainNamespace: CHAIN_NAMESPACES.EIP155,
   chainId: "0x1",
@@ -1611,36 +1610,41 @@ function App() {
   };
 
   // Fiat onramp — buy ETH with card / Google Pay / Apple Pay
-  const openFiatOnramp = () => {
+  // Uses server-side Transak widget URL generation (api/transak-widget.js)
+  const openFiatOnramp = async () => {
     if (!account) {
       toast.error('Please connect your wallet first');
       return;
     }
 
-    const transakUrl = new URL('https://global.transak.com');
-    transakUrl.searchParams.set('apiKey', TRANSAK_API_KEY);
-    transakUrl.searchParams.set('environment', 'PRODUCTION');
-    transakUrl.searchParams.set('cryptoCurrencyCode', 'ETH');
-    transakUrl.searchParams.set('network', 'ethereum');
-    transakUrl.searchParams.set('defaultCryptoCurrency', 'ETH');
-    transakUrl.searchParams.set('walletAddress', account);
-    transakUrl.searchParams.set('fiatCurrency', selectedCurrency);
-    transakUrl.searchParams.set('defaultFiatAmount', '50');
-    transakUrl.searchParams.set('themeColor', '7B68EE');
-    transakUrl.searchParams.set('disableWalletAddressForm', 'true');
+    const toastId = toast.loading('Opening ETH purchase...');
 
-    // Open in a popup window
-    const width = 450;
-    const height = 700;
-    const left = (window.innerWidth - width) / 2 + window.screenX;
-    const top = (window.innerHeight - height) / 2 + window.screenY;
-    window.open(
-      transakUrl.toString(),
-      'transak_widget',
-      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
-    );
+    try {
+      const res = await fetch(`/api/transak-widget?walletAddress=${account}&fiatCurrency=${selectedCurrency}`);
+      const data = await res.json();
 
-    toast('ETH purchase window opened! Your balance will update after the purchase completes.', { icon: '💳', duration: 5000 });
+      if (!res.ok || !data.widgetUrl) {
+        throw new Error(data.error || 'Failed to load purchase widget');
+      }
+
+      // Open in a popup window
+      const width = 450;
+      const height = 700;
+      const left = (window.innerWidth - width) / 2 + window.screenX;
+      const top = (window.innerHeight - height) / 2 + window.screenY;
+      window.open(
+        data.widgetUrl,
+        'transak_widget',
+        `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+      );
+
+      toast.dismiss(toastId);
+      toast('ETH purchase window opened! Your balance will update after the purchase completes.', { icon: '💳', duration: 5000 });
+    } catch (err) {
+      toast.dismiss(toastId);
+      toast.error(err.message || 'Could not open purchase widget');
+      return;
+    }
 
     // Poll for balance changes after opening widget
     // Clear any previous polling interval to prevent stacking
@@ -3879,7 +3883,6 @@ OOOWEEE Protocol — Saving, Stabilised.`}</pre>
                     {loading ? '⏳ Processing...' : '🚀 Swap for OOOWEEE'}
                   </button>
 
-                  {/* Fiat onramp — disabled until provider account is set up
                   <div className="onramp-divider">
                     <span>or buy ETH directly with</span>
                   </div>
@@ -3889,7 +3892,6 @@ OOOWEEE Protocol — Saving, Stabilised.`}</pre>
                   >
                     💳 Card / Google Pay / Apple Pay
                   </button>
-                  */}
                 </>
               )}
             </div>
