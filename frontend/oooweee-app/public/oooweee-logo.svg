@@ -1,0 +1,21 @@
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="oooweeeGradient" x1="3" y1="16" x2="29" y2="16" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffd400"/>
+      <stop offset="25%" stop-color="#7ed957"/>
+      <stop offset="50%" stop-color="#00c9a7"/>
+      <stop offset="75%" stop-color="#2b7bff"/>
+      <stop offset="100%" stop-color="#5a3dff"/>
+    </linearGradient>
+  </defs>
+  <!-- Three O's as concentric circles — no font dependency -->
+  <!-- O1 (left) -->
+  <circle cx="8" cy="16" r="5" fill="url(#oooweeeGradient)" stroke="#1b1445" stroke-width="1.2"/>
+  <circle cx="8" cy="16" r="2" fill="#1b1445"/>
+  <!-- O2 (center) -->
+  <circle cx="16" cy="16" r="5" fill="url(#oooweeeGradient)" stroke="#1b1445" stroke-width="1.2"/>
+  <circle cx="16" cy="16" r="2" fill="#1b1445"/>
+  <!-- O3 (right) -->
+  <circle cx="24" cy="16" r="5" fill="url(#oooweeeGradient)" stroke="#1b1445" stroke-width="1.2"/>
+  <circle cx="24" cy="16" r="2" fill="#1b1445"/>
+</svg>

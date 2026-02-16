@@ -196,6 +196,175 @@ const providerOptions = {
   }
 };
 
+// ==========================================
+// LANDING PAGE (Static — no API calls)
+// ==========================================
+function LandingPage({ onLaunchApp }) {
+  return (
+    <div className="landing-page">
+      {/* Nav */}
+      <nav className="landing-nav">
+        <div className="landing-nav-inner">
+          <div className="landing-nav-brand">
+            <img src="/oooweee-logo.svg" alt="OOOWEEE" className="landing-nav-logo" />
+            <span className="landing-nav-title">OOOWEEE</span>
+          </div>
+          <button className="landing-launch-btn" onClick={onLaunchApp}>
+            Launch App
+          </button>
+        </div>
+      </nav>
+
+      {/* Hero */}
+      <section className="landing-hero">
+        <img src="/oooweee-logo.png" alt="OOOWEEE Protocol" className="landing-hero-logo" />
+        <h1 className="landing-hero-title">OOOWEEE Protocol</h1>
+        <p className="landing-hero-subtitle">
+          A DeFi savings protocol on Ethereum with built-in price stability
+        </p>
+        <p className="landing-hero-desc">
+          Create goal-based savings accounts denominated in USD, EUR, or GBP.
+          Your funds are locked by smart contracts until you hit your target.
+          Staking rewards from Ethereum validators are distributed back to savers.
+        </p>
+        <button className="landing-hero-cta" onClick={onLaunchApp}>
+          Launch App
+        </button>
+        <div className="landing-hero-links">
+          <a href="https://etherscan.io/address/0xFb46B3eED3590eE5049bCbDA084D5582f2c14D35" target="_blank" rel="noopener noreferrer">
+            Etherscan
+          </a>
+          <span className="landing-link-dot"></span>
+          <a href="https://github.com/oooweee-defi/oooweee-protocol" target="_blank" rel="noopener noreferrer">
+            GitHub
+          </a>
+          <span className="landing-link-dot"></span>
+          <a href="https://github.com/oooweee-defi/oooweee-protocol/blob/main/WHITEPAPER.md" target="_blank" rel="noopener noreferrer">
+            Whitepaper
+          </a>
+        </div>
+      </section>
+
+      {/* How It Works */}
+      <section className="landing-how-it-works">
+        <h2 className="landing-section-title">How It Works</h2>
+        <p className="landing-section-subtitle">From sign-in to earning rewards in 5 steps</p>
+        <div className="landing-flow">
+          <div className="landing-flow-step">
+            <div className="landing-flow-icon">1</div>
+            <h3>Sign In</h3>
+            <p>Connect with Google, email, or any Ethereum wallet. No crypto experience needed.</p>
+          </div>
+          <div className="landing-flow-arrow">&#8594;</div>
+          <div className="landing-flow-step">
+            <div className="landing-flow-icon">2</div>
+            <h3>Get ETH</h3>
+            <p>Buy ETH with your debit card directly in the app via our fiat onramp.</p>
+          </div>
+          <div className="landing-flow-arrow">&#8594;</div>
+          <div className="landing-flow-step">
+            <div className="landing-flow-icon">3</div>
+            <h3>Swap for $OOOWEEE</h3>
+            <p>Swap ETH for $OOOWEEE tokens via Uniswap, built right into the dashboard.</p>
+          </div>
+          <div className="landing-flow-arrow">&#8594;</div>
+          <div className="landing-flow-step">
+            <div className="landing-flow-icon">4</div>
+            <h3>Open a Savings Account</h3>
+            <p>Choose a time lock, balance target, or growth goal. Set targets in EUR, USD, or GBP.</p>
+          </div>
+          <div className="landing-flow-arrow">&#8594;</div>
+          <div className="landing-flow-step">
+            <div className="landing-flow-icon">5</div>
+            <h3>Earn Rewards</h3>
+            <p>The protocol stakes ETH with validators. Staking yield flows back to active savers.</p>
+          </div>
+        </div>
+      </section>
+
+      {/* Features */}
+      <section className="landing-features">
+        <h2 className="landing-section-title">Why OOOWEEE?</h2>
+        <div className="landing-features-grid">
+          <div className="landing-feature-card">
+            <div className="landing-feature-icon">&#128274;</div>
+            <h3>Smart Contract Savings</h3>
+            <p>Funds are locked by code, not willpower. Three lock types: time lock, balance target, and growth goal.</p>
+          </div>
+          <div className="landing-feature-card">
+            <div className="landing-feature-icon">&#128737;</div>
+            <h3>Built-In Price Stability</h3>
+            <p>An automated mechanism dampens price spikes, capturing value and redirecting it to validators.</p>
+          </div>
+          <div className="landing-feature-card">
+            <div className="landing-feature-icon">&#127873;</div>
+            <h3>Sustainable Yield</h3>
+            <p>Rewards come from real Ethereum validator staking — no inflation, no unsustainable emissions.</p>
+          </div>
+          <div className="landing-feature-card">
+            <div className="landing-feature-icon">&#128177;</div>
+            <h3>Fiat-Denominated Goals</h3>
+            <p>Set savings targets in EUR, USD, or GBP. The protocol tracks real exchange rates via Chainlink oracles.</p>
+          </div>
+          <div className="landing-feature-card">
+            <div className="landing-feature-icon">&#128101;</div>
+            <h3>Group Savings</h3>
+            <p>Create shared savings pools with friends or family. Contribute together toward a common goal.</p>
+          </div>
+          <div className="landing-feature-card">
+            <div className="landing-feature-icon">&#127758;</div>
+            <h3>Open &amp; Permissionless</h3>
+            <p>No KYC, no minimum balance, no geographic restrictions. All contracts are verified on Etherscan.</p>
+          </div>
+        </div>
+      </section>
+
+      {/* Team */}
+      <section className="landing-team">
+        <h2 className="landing-section-title">Team</h2>
+        <div className="landing-team-card">
+          <div className="landing-team-avatar">RH</div>
+          <div className="landing-team-info">
+            <h3>Ryan Heapes</h3>
+            <p className="landing-team-role">Founder &amp; Developer</p>
+            <a href="https://ie.linkedin.com/in/ryan-heapes-7a3aa0229" target="_blank" rel="noopener noreferrer" className="landing-linkedin-link">
+              LinkedIn Profile &#8594;
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="landing-footer">
+        <div className="landing-footer-inner">
+          <div className="landing-footer-col">
+            <h4>Protocol</h4>
+            <a href="https://etherscan.io/address/0xFb46B3eED3590eE5049bCbDA084D5582f2c14D35" target="_blank" rel="noopener noreferrer">
+              Token Contract
+            </a>
+            <a href="https://github.com/oooweee-defi/oooweee-protocol/blob/main/WHITEPAPER.md" target="_blank" rel="noopener noreferrer">
+              Whitepaper
+            </a>
+          </div>
+          <div className="landing-footer-col">
+            <h4>Resources</h4>
+            <a href="https://github.com/oooweee-defi/oooweee-protocol" target="_blank" rel="noopener noreferrer">
+              GitHub
+            </a>
+          </div>
+          <div className="landing-footer-col">
+            <h4>Contact</h4>
+            <span>support@oooweee.io</span>
+          </div>
+        </div>
+        <div className="landing-footer-bottom">
+          <p>&copy; 2025 OOOWEEE Protocol. All rights reserved.</p>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
 function App() {
   const [account, setAccount] = useState(null);
   const [provider, setProvider] = useState(null);
@@ -224,6 +393,7 @@ function App() {
   const [targetAmountInput, setTargetAmountInput] = useState('');
   const [initialDepositInput, setInitialDepositInput] = useState('');
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [showLanding, setShowLanding] = useState(true);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [ethToBuy, setEthToBuy] = useState('0.01');
@@ -283,6 +453,9 @@ function App() {
   });
   const [shopCategory, setShopCategory] = useState('all');
   const [shopSelectedColors, setShopSelectedColors] = useState({});
+
+  // Landing page handler
+  const handleLaunchApp = useCallback(() => { setShowLanding(false); }, []);
 
   // Validator stats
   const [validatorStats, setValidatorStats] = useState({
@@ -553,8 +726,9 @@ function App() {
     }
   };
 
-  // Initialize on load
+  // Initialize on load (deferred until landing page is dismissed)
   useEffect(() => {
+    if (showLanding) return;
     const init = async () => {
       setIsAppLoading(true);
 
@@ -641,7 +815,8 @@ function App() {
     };
     
     init();
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showLanding]);
 
   // Persist selected currency
   useEffect(() => {
@@ -2279,6 +2454,11 @@ function App() {
 
   const activeAccounts = accounts.filter(acc => acc.isActive);
   const completedAccounts = accounts.filter(acc => !acc.isActive);
+
+  // Show landing page before app initialization
+  if (showLanding) {
+    return <LandingPage onLaunchApp={handleLaunchApp} />;
+  }
 
   if (isAppLoading) {
     return (
