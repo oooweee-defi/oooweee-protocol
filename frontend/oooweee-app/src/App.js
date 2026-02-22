@@ -217,7 +217,7 @@ function LandingPage({ onLaunchApp }) {
 
       {/* Hero */}
       <section className="landing-hero">
-        <img src="/oooweee-logo.png" alt="OOOWEEE Protocol" className="landing-hero-logo" />
+        <img src="/oooweee-banner.png" alt="OOOWEEE Protocol" className="landing-hero-banner" />
         <h1 className="landing-hero-title">OOOWEEE Protocol</h1>
         <p className="landing-hero-subtitle">
           A DeFi savings protocol on Ethereum with built-in price stability

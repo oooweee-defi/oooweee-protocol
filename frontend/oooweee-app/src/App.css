@@ -4577,6 +4577,14 @@ textarea:focus {
   image-rendering: pixelated;
 }
 
+.landing-hero-banner {
+  width: 100%;
+  max-width: 600px;
+  height: auto;
+  margin-bottom: 1.5rem;
+  border-radius: 12px;
+}
+
 .landing-hero-title {
   font-size: 3rem;
   font-weight: 900;
@@ -4910,6 +4918,10 @@ textarea:focus {
   .landing-hero-logo {
     width: 80px;
     height: 80px;
+  }
+
+  .landing-hero-banner {
+    max-width: 100%;
   }
 
   .landing-hero-title {
